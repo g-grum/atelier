@@ -3,10 +3,11 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AppData } from '../store/app-data'
+import type { SdkSessionInfo } from '../sdk/sdk-client'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
 import { SessionsService } from './sessions-service'
 
-function freshSetup(sessions: Parameters<typeof MockSdkClient>[0]['sessions'] = []) {
+function freshSetup(sessions: SdkSessionInfo[] = []) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-sessions-')), 'data.json')
   const data = new AppData(filePath)
   data.update((d) => {
