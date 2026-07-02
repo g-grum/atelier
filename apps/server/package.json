@@ -1,0 +1,10 @@
+{
+  "name": "@atelier/server",
+  "type": "module",
+  "scripts": { "dev": "bun run --watch src/index.ts" },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest",
+    "@atelier/shared": "workspace:*",
+    "hono": "^4"
+  }
+}
