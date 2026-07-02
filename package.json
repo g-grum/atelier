@@ -1,0 +1,11 @@
+{
+  "name": "atelier",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "test": "bun test",
+    "dev:server": "bun run --cwd apps/server dev",
+    "dev:web": "bun run --cwd apps/web dev",
+    "dev:desktop": "bun run --cwd apps/desktop dev"
+  }
+}

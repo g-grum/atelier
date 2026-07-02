@@ -1,0 +1,5 @@
+{
+  "name": "@atelier/shared",
+  "type": "module",
+  "exports": { ".": "./src/protocol.ts" }
+}
