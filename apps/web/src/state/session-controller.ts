@@ -77,12 +77,19 @@ export class SessionController {
     })
   }
 
-  sendMessage(text: string): void {
-    if (this.socket === null) return
+  /**
+   * Returns whether the message was accepted. Refused mid-turn: the server
+   * drops user_message while streaming (one turn at a time), so sending would
+   * append a local echo that is never persisted — a phantom until the next
+   * refetch. The UI gates the composer on this contract.
+   */
+  sendMessage(text: string): boolean {
+    if (this.socket === null || this.state.status === 'streaming') return false
     this.socket.send({ type: 'user_message', text })
     // The server never echoes user messages as ServerEvents — append locally
     // (the persisted copy comes back on the next history fetch).
     this.setState({ ...this.state, items: [...this.state.items, { kind: 'user', text }] })
+    return true
   }
 
   respondPermission(requestId: string, decision: 'allow' | 'deny' | 'always'): void {

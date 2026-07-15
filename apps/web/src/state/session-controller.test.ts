@@ -237,12 +237,36 @@ describe('SessionController draft remap', () => {
 })
 
 describe('SessionController actions', () => {
-  test('sendMessage sends user_message and appends a local user item', async () => {
+  test('sendMessage sends user_message, appends a local user item, and reports acceptance', async () => {
     const { controller, socket, open } = makeHarness()
     await open(history)
-    controller.sendMessage('Continue le correctif')
+    expect(controller.sendMessage('Continue le correctif')).toBe(true)
     expect(socket().sent).toEqual([{ type: 'user_message', text: 'Continue le correctif' }])
     expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'Continue le correctif' })
+  })
+
+  test('sendMessage is refused mid-turn — the server drops it, so no phantom echo', async () => {
+    const { controller, socket, open } = makeHarness()
+    await open(history)
+    socket().emit(delta('je travaille'))
+    expect(controller.getState().status).toBe('streaming')
+
+    const before = controller.getState()
+    expect(controller.sendMessage('trop tôt')).toBe(false)
+    expect(socket().sent).toEqual([]) // mirrors session-stream: mid-turn user_message is dropped
+    expect(controller.getState()).toBe(before)
+
+    // Once the turn ends the composer path reopens.
+    socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
+    expect(controller.sendMessage('maintenant oui')).toBe(true)
+    expect(socket().sent).toEqual([{ type: 'user_message', text: 'maintenant oui' }])
+    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'maintenant oui' })
+  })
+
+  test('sendMessage without an open socket is refused', () => {
+    const controller = new SessionController()
+    expect(controller.sendMessage('personne n’écoute')).toBe(false)
+    expect(controller.getState().items).toEqual([])
   })
 
   test('respondPermission sends permission_response and resolves the item locally', async () => {
