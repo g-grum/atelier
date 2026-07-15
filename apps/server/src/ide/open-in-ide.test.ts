@@ -208,6 +208,26 @@ describe('POST /open-in-ide route', () => {
     expect(calls).toEqual([])
   })
 
+  test('legal JSON bodies that are not objects (null, [], "x", 42, true, {}) all respond { ok: false, reason } — never a 500', async () => {
+    // Same class as the lone-surrogate bug: JSON.parse succeeds so the parse
+    // guard does not fire, then `body.file` on a null/primitive body throws
+    // outside any catch and Hono returns 500.
+    const raws = ['null', '[]', '"x"', '42', 'true', '{}']
+    for (const raw of raws) {
+      const { app, calls } = freshRoutes([true])
+      const res = await app.request('/open-in-ide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: raw,
+      })
+      expect(res.status).toBe(200)
+      const body = await res.json() as { ok: boolean; reason: string }
+      expect(body.ok).toBe(false)
+      expect(typeof body.reason).toBe('string')
+      expect(calls).toEqual([])
+    }
+  })
+
   test('a throwing launch still responds { ok: false, reason } — the route is structurally 500-proof', async () => {
     const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-ide-')), 'data.json')
     const data = new AppData(filePath)
