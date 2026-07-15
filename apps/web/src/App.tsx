@@ -4,8 +4,10 @@ import type { SessionSummary } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
+import { ModifiedFilesPanel } from './components/ModifiedFilesPanel'
 import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
+import { Toaster } from './components/ui/sonner'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
 
@@ -194,9 +196,12 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           />
           <Composer disabled={selected === null} onSend={(text) => controller.sendMessage(text)} />
         </main>
-        {/* Panels (usage, model, files, activity) land in chunk 5. */}
-        <aside className="dash" aria-label="Usage et activité" />
+        <aside className="dash" aria-label="Usage et activité">
+          {/* Usage card (Task 5.5) mounts above the files section. */}
+          <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
+        </aside>
       </div>
+      <Toaster />
     </div>
   )
 }
