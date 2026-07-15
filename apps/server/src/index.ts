@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { websocket } from 'hono/bun'
 import { AppData } from './store/app-data'
 import { AgentSdkClient } from './sdk/sdk-client'
 import { SessionsService } from './sessions/sessions-service'
@@ -36,12 +37,13 @@ const { port, token, dataPath } = parseArgs()
 const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
 const sessions = new SessionsService(sdk, data)
-const app = createApp({ data, sessions, token })
+const app = createApp({ data, sessions, sdk, token })
 
 Bun.serve({
   hostname: '127.0.0.1',
   port,
   fetch: app.fetch,
+  websocket,
 })
 
 console.log(`atelier server on http://127.0.0.1:${port}`)

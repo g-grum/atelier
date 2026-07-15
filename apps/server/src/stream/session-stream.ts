@@ -1,0 +1,256 @@
+import type { PermissionRequest, ServerEvent } from '@atelier/shared'
+import { parseClientMessage } from '@atelier/shared'
+import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
+import type { AppData } from '../store/app-data'
+import { describeToolUse } from './describe-tool-use'
+import { PermissionBroker } from './permission-broker'
+
+export type EventSink = (event: ServerEvent) => void
+
+type SessionStreamParams = {
+  /** The id the client connected with — a draft id or an SDK session id. */
+  id: string
+  projectId: string
+  data: AppData
+  sdk: SdkClient
+  /** Called when a draft materializes so the registry can re-key its singleton. */
+  onRekey?: (from: string, to: string) => void
+}
+
+/**
+ * One live session: fans ServerEvents out to every connected socket, buffers the
+ * in-flight turn for reconnect snapshots, and bridges permissions via the broker.
+ * Socket-free by design — the WS route is glue around onConnect/onMessage/onClose.
+ */
+export class SessionStream {
+  private readonly id: string
+  private readonly projectId: string
+  private readonly data: AppData
+  private readonly sdk: SdkClient
+  private readonly onRekey?: (from: string, to: string) => void
+  private readonly broker: PermissionBroker
+
+  private readonly sinks = new Set<EventSink>()
+  private state: 'idle' | 'streaming' | 'error' = 'idle'
+  /** Buffer of the current in-flight assistant text run — snapshot fodder for reconnects. */
+  private partialText = ''
+  private lastError?: { reason: string; resetAt?: string }
+  private turnAbort: AbortController | null = null
+
+  constructor({ id, projectId, data, sdk, onRekey }: SessionStreamParams) {
+    this.id = id
+    this.projectId = projectId
+    this.data = data
+    this.sdk = sdk
+    this.onRekey = onRekey
+    const projectDir = data.get().projects.find((p) => p.id === projectId)?.path ?? ''
+    this.broker = new PermissionBroker(data, projectId, projectDir, (request) => {
+      this.broadcast(this.toPermissionEvent(request))
+    })
+  }
+
+  onConnect(send: EventSink): void {
+    this.sinks.add(send)
+    send(this.snapshot())
+    // Broker state is not history — reconnect recovery depends on this re-emit.
+    for (const request of this.broker.pending()) send(this.toPermissionEvent(request))
+  }
+
+  onMessage(raw: string): void {
+    const message = parseClientMessage(raw)
+    if (message === null) return
+
+    switch (message.type) {
+      case 'user_message':
+        // One turn at a time per session — a mid-turn user_message is dropped.
+        if (this.state !== 'streaming') void this.runTurn(message.text)
+        return
+      case 'permission_response':
+        this.broker.resolve(message.requestId, message.decision)
+        return
+      case 'abort':
+        this.turnAbort?.abort()
+        this.broker.abort()
+        return
+    }
+  }
+
+  onClose(send: EventSink): void {
+    // A bare disconnect never aborts — the turn keeps running; the next connect resyncs.
+    this.sinks.delete(send)
+  }
+
+  private async runTurn(prompt: string): Promise<void> {
+    const { projects, drafts, modelOverrides, preferences } = this.data.get()
+    const project = projects.find((p) => p.id === this.projectId)
+    if (!project) {
+      this.state = 'error'
+      this.lastError = { reason: `unknown project: ${this.projectId}` }
+      this.broadcast(this.snapshot())
+      return
+    }
+
+    const resolvedId = this.data.resolveSessionId(this.id)
+    const draft = drafts.find((d) => d.id === resolvedId)
+    // A draft carries its own model until materialization moves it into modelOverrides.
+    const model = draft?.model ?? modelOverrides[resolvedId] ?? preferences.defaultModel
+
+    this.state = 'streaming'
+    this.partialText = ''
+    this.lastError = undefined
+    const abort = new AbortController()
+    this.turnAbort = abort
+
+    try {
+      const turn = this.sdk.runTurn({
+        cwd: project.path,
+        model,
+        prompt,
+        resumeSessionId: draft ? undefined : resolvedId,
+        canUseTool: (toolName, input) => this.broker.request(toolName, input),
+        signal: abort.signal,
+      })
+      for await (const event of turn) {
+        await this.handleTurnEvent(event, draft?.id)
+      }
+    } catch (err) {
+      // runTurn is fired-and-forgotten from onMessage — an escaping rejection
+      // would be unhandled. Surface SDK failures as a status error instead.
+      this.state = 'error'
+      this.lastError = { reason: err instanceof Error ? err.message : String(err) }
+      this.broadcast(this.snapshot())
+    } finally {
+      this.turnAbort = null
+      if (this.state === 'streaming') {
+        // Aborted, or the turn ended without turn_done/turn_error — settle to idle.
+        this.state = 'idle'
+        this.broadcast(this.snapshot())
+      }
+    }
+  }
+
+  private async handleTurnEvent(event: SdkTurnEvent, draftId: string | undefined): Promise<void> {
+    switch (event.type) {
+      case 'text_delta':
+        this.partialText += event.text
+        this.broadcast({ type: 'assistant_delta', sessionId: this.sessionId(), text: event.text })
+        return
+      case 'tool_use':
+        // A tool_use closes the current text run — the buffer tracks only the in-flight run.
+        this.partialText = ''
+        this.broadcast({
+          type: 'tool_use',
+          sessionId: this.sessionId(),
+          toolUseId: event.toolUseId,
+          ...describeToolUse(event.toolName, event.input),
+        })
+        return
+      case 'tool_result':
+        this.broadcast({
+          type: 'tool_result',
+          sessionId: this.sessionId(),
+          toolUseId: event.toolUseId,
+          ok: event.ok,
+          summary: event.summary,
+        })
+        return
+      case 'usage':
+        this.data.recordUsage({
+          at: new Date().toISOString(),
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          cacheReadTokens: event.cacheReadTokens,
+          cacheCreationTokens: event.cacheCreationTokens,
+        })
+        this.broadcast({
+          type: 'usage',
+          sessionId: this.sessionId(),
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          cacheReadTokens: event.cacheReadTokens,
+          cacheCreationTokens: event.cacheCreationTokens,
+        })
+        return
+      case 'session_started':
+        if (draftId !== undefined) await this.materializeDraft(draftId, event.sessionId)
+        return
+      case 'turn_done':
+        this.state = 'idle'
+        this.broadcast(this.snapshot())
+        return
+      case 'turn_error':
+        this.state = 'error'
+        this.lastError = event.resetAt !== undefined ? { reason: event.reason, resetAt: event.resetAt } : { reason: event.reason }
+        this.broadcast(this.snapshot())
+        return
+    }
+  }
+
+  private async materializeDraft(draftId: string, sdkSessionId: string): Promise<void> {
+    // mapDraft moves the draft's model into modelOverrides[sdkSessionId] — loss-less.
+    const { deferredName } = this.data.mapDraft(draftId, sdkSessionId)
+    if (deferredName !== null) await this.sdk.renameSession(sdkSessionId, deferredName)
+    this.onRekey?.(draftId, sdkSessionId)
+    this.broadcast({
+      type: 'status',
+      sessionId: sdkSessionId,
+      state: 'streaming',
+      mapping: { draftId, sessionId: sdkSessionId },
+    })
+  }
+
+  /** Events are stamped with the resolved id — after materialization the SDK id. */
+  private sessionId(): string {
+    return this.data.resolveSessionId(this.id)
+  }
+
+  private snapshot(): ServerEvent {
+    const base = { type: 'status' as const, sessionId: this.sessionId(), state: this.state }
+    if (this.state === 'streaming') return { ...base, partialText: this.partialText }
+    if (this.state === 'error' && this.lastError) return { ...base, error: this.lastError }
+    return base
+  }
+
+  private toPermissionEvent(request: PermissionRequest): ServerEvent {
+    return { ...request, sessionId: this.sessionId() }
+  }
+
+  private broadcast(event: ServerEvent): void {
+    for (const send of this.sinks) send(event)
+  }
+}
+
+/**
+ * Per-session singletons keyed by the RESOLVED session id, so reconnects — with
+ * the draft id or the SDK id — attach to the same live stream.
+ */
+export class SessionStreamRegistry {
+  private readonly streams = new Map<string, SessionStream>()
+
+  constructor(
+    private readonly data: AppData,
+    private readonly sdk: SdkClient
+  ) {}
+
+  get(id: string, projectId: string): SessionStream {
+    const key = this.data.resolveSessionId(id)
+    let stream = this.streams.get(key)
+    if (!stream) {
+      stream = new SessionStream({
+        id: key,
+        projectId,
+        data: this.data,
+        sdk: this.sdk,
+        onRekey: (from, to) => {
+          const entry = this.streams.get(from)
+          if (entry) {
+            this.streams.delete(from)
+            this.streams.set(to, entry)
+          }
+        },
+      })
+      this.streams.set(key, stream)
+    }
+    return stream
+  }
+}

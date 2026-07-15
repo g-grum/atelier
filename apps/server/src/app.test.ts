@@ -12,7 +12,7 @@ function freshApp() {
   const data = new AppData(filePath)
   const sdk = new MockSdkClient()
   const sessions = new SessionsService(sdk, data)
-  const app = createApp({ data, sessions, token: 'test-token' })
+  const app = createApp({ data, sessions, sdk, token: 'test-token' })
   return { app, data, sessions }
 }
 
