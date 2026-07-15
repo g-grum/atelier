@@ -241,7 +241,37 @@ describe('createApp', () => {
     expect(prefs.ide).toBe('vscode')
   })
 
-  // 9. GET/DELETE /api/rules
+  // 9. WS stream route guard: a bad projectId must be rejected BEFORE the
+  // upgrade — otherwise the registry caches a permanently broken singleton
+  // that even later connects with the CORRECT projectId would attach to.
+  test('GET /api/sessions/:id/stream without projectId returns 400', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/sessions/x/stream?token=test-token')
+    expect(res.status).toBe(400)
+  })
+
+  test('GET /api/sessions/:id/stream with an unknown projectId returns 400', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/sessions/x/stream?token=test-token&projectId=nope')
+    expect(res.status).toBe(400)
+  })
+
+  test('GET /api/sessions/:id/stream with a known projectId passes the guard', async () => {
+    const { app } = freshApp()
+    const rp = await app.request('/api/projects', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: '/tmp/x' }),
+    })
+    const project = await rp.json() as { id: string }
+
+    // No real Bun server here, so the upgrade itself cannot succeed — the guard
+    // letting the request through to upgradeWebSocket (anything but 400) is the point.
+    const res = await app.request(`/api/sessions/x/stream?token=test-token&projectId=${project.id}`)
+    expect(res.status).not.toBe(400)
+  })
+
+  // 10. GET/DELETE /api/rules
   test('GET /api/rules returns [] initially', async () => {
     const { app } = freshApp()
     const res = await app.request('/api/rules', {

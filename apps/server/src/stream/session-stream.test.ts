@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ServerEvent } from '@atelier/shared'
-import type { RunTurnParams } from '../sdk/sdk-client'
+import type { RunTurnParams, SdkTurnEvent } from '../sdk/sdk-client'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
 import { AppData, type Draft } from '../store/app-data'
 import { SessionStreamRegistry } from './session-stream'
@@ -249,6 +249,76 @@ describe('SessionStream', () => {
     expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
   })
 
+  // The real AgentSdkClient does NOT return cleanly on abort like the base mock:
+  // the SDK query rejects with an AbortError, which its catch converts into
+  // turn_error { reason: 'This operation was aborted' }. Both real paths must
+  // settle to idle — an abort is a normal Stop, never an error.
+  test('abort surfacing as a turn_error event (real AgentSdkClient path) settles to idle, not error', async () => {
+    class AbortAsTurnErrorSdk extends MockSdkClient {
+      override async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
+        this.calls.push({ method: 'runTurn', args: [params] })
+        yield { type: 'text_delta', text: 'a' }
+        // Block like the real SDK awaiting canUseTool; broker.abort() settles it.
+        await params.canUseTool('Bash', { command: 'sleep 999' })
+        if (params.signal.aborted) {
+          yield { type: 'turn_error', reason: 'This operation was aborted' }
+          return
+        }
+        yield { type: 'turn_done' }
+      }
+    }
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new AbortAsTurnErrorSdk()
+    const registry = new SessionStreamRegistry(data, sdk)
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+    stream.onMessage(clientMessage({ type: 'abort' }))
+    await tick()
+
+    expect(runTurnParams(sdk).signal.aborted).toBe(true)
+    expect(ofType(events, 'status').every((event) => event.state !== 'error')).toBe(true)
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+  })
+
+  test('abort surfacing as a rejected turn (AbortError thrown) settles to idle, not error', async () => {
+    class AbortThrowingSdk extends MockSdkClient {
+      override async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
+        this.calls.push({ method: 'runTurn', args: [params] })
+        yield { type: 'text_delta', text: 'a' }
+        await params.canUseTool('Bash', { command: 'sleep 999' })
+        if (params.signal.aborted) throw new DOMException('This operation was aborted', 'AbortError')
+        yield { type: 'turn_done' }
+      }
+    }
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new AbortThrowingSdk()
+    const registry = new SessionStreamRegistry(data, sdk)
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+    stream.onMessage(clientMessage({ type: 'abort' }))
+    await tick()
+
+    expect(runTurnParams(sdk).signal.aborted).toBe(true)
+    expect(ofType(events, 'status').every((event) => event.state !== 'error')).toBe(true)
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+  })
+
   test('onClose alone does NOT abort: the turn keeps running and the next connect resyncs', async () => {
     const { registry, sdk } = setup({
       turns: [[
@@ -338,6 +408,12 @@ describe('SessionStream', () => {
     await tick()
 
     expect(events.at(-1)).toEqual({ type: 'status', sessionId: 'sdk-1', state: 'error', error: { reason: 'rename failed' } })
+
+    // The registry must have been re-keyed BEFORE the (failing) awaited rename:
+    // mapDraft already redirects both ids to 'sdk-1', so a stale 'd1' key would
+    // make every future get() miss and mint a DUPLICATE stream, stranding this one.
+    expect(registry.get('d1', 'p1')).toBe(stream)
+    expect(registry.get('sdk-1', 'p1')).toBe(stream)
   })
 
   // Guard: a turn against an unknown project must fail loudly, not crash the process

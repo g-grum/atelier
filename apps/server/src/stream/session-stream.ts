@@ -111,14 +111,18 @@ export class SessionStream {
         signal: abort.signal,
       })
       for await (const event of turn) {
-        await this.handleTurnEvent(event, draft?.id)
+        await this.handleTurnEvent(event, draft?.id, abort.signal)
       }
     } catch (err) {
       // runTurn is fired-and-forgotten from onMessage — an escaping rejection
-      // would be unhandled. Surface SDK failures as a status error instead.
-      this.state = 'error'
-      this.lastError = { reason: err instanceof Error ? err.message : String(err) }
-      this.broadcast(this.snapshot())
+      // would be unhandled. Surface SDK failures as a status error instead —
+      // unless the turn's own abort fired: an AbortError rejection is then a
+      // normal Stop, and the finally block settles the state to idle.
+      if (!abort.signal.aborted) {
+        this.state = 'error'
+        this.lastError = { reason: err instanceof Error ? err.message : String(err) }
+        this.broadcast(this.snapshot())
+      }
     } finally {
       this.turnAbort = null
       if (this.state === 'streaming') {
@@ -129,7 +133,7 @@ export class SessionStream {
     }
   }
 
-  private async handleTurnEvent(event: SdkTurnEvent, draftId: string | undefined): Promise<void> {
+  private async handleTurnEvent(event: SdkTurnEvent, draftId: string | undefined, signal: AbortSignal): Promise<void> {
     switch (event.type) {
       case 'text_delta':
         this.partialText += event.text
@@ -179,6 +183,10 @@ export class SessionStream {
         this.broadcast(this.snapshot())
         return
       case 'turn_error':
+        // A user abort surfaces from the real AgentSdkClient as a turn_error
+        // (the SDK query rejects with an AbortError, converted downstream) —
+        // that is a normal Stop, not an error; finally settles the state to idle.
+        if (signal.aborted) return
         this.state = 'error'
         this.lastError = event.resetAt !== undefined ? { reason: event.reason, resetAt: event.resetAt } : { reason: event.reason }
         this.broadcast(this.snapshot())
@@ -189,8 +197,12 @@ export class SessionStream {
   private async materializeDraft(draftId: string, sdkSessionId: string): Promise<void> {
     // mapDraft moves the draft's model into modelOverrides[sdkSessionId] — loss-less.
     const { deferredName } = this.data.mapDraft(draftId, sdkSessionId)
-    if (deferredName !== null) await this.sdk.renameSession(sdkSessionId, deferredName)
+    // Re-key the registry in the SAME synchronous step as mapDraft: from here on
+    // both ids resolve to sdkSessionId, so a stale draft-id key would make every
+    // future lookup miss and mint a duplicate stream (and the awaited rename
+    // below yields — or throws — before a deferred re-key could ever run).
     this.onRekey?.(draftId, sdkSessionId)
+    if (deferredName !== null) await this.sdk.renameSession(sdkSessionId, deferredName)
     this.broadcast({
       type: 'status',
       sessionId: sdkSessionId,

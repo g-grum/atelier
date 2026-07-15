@@ -38,9 +38,21 @@ export function createApp({ data, sessions, sdk, token }: { data: AppData; sessi
   const streams = new SessionStreamRegistry(data, sdk)
   api.get(
     '/sessions/:id/stream',
+    // Guard BEFORE the upgrade: the registry caches one stream per session
+    // forever, so a first connect with a missing/unknown projectId would poison
+    // the singleton — later connects with the correct projectId would silently
+    // attach to a stream whose every user_message fails until restart.
+    async (c, next) => {
+      const projectId = c.req.query('projectId')
+      if (!projectId || !data.get().projects.some((p) => p.id === projectId)) {
+        return c.json({ error: `unknown projectId: ${projectId ?? ''}` }, 400)
+      }
+      await next()
+    },
     upgradeWebSocket((c) => {
-      // upgradeWebSocket's context is not path-typed — param() comes back optional
-      const stream = streams.get(c.req.param('id') ?? '', c.req.query('projectId') ?? '')
+      // upgradeWebSocket's context is not path-typed — param() comes back
+      // optional; projectId was validated (present + known) by the guard above.
+      const stream = streams.get(c.req.param('id') ?? '', c.req.query('projectId') as string)
       let sink: ((event: ServerEvent) => void) | null = null
       return {
         onOpen(_evt, ws) {
