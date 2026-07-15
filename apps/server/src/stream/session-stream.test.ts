@@ -365,6 +365,124 @@ describe('SessionStream', () => {
     expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
   })
 
+  // The real AgentSdkClient keeps awaiting the SDK query stream's close AFTER
+  // yielding turn_done from the 'result' message — so the generator drains
+  // asynchronously past turn_done while state is already 'idle'. A user_message
+  // in that gap legitimately starts the next turn; the draining turn's teardown
+  // must not touch fields the new turn now owns. (The base mock completes
+  // synchronously, which is why these need bespoke generators.)
+  test('a turn draining past turn_done must not tear down the next turn (abort stays live, no spurious idle)', async () => {
+    let releaseDrain!: () => void
+    const drainGate = new Promise<void>((resolve) => {
+      releaseDrain = resolve
+    })
+    class DrainGapSdk extends MockSdkClient {
+      private turnNo = 0
+      override async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
+        this.calls.push({ method: 'runTurn', args: [params] })
+        if (this.turnNo++ === 0) {
+          yield { type: 'text_delta', text: 'one' }
+          yield { type: 'turn_done' }
+          await drainGate // the post-turn_done drain gap
+          return
+        }
+        // turn 2: held open on canUseTool so the drain races against it mid-turn
+        yield { type: 'text_delta', text: 'two' }
+        await params.canUseTool('Bash', { command: 'sleep 999' })
+        if (params.signal.aborted) return
+        yield { type: 'turn_done' }
+      }
+    }
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new DrainGapSdk()
+    const registry = new SessionStreamRegistry(data, sdk)
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'first' }))
+    await tick()
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+
+    // turn 1's generator is still draining; turn 2 starts in that gap
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'second' }))
+    await tick()
+    const countBeforeDrain = events.length
+
+    releaseDrain()
+    await tick()
+
+    // no spurious idle mid-turn-2 — that would let a further user_message
+    // start a truly concurrent turn (one-turn-per-session invariant)
+    expect(events.length).toBe(countBeforeDrain)
+
+    // Stop is still alive: an abort message aborts TURN 2's signal
+    stream.onMessage(clientMessage({ type: 'abort' }))
+    await tick()
+    expect(runTurnParams(sdk, 1).signal.aborted).toBe(true)
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+  })
+
+  test('a turn rejecting while draining past turn_done must not clobber the next turn with an error', async () => {
+    let failDrain!: (err: Error) => void
+    const drainGate = new Promise<void>((_resolve, reject) => {
+      failDrain = reject
+    })
+    class DrainRejectSdk extends MockSdkClient {
+      private turnNo = 0
+      override async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
+        this.calls.push({ method: 'runTurn', args: [params] })
+        if (this.turnNo++ === 0) {
+          yield { type: 'turn_done' }
+          await drainGate // rejects: e.g. the SDK stream's close fails after 'result'
+          return
+        }
+        yield { type: 'text_delta', text: 'two' }
+        await params.canUseTool('Bash', { command: 'sleep 999' })
+        if (params.signal.aborted) return
+        yield { type: 'turn_done' }
+      }
+    }
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new DrainRejectSdk()
+    const registry = new SessionStreamRegistry(data, sdk)
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'first' }))
+    await tick()
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'second' }))
+    await tick()
+
+    failDrain(new Error('stream close failed'))
+    await tick()
+
+    // turn 1's late rejection must not surface as an error over turn 2
+    expect(ofType(events, 'status').every((event) => event.state !== 'error')).toBe(true)
+
+    // and must not have knocked the state off 'streaming': a user_message here
+    // must still be dropped by the one-turn guard
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'third' }))
+    await tick()
+    expect(sdk.calls.filter((call) => call.method === 'runTurn')).toHaveLength(2)
+
+    // turn 2 finishes normally once its held permission is allowed
+    const pending = ofType(events, 'permission_request')
+    expect(pending).toHaveLength(1)
+    stream.onMessage(clientMessage({ type: 'permission_response', requestId: pending[0]!.requestId, decision: 'allow' }))
+    await tick()
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+  })
+
   test('onClose alone does NOT abort: the turn keeps running and the next connect resyncs', async () => {
     const { registry, sdk } = setup({
       turns: [[

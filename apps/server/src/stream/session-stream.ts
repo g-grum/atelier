@@ -117,18 +117,28 @@ export class SessionStream {
       // runTurn is fired-and-forgotten from onMessage — an escaping rejection
       // would be unhandled. Surface SDK failures as a status error instead —
       // unless the turn's own abort fired: an AbortError rejection is then a
-      // normal Stop, and the finally block settles the state to idle.
-      if (!abort.signal.aborted) {
+      // normal Stop, and the finally block settles the state to idle. The
+      // this.turnAbort identity check makes teardown owner-only: the real
+      // AgentSdkClient keeps draining the SDK stream AFTER yielding turn_done
+      // (state already 'idle'), so a user_message in that gap starts the next
+      // turn — a late rejection from the drained turn must not clobber it.
+      if (!abort.signal.aborted && this.turnAbort === abort) {
         this.state = 'error'
         this.lastError = { reason: err instanceof Error ? err.message : String(err) }
         this.broadcast(this.snapshot())
       }
     } finally {
-      this.turnAbort = null
-      if (this.state === 'streaming') {
-        // Aborted, or the turn ended without turn_done/turn_error — settle to idle.
-        this.state = 'idle'
-        this.broadcast(this.snapshot())
+      // Owner-only teardown (same drain-gap race as above): once a newer turn
+      // holds this.turnAbort, nulling it would kill its Stop, and the
+      // 'streaming' settle would broadcast a spurious idle mid-turn — letting
+      // a further user_message violate the one-turn-per-session invariant.
+      if (this.turnAbort === abort) {
+        this.turnAbort = null
+        if (this.state === 'streaming') {
+          // Aborted, or the turn ended without turn_done/turn_error — settle to idle.
+          this.state = 'idle'
+          this.broadcast(this.snapshot())
+        }
       }
     }
   }
