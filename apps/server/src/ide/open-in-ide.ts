@@ -24,12 +24,24 @@ const LAUNCHER_FIX: Record<Ide, string> = {
   cursor: "installez la commande « cursor » (Shell Command: Install 'cursor' command)",
 }
 
+/**
+ * Escapes only the characters that are invalid (whitespace) or ambiguous (&, #, %, ?)
+ * in the URL path/query-value position — `/` and `:` stay intact. Without this,
+ * a space makes `open <url>` fail to parse (dead scheme route → misleading
+ * "install the launcher"), and `&`/`#`/`%` yield a dispatchable-but-misparsed URL:
+ * `open` exits 0, we report ok, and the IDE opens the wrong file — a silent failure.
+ */
+function escapePath(file: string): string {
+  return file.replace(/[%\s&#?]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`)
+}
+
 export function buildSchemeUrl(ide: Ide, file: string, line?: number): string {
+  const path = escapePath(file)
   if (ide === 'vscode' || ide === 'cursor') {
     // Canonical form vscode://file/<abs>:<line> — the path's leading slash is the separator.
-    return `${ide}://file${file}${line === undefined ? '' : `:${line}`}`
+    return `${ide}://file${path}${line === undefined ? '' : `:${line}`}`
   }
-  return `${ide}://open?file=${file}${line === undefined ? '' : `&line=${line}`}`
+  return `${ide}://open?file=${path}${line === undefined ? '' : `&line=${line}`}`
 }
 
 export function buildCliArgs(ide: Ide, file: string, line?: number): string[] {

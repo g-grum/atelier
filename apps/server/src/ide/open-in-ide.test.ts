@@ -38,6 +38,33 @@ describe('buildSchemeUrl', () => {
   test('idea → idea://open?file=<abs>&line=<n>', () => {
     expect(buildSchemeUrl('idea', FILE, 84)).toBe('idea://open?file=/proj/src/app.ts&line=84')
   })
+
+  test('escapes spaces in the path so `open <url>` parses it (webstorm)', () => {
+    expect(buildSchemeUrl('webstorm', '/proj/My Project/app.ts', 84)).toBe(
+      'webstorm://open?file=/proj/My%20Project/app.ts&line=84',
+    )
+  })
+
+  test('escapes &, #, % and ? so the URL is not misparsed into the wrong file', () => {
+    expect(buildSchemeUrl('webstorm', '/proj/a&b#c%d?e.ts', 5)).toBe(
+      'webstorm://open?file=/proj/a%26b%23c%25d%3Fe.ts&line=5',
+    )
+  })
+
+  test('escapes spaces for vscode while keeping / and : intact', () => {
+    expect(buildSchemeUrl('vscode', '/proj/My Project/v1:2.ts', 84)).toBe(
+      'vscode://file/proj/My%20Project/v1:2.ts:84',
+    )
+  })
+
+  test('CLI fallback args keep the raw path (argv needs no URL escaping)', () => {
+    expect(buildCliArgs('webstorm', '/proj/My Project/a&b.ts', 84)).toEqual([
+      'webstorm',
+      '--line',
+      '84',
+      '/proj/My Project/a&b.ts',
+    ])
+  })
 })
 
 describe('openInIde', () => {
