@@ -12,7 +12,7 @@ export type ToolUseDescription = {
 }
 
 export function toolKindOf(toolName: string): ToolKind {
-  return toolName in ToolKinds && toolName !== ToolKinds.Other ? (toolName as ToolKind) : ToolKinds.Other
+  return Object.hasOwn(ToolKinds, toolName) ? (toolName as ToolKind) : ToolKinds.Other
 }
 
 /** The single place that turns raw { toolName, input } into what the UI shows (chat items + tool_use events). */

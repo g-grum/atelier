@@ -11,6 +11,12 @@ describe('toolKindOf', () => {
   test('unknown tool name maps to Other', () => {
     expect(toolKindOf('mcp__github__create_pr')).toBe('Other')
   })
+  test('Object.prototype member names map to Other, not a bogus kind', () => {
+    expect(toolKindOf('toString')).toBe('Other')
+    expect(toolKindOf('valueOf')).toBe('Other')
+    expect(toolKindOf('hasOwnProperty')).toBe('Other')
+    expect(toolKindOf('constructor')).toBe('Other')
+  })
 })
 
 describe('describeToolUse', () => {
