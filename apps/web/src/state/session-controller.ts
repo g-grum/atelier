@@ -40,6 +40,8 @@ export class SessionController {
   private resyncGeneration = 0
   private resyncing = false
   private buffer: ServerEvent[] = []
+  /** User texts echoed locally but not yet seen in a fetched history — resync resets must not wipe them. */
+  private pendingEchoes: string[] = []
 
   constructor(options: SessionControllerOptions = {}) {
     this.fetchMessages = options.fetchMessages ?? getMessages
@@ -78,16 +80,19 @@ export class SessionController {
   }
 
   /**
-   * Returns whether the message was accepted. Refused mid-turn: the server
-   * drops user_message while streaming (one turn at a time), so sending would
-   * append a local echo that is never persisted — a phantom until the next
-   * refetch. The UI gates the composer on this contract.
+   * Returns whether the message was accepted. Refused mid-turn (the server
+   * drops user_message while streaming — one turn at a time) and while a
+   * resync refetch is pending (the stale local status cannot vouch for the
+   * server, and the imminent reset would race the echo). The UI gates the
+   * composer on this contract. Once accepted, the local echo is guaranteed to
+   * survive resync resets — see unconfirmedEchoes.
    */
   sendMessage(text: string): boolean {
-    if (this.socket === null || this.state.status === 'streaming') return false
+    if (this.socket === null || this.resyncing || this.state.status === 'streaming') return false
     this.socket.send({ type: 'user_message', text })
     // The server never echoes user messages as ServerEvents — append locally
     // (the persisted copy comes back on the next history fetch).
+    this.pendingEchoes.push(text)
     this.setState({ ...this.state, items: [...this.state.items, { kind: 'user', text }] })
     return true
   }
@@ -111,6 +116,7 @@ export class SessionController {
     this.activeSessionId = null
     this.resyncing = false
     this.buffer = []
+    this.pendingEchoes = []
   }
 
   private receive(event: ServerEvent): void {
@@ -146,8 +152,41 @@ export class SessionController {
     this.resyncing = false
     const buffered = this.buffer
     this.buffer = []
-    if (history !== null) this.setState(reset(history))
+    if (history !== null) {
+      // The refetch can predate an accepted send: ws.ts flushes its outbox on
+      // reopen BEFORE firing onReconnect, so the GET races the SDK's transcript
+      // persistence. Re-append the echoes the history does not account for —
+      // an accepted message must never silently vanish from the transcript.
+      const missing = this.unconfirmedEchoes(history) // computed against the pre-reset items
+      this.pendingEchoes = missing
+      const next = reset(history)
+      for (const text of missing) next.items.push({ kind: 'user', text })
+      this.setState(next)
+    }
     for (const event of buffered) this.apply(event)
+  }
+
+  /**
+   * Multiset diff: which pending echoes does `history` NOT account for?
+   * Budget per text = occurrences in the refetched history minus occurrences
+   * already confirmed on screen (user items minus the pending echoes) — so a
+   * repeated text (« Continue ») is never confirmed against an old message.
+   * Pending echoes then consume the remaining budget in send order.
+   */
+  private unconfirmedEchoes(history: ChatMessage[]): string[] {
+    if (this.pendingEchoes.length === 0) return []
+    const budget = new Map<string, number>()
+    const bump = (text: string, by: number): void => {
+      budget.set(text, (budget.get(text) ?? 0) + by)
+    }
+    for (const message of history) if (message.role === 'user') bump(message.text, 1)
+    for (const item of this.state.items) if (item.kind === 'user') bump(item.text, -1)
+    for (const text of this.pendingEchoes) bump(text, 1)
+    return this.pendingEchoes.filter((text) => {
+      const remaining = budget.get(text) ?? 0
+      bump(text, -1)
+      return remaining <= 0 // no persisted copy left to match — still pending
+    })
   }
 
   private setState(next: StreamState): void {

@@ -302,6 +302,85 @@ describe('SessionController actions', () => {
   })
 })
 
+describe('SessionController sendMessage vs resync', () => {
+  test('sendMessage during a pending resync refetch is refused — the stale status cannot vouch for the server', async () => {
+    const { controller, socket, lastFetch, open } = makeHarness()
+    await open(history)
+
+    socket().reconnect()
+    const before = controller.getState()
+    expect(controller.sendMessage('pendant le resync')).toBe(false)
+    expect(socket().sent).toEqual([])
+    expect(controller.getState()).toBe(before)
+
+    lastFetch().resolve(history)
+    await flush()
+    expect(controller.sendMessage('après le resync')).toBe(true)
+    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'après le resync' })
+  })
+
+  test('a local echo missing from the resync refetch survives the reset, then dedupes once persisted', async () => {
+    const { controller, socket, lastFetch, open } = makeHarness()
+    await open(history)
+    expect(controller.sendMessage('Relance les tests')).toBe(true)
+
+    // Socket blip: ws.ts flushes the outboxed user_message on reopen BEFORE
+    // firing onReconnect, so the resync GET races the SDK's persistence and
+    // misses the just-sent message. The accepted echo must not vanish.
+    socket().reconnect()
+    lastFetch().resolve(history) // refetched history predates the message
+    await flush()
+    expect(controller.getState().items).toEqual([
+      { kind: 'user', text: 'Bonjour' },
+      { kind: 'assistant', text: 'Salut !', streaming: false },
+      { kind: 'user', text: 'Relance les tests' }, // replayed — sendMessage's `true` must not lie
+    ])
+
+    // A later resync sees the persisted copy — confirmed, not doubled.
+    socket().reconnect()
+    lastFetch().resolve([...history, { role: 'user', text: 'Relance les tests', at: '2026-07-15T09:02:00.000Z' }])
+    await flush()
+    expect(controller.getState().items).toEqual([
+      { kind: 'user', text: 'Bonjour' },
+      { kind: 'assistant', text: 'Salut !', streaming: false },
+      { kind: 'user', text: 'Relance les tests' },
+    ])
+  })
+
+  test('echo replay counts occurrences — an old message with the same text does not confirm a new echo', async () => {
+    const repeatHistory: ChatMessage[] = [
+      ...history,
+      { role: 'user', text: 'Continue', at: '2026-07-15T09:01:00.000Z' },
+      { role: 'assistant', text: 'Fait.', at: '2026-07-15T09:01:30.000Z' },
+    ]
+    const { controller, socket, lastFetch, open } = makeHarness()
+    await open(repeatHistory)
+    expect(controller.sendMessage('Continue')).toBe(true)
+
+    socket().reconnect()
+    lastFetch().resolve(repeatHistory) // still only the OLD « Continue »
+    await flush()
+
+    expect(controller.getState().items.filter((item) => item.kind === 'user')).toEqual([
+      { kind: 'user', text: 'Bonjour' },
+      { kind: 'user', text: 'Continue' },
+      { kind: 'user', text: 'Continue' }, // the new echo survives
+    ])
+  })
+
+  test('pending echoes do not leak across open() — a new session resync cannot replay them', async () => {
+    const { controller, socket, lastFetch, open } = makeHarness()
+    await open(history, 's1')
+    expect(controller.sendMessage('message pour s1')).toBe(true)
+
+    await open([], 's2', 'p1')
+    socket().reconnect()
+    lastFetch().resolve([])
+    await flush()
+    expect(controller.getState().items).toEqual([])
+  })
+})
+
 describe('fixtures', () => {
   test('the scripted fixture turn replays through the controller', async () => {
     const { controller, socket, open } = makeHarness()
