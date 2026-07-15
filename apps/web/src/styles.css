@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Design tokens transcribed from docs/mockups/v4.2.html :root.
+ * Semantic mapping (from the mockup):
+ *  - project identities cycle cyan / magenta / violet / mint / amber
+ *  - tool kinds: Bash = cyan, Edit/Write = violet, Read/Other = muted
+ *  - states: mint = running/open, violet = merged, red = critical only
+ *  - AMBER IS RESERVED EXCLUSIVELY FOR PERMISSION PROMPTS
+ *  - usage bar gradient: cyan -> indigo -> magenta
+ */
+@theme {
+  --color-ground: #0c101c;
+  --color-surface: #121828;
+  --color-surface-2: #182034;
+  --color-line: #232d45;
+  --color-line-soft: #1c2438;
+  --color-text: #e8ecf6;
+  --color-muted: #93a0bd;
+  --color-faint: #5b6784;
+  --color-indigo: #7c86ff;
+  --color-cyan: #4dd8e6;
+  --color-magenta: #f06bd9;
+  --color-mint: #4ade80;
+  --color-amber: #fbbf24;
+  --color-red: #fb6f5f;
+  --color-violet: #b18aff;
+  --color-blue: #60a5fa;
+  --color-teal: #2dd4bf;
+
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  --font-sans: -apple-system, 'SF Pro Text', 'Segoe UI', sans-serif;
+
+  /*
+   * shadcn/ui semantic variables, hand-wired to the v4.2 tokens above.
+   * Dark theme only — there is no light theme in Atelier v0.1.
+   * Note: --color-muted keeps the mockup meaning (a TEXT color, #93a0bd);
+   * shadcn's "muted background" role is covered by surface-2 instead.
+   */
+  --color-background: var(--color-ground);
+  --color-foreground: var(--color-text);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-text);
+  --color-primary: var(--color-indigo);
+  --color-primary-foreground: var(--color-ground);
+  --color-secondary: var(--color-surface-2);
+  --color-secondary-foreground: var(--color-text);
+  --color-muted-foreground: var(--color-muted);
+  --color-accent: var(--color-surface-2);
+  --color-accent-foreground: var(--color-text);
+  --color-destructive: var(--color-red);
+  --color-destructive-foreground: var(--color-ground);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-cyan);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
+
+  body {
+    background-color: var(--color-ground);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+  }
+}
