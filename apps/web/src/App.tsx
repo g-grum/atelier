@@ -1,22 +1,38 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { SessionSummary } from '@atelier/shared'
-import { backend } from './api/backend'
+import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
 import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
+import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
+
+export type AppProps = {
+  /** Injectable for tests — defaults to the module backend (real REST+WS, or fixtures). */
+  backend?: Backend
+}
 
 /**
  * Layout-only component: 3-zone grid (sidebar 262px / chat / right panel
  * 306px) under a 48px topbar. All session lifecycle lives in
  * SessionController; server data flows through react-query.
  */
-export default function App() {
+export default function App({ backend = defaultBackend }: AppProps = {}) {
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<{ sessionId: string; projectId: string } | null>(null)
   const [openProjectId, setOpenProjectId] = useState<string | null>(null)
+  /**
+   * Failure of the last controller.open() (the history fetch): without it the
+   * chat would render as an innocent empty session while every send is
+   * silently refused (no socket). Rendered as a banner with a retry.
+   */
+  const [openFailure, setOpenFailure] = useState<{ sessionId: string; projectId: string; message: string } | null>(null)
+  /** Transient failure notice from session mutations (rename / create / delete). */
+  const [notice, setNotice] = useState<string | null>(null)
+  /** Bumped per open attempt — a stale rejection must not overwrite a newer attempt's state. */
+  const openAttempt = useRef(0)
 
   const controller = useMemo(
     () =>
@@ -31,7 +47,7 @@ export default function App() {
           void queryClient.invalidateQueries({ queryKey: ['sessions'] })
         },
       }),
-    [queryClient],
+    [backend, queryClient],
   )
   useEffect(() => () => controller.close(), [controller])
 
@@ -51,17 +67,31 @@ export default function App() {
   })
   const sessions = sessionsQuery.data ?? []
 
+  const openSession = useCallback(
+    (sessionId: string, projectId: string) => {
+      const attempt = ++openAttempt.current
+      setOpenFailure(null)
+      controller.open(sessionId, projectId).catch((error: unknown) => {
+        // A newer open()/close() superseded this attempt — its outcome owns the UI.
+        if (attempt !== openAttempt.current) return
+        setOpenFailure({ sessionId, projectId, message: errorMessage(error) })
+      })
+    },
+    [controller],
+  )
+
   const selectSession = useCallback(
     (session: SessionSummary) => {
       if (selected?.sessionId === session.id) return
       setSelected({ sessionId: session.id, projectId: session.projectId })
-      void controller.open(session.id, session.projectId).catch(() => {})
+      openSession(session.id, session.projectId)
     },
-    [controller, selected],
+    [openSession, selected],
   )
 
   const registerProject = useMutation({
     mutationFn: backend.registerProject,
+    // Failure surfaces through `registerProject.error` in the sidebar form.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   })
 
@@ -71,6 +101,7 @@ export default function App() {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
       selectSession(draft)
     },
+    onError: (error) => setNotice(`Impossible de créer la session : ${errorMessage(error)}`),
   })
 
   const deleteDraft = useMutation({
@@ -79,15 +110,19 @@ export default function App() {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
       // react-query v5 invokes the latest render's callbacks — `selected` is current.
       if (selected?.sessionId === session.id) {
+        openAttempt.current++ // orphan any in-flight open of the deleted session
         controller.close()
         setSelected(null)
+        setOpenFailure(null)
       }
     },
+    onError: (error) => setNotice(`Impossible de supprimer le brouillon : ${errorMessage(error)}`),
   })
 
   const renameSession = useMutation({
     mutationFn: ({ sessionId, name }: { sessionId: string; name: string }) => backend.patchSession(sessionId, { name }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+    onError: (error) => setNotice(`Échec du renommage : ${errorMessage(error)}`),
   })
 
   const activeSession = sessions.find((session) => session.id === selected?.sessionId) ?? null
@@ -106,6 +141,9 @@ export default function App() {
       <div className="app">
         <SessionSidebar
           projects={projects}
+          projectsStatus={projectsQuery.status}
+          projectsError={projectsQuery.error !== null ? errorMessage(projectsQuery.error) : undefined}
+          onRetryProjects={() => void projectsQuery.refetch()}
           sessions={sessions}
           openProjectId={projectId}
           activeSessionId={selected?.sessionId ?? null}
@@ -117,8 +155,26 @@ export default function App() {
           }}
           onDeleteDraft={(session) => deleteDraft.mutate(session)}
           onRegisterProject={(path) => registerProject.mutate(path)}
+          registerError={registerProject.error !== null ? errorMessage(registerProject.error) : null}
+          registerPending={registerProject.isPending}
         />
         <main className="chat">
+          {notice !== null && (
+            <div className="banner" role="alert">
+              <span className="banner-text">{notice}</span>
+              <button type="button" className="banner-btn" onClick={() => setNotice(null)}>
+                Fermer
+              </button>
+            </div>
+          )}
+          {openFailure !== null && (
+            <div className="banner" role="alert">
+              <span className="banner-text">Impossible de charger la session : {openFailure.message}</span>
+              <button type="button" className="banner-btn" onClick={() => openSession(openFailure.sessionId, openFailure.projectId)}>
+                Réessayer
+              </button>
+            </div>
+          )}
           <ChatView
             items={stream.items}
             status={stream.status}

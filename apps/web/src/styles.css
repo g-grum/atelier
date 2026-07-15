@@ -151,6 +151,13 @@
   .register p { margin: 0; font-size: 12px; color: var(--color-muted); }
   .register input { background: var(--color-ground); border: 1px solid var(--color-line); border-radius: 7px; padding: 7px 10px; color: var(--color-text); font: 12px var(--font-mono); outline: 0; }
   .register input:focus { border-color: var(--color-indigo); box-shadow: 0 0 0 3px rgba(124, 134, 255, 0.12); }
+  .register .new-btn:disabled { opacity: 0.6; cursor: default; }
+  .register .form-error { color: var(--color-red); font-size: 11.5px; overflow-wrap: anywhere; }
+
+  /* Projects query pending / failed (the register form is gated on success). */
+  .side-note { margin: 4px 14px; padding: 6px 2px; font-size: 12px; color: var(--color-faint); }
+  .side-error { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; margin: 4px 14px; padding: 13px 14px; border: 1px solid rgba(251, 111, 95, 0.4); border-left: 3px solid var(--color-red); border-radius: 12px; background: var(--color-surface); }
+  .side-error p { margin: 0; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }
 
   /* ── Chat ───────────────────────────── */
   .chat { min-width: 0; display: flex; flex-direction: column; }
@@ -165,8 +172,10 @@
   .msg.user .body { background: var(--color-surface-2); border: 1px solid var(--color-line-soft); border-radius: 11px; padding: 10px 13px; }
   .msg .body { white-space: pre-wrap; overflow-wrap: break-word; }
 
-  .tool { display: flex; align-items: center; gap: 9px; margin-top: 8px; border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 8px 12px; font: 500 11.5px var(--font-mono); color: var(--color-muted); cursor: pointer; width: 100%; text-align: left; background: transparent; }
+  /* Row = plain div wrapping two SIBLING buttons (toggle + IDE) — a button must never nest interactive content. */
+  .tool { display: flex; align-items: center; gap: 9px; margin-top: 8px; border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 8px 12px; font: 500 11.5px var(--font-mono); color: var(--color-muted); background: transparent; }
   .tool:hover { background: var(--color-surface); }
+  .tool-toggle { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; background: transparent; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   .tool.bash { border-left: 3px solid var(--color-cyan); }
   .tool.edit { border-left: 3px solid var(--color-violet); }
   .tool.other { border-left: 3px solid var(--color-muted); }
@@ -182,8 +191,12 @@
   .tool .status .del { color: var(--color-red); font-weight: 700; }
   .tool .lnum { color: var(--color-faint); }
   .tool-detail { margin-top: 4px; border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 8px 12px; font: 12px var(--font-mono); color: var(--color-muted); background: var(--color-ground); white-space: pre-wrap; overflow-wrap: break-word; }
-  .ide-btn { display: none; align-items: center; gap: 5px; font: 700 10px var(--font-mono); color: var(--color-cyan); background: rgba(77, 216, 230, 0.1); border: 1px solid rgba(77, 216, 230, 0.35); border-radius: 6px; padding: 3px 8px; cursor: pointer; margin-left: 8px; }
-  .tool:hover .ide-btn { display: inline-flex; }
+  /* Revealed on hover AND :focus-within: tabbing onto the toggle shows the
+     button, so the next Tab can reach it (display:none drops it from the tab
+     order only while nothing in the row has focus). */
+  .ide-btn { display: none; align-items: center; gap: 5px; font: 700 10px var(--font-mono); color: var(--color-cyan); background: rgba(77, 216, 230, 0.1); border: 1px solid rgba(77, 216, 230, 0.35); border-radius: 6px; padding: 3px 8px; cursor: pointer; margin-left: 8px; flex-shrink: 0; }
+  .tool:hover .ide-btn,
+  .tool:focus-within .ide-btn { display: inline-flex; }
 
   .typing { display: flex; gap: 4px; padding: 6px 2px 0; }
   .typing i { width: 5px; height: 5px; border-radius: 99px; background: var(--color-indigo); opacity: 0.4; }
@@ -194,6 +207,13 @@
   .permission .p-head .k { color: var(--color-amber); font: 700 10px var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; }
   .permission code.cmd { display: block; font: 12px var(--font-mono); color: #ffe9b3; background: var(--color-ground); border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 9px 12px; margin: 8px 0 0; overflow-x: auto; white-space: pre; }
   .permission .p-note { margin-top: 10px; font: 500 11px var(--font-mono); color: var(--color-faint); }
+
+  /* Failure banners: mutation notices + failed session open (with retry).
+     Red is the critical color — amber stays reserved for permissions. */
+  .banner { display: flex; align-items: center; gap: 10px; margin: 12px 28px 0; padding: 9px 13px; max-width: 48rem; border: 1px solid rgba(251, 111, 95, 0.4); border-left: 3px solid var(--color-red); border-radius: 9px; background: linear-gradient(180deg, rgba(251, 111, 95, 0.07), transparent 80%), var(--color-surface); font-size: 12px; }
+  .banner .banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .banner .banner-btn { flex-shrink: 0; font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+  .banner .banner-btn:hover { border-color: var(--color-red); color: var(--color-red); }
 
   /* ── Composer ───────────────────────── */
   .composer { flex-shrink: 0; padding: 14px 28px 18px; border-top: 1px solid var(--color-line); }

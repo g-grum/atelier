@@ -18,65 +18,62 @@ function kindClass(kind: ToolKind): string {
 
 /**
  * Collapsible tool-call row: kind-colored left border, summary, status
- * (checkmark/cross + diffstat + :line), and a hover-revealed IDE button that
- * opens the file at its line (POST /api/open-in-ide).
+ * (checkmark/cross + diffstat + :line), and an IDE button that opens the file
+ * at its line (POST /api/open-in-ide).
+ *
+ * The row is a plain div holding two SIBLING native buttons (toggle + IDE) —
+ * never a button nested in a button (non-conforming HTML, and a display:none
+ * child of a hover-only reveal would be unreachable by keyboard). The IDE
+ * button is revealed on :hover and :focus-within (styles.css), so tabbing
+ * onto the toggle makes it visible and the next Tab reaches it.
  */
 export function ToolCallItem({ item, onOpenInIde }: ToolCallItemProps) {
   const [expanded, setExpanded] = useState(false)
   const { file, line } = item
   return (
     <>
-      <button type="button" className={`tool ${kindClass(item.tool)}`} onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
-        <span className="chev" aria-hidden="true">
-          {expanded ? '▾' : '▸'}
-        </span>
-        <span className="kind">{item.tool}</span>
-        <span>
-          {item.summary}
-          {line !== undefined && <span className="lnum">:{line}</span>}
-        </span>
-        <span className="status">
-          {item.result !== undefined &&
-            (item.result.ok ? (
-              <span className="okt" aria-label="succès">
-                ✓
+      <div className={`tool ${kindClass(item.tool)}`}>
+        <button type="button" className="tool-toggle" onClick={() => setExpanded((open) => !open)} aria-expanded={expanded}>
+          <span className="chev" aria-hidden="true">
+            {expanded ? '▾' : '▸'}
+          </span>
+          <span className="kind">{item.tool}</span>
+          <span>
+            {item.summary}
+            {line !== undefined && <span className="lnum">:{line}</span>}
+          </span>
+          <span className="status">
+            {item.result !== undefined &&
+              (item.result.ok ? (
+                <span className="okt" aria-label="succès">
+                  ✓
+                </span>
+              ) : (
+                <span className="failt" aria-label="échec">
+                  ✗
+                </span>
+              ))}
+            {item.diffstat !== undefined && (
+              <span>
+                <span className="add">+{item.diffstat.added}</span> <span className="del">−{item.diffstat.removed}</span>
               </span>
-            ) : (
-              <span className="failt" aria-label="échec">
-                ✗
-              </span>
-            ))}
-          {item.diffstat !== undefined && (
-            <span>
-              <span className="add">+{item.diffstat.added}</span> <span className="del">−{item.diffstat.removed}</span>
-            </span>
-          )}
-        </span>
+            )}
+          </span>
+        </button>
         {file !== undefined && (
-          <span
+          <button
+            type="button"
             className="ide-btn"
-            role="button"
-            tabIndex={0}
             aria-label={`Ouvrir dans l’IDE${line !== undefined ? ` à la ligne ${line}` : ''}`}
-            onClick={(event) => {
-              event.stopPropagation()
-              onOpenInIde(file, line)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                event.stopPropagation()
-                onOpenInIde(file, line)
-              }
-            }}
+            onClick={() => onOpenInIde(file, line)}
           >
             <svg className="i" viewBox="0 0 24 24" aria-hidden="true">
               <path d="m8 7-5 5 5 5M16 7l5 5-5 5" />
             </svg>
             IDE
-          </span>
+          </button>
         )}
-      </button>
+      </div>
       {expanded && <div className="tool-detail">{detail(item)}</div>}
     </>
   )

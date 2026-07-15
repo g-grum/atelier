@@ -38,6 +38,7 @@ function renderSidebar(overrides: Partial<SessionSidebarProps> = {}) {
   }
   const props: SessionSidebarProps = {
     projects: [project],
+    projectsStatus: 'success',
     sessions: [realSession, draftSession],
     openProjectId: 'p1',
     activeSessionId: 's1',
@@ -47,6 +48,7 @@ function renderSidebar(overrides: Partial<SessionSidebarProps> = {}) {
     onCreateDraft: () => {},
     onDeleteDraft: (session) => calls.deleted.push(session),
     onRegisterProject: (path) => calls.registered.push(path),
+    onRetryProjects: () => {},
     ...overrides,
   }
   const view = render(<SessionSidebar {...props} />)
@@ -112,5 +114,42 @@ describe('SessionSidebar empty state', () => {
     renderSidebar()
     expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
     expect(screen.getByText('atelier')).toBeTruthy() // project row: basename of the path
+  })
+
+  test('the register form never shows while the projects query is still loading', () => {
+    renderSidebar({ projects: [], sessions: [], openProjectId: null, activeSessionId: null, projectsStatus: 'pending' })
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull() // loading is not an error either
+  })
+
+  test('a failed projects fetch shows an error with a retry, not the register form', () => {
+    let retries = 0
+    renderSidebar({
+      projects: [],
+      sessions: [],
+      openProjectId: null,
+      activeSessionId: null,
+      projectsStatus: 'error',
+      projectsError: 'GET /api/projects → 401',
+      onRetryProjects: () => {
+        retries += 1
+      },
+    })
+    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(screen.getByRole('alert').textContent).toContain('GET /api/projects → 401')
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    expect(retries).toBe(1)
+  })
+
+  test('a failed registration is surfaced inside the form', () => {
+    renderSidebar({
+      projects: [],
+      sessions: [],
+      openProjectId: null,
+      activeSessionId: null,
+      registerError: 'POST /api/projects → 500',
+    })
+    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('POST /api/projects → 500')
   })
 })

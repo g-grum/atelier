@@ -44,13 +44,28 @@ function toBlocks(items: ChatItem[]): Block[] {
   return blocks
 }
 
+/** How close to the bottom (px) still counts as "pinned" — trackpad slack. */
+const PIN_THRESHOLD_PX = 48
+
 export function ChatView({ items, status, onOpenInIde }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Follow-the-stream pin. Only a user scroll can unpin (see onScroll): while
+  // unpinned, new deltas must NOT yank the view back down — the user is
+  // reading. A ref (not state): scroll position is imperative, no re-render.
+  const pinnedRef = useRef(true)
 
-  // Follow the stream: keep the newest content in view as items grow/stream.
+  const onScroll = () => {
+    const el = scrollRef.current
+    if (el !== null) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= PIN_THRESHOLD_PX
+  }
+
   useEffect(() => {
     const el = scrollRef.current
-    if (el !== null) el.scrollTop = el.scrollHeight
+    if (el === null) return
+    // No overflow (fresh or emptied session) — re-arm the pin so the next
+    // session's history opens at the bottom even if the user had scrolled up.
+    if (el.scrollHeight <= el.clientHeight) pinnedRef.current = true
+    if (pinnedRef.current) el.scrollTop = el.scrollHeight
   }, [items])
 
   const blocks = toBlocks(items)
@@ -65,7 +80,7 @@ export function ChatView({ items, status, onOpenInIde }: ChatViewProps) {
   const typingInLastBlock = showTyping && blocks.at(-1)?.type === 'assistant'
 
   return (
-    <div className="messages" ref={scrollRef}>
+    <div className="messages" ref={scrollRef} onScroll={onScroll}>
       {blocks.map((block, index) => {
         const isLast = index === blocks.length - 1
         switch (block.type) {

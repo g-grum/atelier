@@ -5,6 +5,16 @@ import { SessionListItem, type SessionDotState } from './SessionListItem'
 
 export type SessionSidebarProps = {
   projects: Project[]
+  /**
+   * Status of the projects fetch. The first-launch register form is gated on
+   * 'success': while 'pending' nothing shows (no flash on startup), and
+   * 'error' shows a retry card — an empty list is only trusted once the
+   * server actually said so.
+   */
+  projectsStatus: 'pending' | 'error' | 'success'
+  /** Message of the failed projects fetch (shown when projectsStatus === 'error'). */
+  projectsError?: string
+  onRetryProjects: () => void
   /** Sessions of the open project (v0.1 loads one project's sessions at a time). */
   sessions: SessionSummary[]
   openProjectId: string | null
@@ -17,10 +27,13 @@ export type SessionSidebarProps = {
   onDeleteDraft: (session: SessionSummary) => void
   /** First-launch bootstrap: register a folder as the project (POST /api/projects). */
   onRegisterProject: (path: string) => void
+  /** Message of a failed POST /api/projects (shown inside the register form). */
+  registerError?: string | null
+  registerPending?: boolean
 }
 
 export function SessionSidebar(props: SessionSidebarProps) {
-  const { projects, sessions, openProjectId, onSelectProject, onCreateDraft } = props
+  const { projects, projectsStatus, projectsError, onRetryProjects, sessions, openProjectId, onSelectProject, onCreateDraft } = props
 
   return (
     <nav className="sidebar" aria-label="Projets et sessions">
@@ -32,8 +45,21 @@ export function SessionSidebar(props: SessionSidebarProps) {
           </button>
         )}
       </div>
-      {projects.length === 0 ? (
-        <RegisterProjectForm onRegister={props.onRegisterProject} />
+      {projectsStatus === 'pending' ? (
+        <p className="side-note">Chargement des projets…</p>
+      ) : projectsStatus === 'error' ? (
+        <div className="side-error" role="alert">
+          <p>Impossible de charger les projets{projectsError !== undefined ? ` : ${projectsError}` : ''}</p>
+          <button type="button" className="new-btn" onClick={onRetryProjects}>
+            Réessayer
+          </button>
+        </div>
+      ) : projects.length === 0 ? (
+        <RegisterProjectForm
+          onRegister={props.onRegisterProject}
+          error={props.registerError ?? null}
+          pending={props.registerPending ?? false}
+        />
       ) : (
         projects.map((project) => (
           <div className="project" key={project.id}>
@@ -85,11 +111,19 @@ function dotState(session: SessionSummary, streamingSessionId: string | null): S
   return 'done'
 }
 
-function RegisterProjectForm({ onRegister }: { onRegister: (path: string) => void }) {
+function RegisterProjectForm({
+  onRegister,
+  error,
+  pending,
+}: {
+  onRegister: (path: string) => void
+  error: string | null
+  pending: boolean
+}) {
   const [path, setPath] = useState('')
   const submit = () => {
     const trimmed = path.trim()
-    if (trimmed !== '') onRegister(trimmed)
+    if (trimmed !== '' && !pending) onRegister(trimmed)
   }
   return (
     <form
@@ -107,9 +141,14 @@ function RegisterProjectForm({ onRegister }: { onRegister: (path: string) => voi
         aria-label="Chemin du dossier du projet"
         spellCheck={false}
       />
-      <button type="submit" className="new-btn">
-        Enregistrer
+      <button type="submit" className="new-btn" disabled={pending}>
+        {pending ? 'Enregistrement…' : 'Enregistrer'}
       </button>
+      {error !== null && (
+        <p className="form-error" role="alert">
+          Échec de l’enregistrement : {error}
+        </p>
+      )}
     </form>
   )
 }
