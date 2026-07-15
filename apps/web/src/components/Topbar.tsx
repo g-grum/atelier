@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Project, SessionSummary } from '@atelier/shared'
 import { basename } from '../lib/utils'
 import type { StreamState } from '../state/stream-reducer'
+import { SettingsPanel } from './SettingsPanel'
 
 /** UI labels for the shared model ids — the interactive selector is Task 5.4. */
 const MODEL_LABELS: Record<string, string> = {
@@ -44,6 +45,7 @@ export function Topbar({ project, session, status, onRename }: TopbarProps) {
           <span className="md" aria-hidden="true" /> {MODEL_LABELS[session.model] ?? session.model}
         </div>
       )}
+      <SettingsPanel />
     </header>
   )
 }
