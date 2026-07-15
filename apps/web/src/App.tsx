@@ -179,7 +179,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             items={stream.items}
             status={stream.status}
             onOpenInIde={(file, line) => {
-              void backend.openInIde({ file, line })
+              // The server answers { ok: false, reason } instead of a 5xx when
+              // the IDE cannot be opened — both that and a transport rejection
+              // must reach the user, or the click silently does nothing.
+              backend.openInIde({ file, line }).then(
+                (result) => {
+                  if (!result.ok) setNotice(`Impossible d’ouvrir dans l’IDE : ${result.reason}`)
+                },
+                (error: unknown) => setNotice(`Impossible d’ouvrir dans l’IDE : ${errorMessage(error)}`),
+              )
             }}
           />
           <Composer disabled={selected === null} onSend={(text) => controller.sendMessage(text)} />

@@ -131,10 +131,11 @@
   .project-name.open { color: var(--color-text); }
   .pj-dot { width: 9px; height: 9px; border-radius: 3.5px; flex-shrink: 0; }
   .project-name .count { margin-left: auto; font: 600 10px var(--font-mono); color: var(--color-faint); }
-  .sess { display: flex; flex-direction: column; gap: 3px; margin: 1px 0 1px 12px; padding: 7px 10px; border-radius: 7px; cursor: pointer; color: var(--color-muted); border-left: 2px solid transparent; }
+  /* Row = plain div wrapping two SIBLING buttons (select + delete) — a button must never nest interactive content. */
+  .sess { display: flex; align-items: center; gap: 8px; margin: 1px 0 1px 12px; padding: 7px 10px; border-radius: 7px; color: var(--color-muted); border-left: 2px solid transparent; }
   .sess:hover { background: var(--color-surface-2); }
   .sess.active { background: linear-gradient(90deg, rgba(77, 216, 230, 0.1), transparent 70%); color: var(--color-text); border-left-color: var(--color-cyan); }
-  .sess .row1 { display: flex; align-items: center; gap: 8px; }
+  .sess-btn { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; background: transparent; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   .dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
   .dot[data-state='run'] { background: var(--color-mint); box-shadow: 0 0 7px rgba(74, 222, 128, 0.6); }
   .dot[data-state='idle'] { background: var(--color-faint); }
@@ -142,8 +143,12 @@
   .sess .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; font-size: 12px; }
   .sess.active .name { font-weight: 600; }
   .sess .when { font: 500 10px var(--font-mono); color: var(--color-faint); }
-  .sess .del { display: none; align-items: center; justify-content: center; width: 16px; height: 16px; border: 0; border-radius: 5px; background: transparent; color: var(--color-faint); font-size: 12px; line-height: 1; cursor: pointer; padding: 0; }
-  .sess:hover .del { display: inline-flex; }
+  .sess .del { display: none; align-items: center; justify-content: center; width: 16px; height: 16px; border: 0; border-radius: 5px; background: transparent; color: var(--color-faint); font-size: 12px; line-height: 1; cursor: pointer; padding: 0; flex-shrink: 0; }
+  /* Revealed on hover AND :focus-within (like .ide-btn): tabbing onto the
+     select button shows the delete, so the next Tab can reach it — drafts stay
+     deletable by keyboard. */
+  .sess:hover .del,
+  .sess:focus-within .del { display: inline-flex; }
   .sess .del:hover { color: var(--color-red); background: rgba(251, 111, 95, 0.12); }
 
   /* First-launch empty state (no registered project). */

@@ -82,7 +82,7 @@ describe('SessionSidebar sessions', () => {
 
   test('clicking a session row calls onSelect with that session', () => {
     const { calls } = renderSidebar()
-    fireEvent.click(rowOf('Refresh token expiré'))
+    fireEvent.click(within(rowOf('Refresh token expiré')).getByRole('button', { name: /refresh token expiré/i }))
     expect(calls.selected).toEqual([realSession])
   })
 
@@ -96,6 +96,23 @@ describe('SessionSidebar sessions', () => {
     fireEvent.click(deleteButton)
     expect(calls.deleted).toEqual([draftSession])
     expect(calls.selected).toEqual([])
+  })
+
+  test('select and draft-delete are sibling native buttons — no interactive ancestor', () => {
+    renderSidebar()
+    const draftRow = rowOf('Nouvelle session')
+    const deleteButton = within(draftRow).getByRole('button', { name: /supprimer le brouillon/i })
+    // Conforming HTML: ARIA `button` has presentational children, so nesting
+    // the delete control inside a role="button" row would flatten it away from
+    // assistive tech. It must be a real <button> with no interactive ancestor.
+    expect(deleteButton.tagName).toBe('BUTTON')
+    expect(deleteButton.parentElement?.closest('button, [role="button"], [tabindex]')).toBeNull()
+    // The select affordance is its own native sibling button, so both are
+    // independent tab stops (the delete becomes keyboard-reachable at all).
+    const selectButton = within(draftRow).getByRole('button', { name: /nouvelle session/i })
+    expect(selectButton.tagName).toBe('BUTTON')
+    expect(selectButton === deleteButton).toBe(false)
+    expect(selectButton.parentElement?.closest('button, [role="button"], [tabindex]')).toBeNull()
   })
 })
 

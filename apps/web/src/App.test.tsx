@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { Project, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, Project, SessionSummary } from '@atelier/shared'
 import type { Backend } from './api/backend'
 import App from './App'
 
@@ -100,5 +100,47 @@ describe('App failure surfacing', () => {
     expect(notice.textContent).toContain('PATCH /api/sessions/s1 → 500')
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
     expect(screen.queryByText(/Échec du renommage/)).toBeNull()
+  })
+
+  // History with a tool call carrying a file → ChatView renders an IDE button.
+  const toolMessage: ChatMessage = {
+    role: 'tool',
+    toolUseId: 't1',
+    kind: 'Edit',
+    summary: 'src/auth/refresh.ts',
+    ok: true,
+    file: 'src/auth/refresh.ts',
+    line: 42,
+    at: '2026-07-15T09:40:30.000Z',
+  }
+
+  test('an open-in-ide refusal ({ok:false}) surfaces its reason as a dismissible notice', async () => {
+    const backend = fakeBackend({
+      getMessages: async () => [toolMessage],
+      openInIde: async () => ({ ok: false, reason: 'aucun IDE détecté' }),
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByText('Session un'))
+    fireEvent.click(await screen.findByRole('button', { name: /ouvrir dans l/i }))
+
+    const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
+    expect(notice.textContent).toContain('aucun IDE détecté')
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+    expect(screen.queryByText(/Impossible d’ouvrir dans l’IDE/)).toBeNull()
+  })
+
+  test('a rejected open-in-ide call is caught and surfaced, not an unhandled rejection', async () => {
+    const backend = fakeBackend({
+      getMessages: async () => [toolMessage],
+      openInIde: async () => Promise.reject(new Error('POST /api/open-in-ide → 401')),
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByText('Session un'))
+    fireEvent.click(await screen.findByRole('button', { name: /ouvrir dans l/i }))
+
+    const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
+    expect(notice.textContent).toContain('POST /api/open-in-ide → 401')
   })
 })
