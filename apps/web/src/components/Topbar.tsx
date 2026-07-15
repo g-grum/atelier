@@ -2,14 +2,8 @@ import { useState } from 'react'
 import type { Project, SessionSummary } from '@atelier/shared'
 import { basename } from '../lib/utils'
 import type { StreamState } from '../state/stream-reducer'
+import { ModelSelector } from './ModelSelector'
 import { SettingsPanel } from './SettingsPanel'
-
-/** UI labels for the shared model ids — the interactive selector is Task 5.4. */
-const MODEL_LABELS: Record<string, string> = {
-  'claude-fable-5': 'Fable 5',
-  'claude-opus-4-8': 'Opus 4.8',
-  'claude-sonnet-4-6': 'Sonnet 4.6',
-}
 
 export type TopbarProps = {
   project: Project | null
@@ -40,11 +34,7 @@ export function Topbar({ project, session, status, onRename }: TopbarProps) {
           <span className="d" aria-hidden="true" /> streaming
         </div>
       )}
-      {session !== null && (
-        <div className="model-chip" title="Sélecteur de modèle à venir">
-          <span className="md" aria-hidden="true" /> {MODEL_LABELS[session.model] ?? session.model}
-        </div>
-      )}
+      <ModelSelector session={session} />
       <SettingsPanel />
     </header>
   )

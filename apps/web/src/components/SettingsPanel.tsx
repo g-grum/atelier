@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react'
 import { useState } from 'react'
 import { MODELS, type AlwaysRule, type Preferences } from '@atelier/shared'
 import * as client from '../api/client'
+import { modelLabel } from '../lib/models'
 import { errorMessage } from '../lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 
@@ -28,13 +29,6 @@ const IDE_LABELS: Record<Preferences['ide'], string> = {
   idea: 'IntelliJ IDEA',
 }
 const IDES = Object.keys(IDE_LABELS) as Preferences['ide'][]
-
-/** Same ids as the Topbar chip labels — a shared module lands with ModelSelector (Task 5.4). */
-const MODEL_LABELS: Record<string, string> = {
-  'claude-fable-5': 'Fable 5',
-  'claude-opus-4-8': 'Opus 4.8',
-  'claude-sonnet-4-6': 'Sonnet 4.6',
-}
 
 const LABEL_CLASS = 'font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-faint'
 const HINT_CLASS = 'm-0 text-[11.5px] text-faint'
@@ -157,7 +151,7 @@ function SettingsBody({ api }: { api: SettingsApi }) {
           >
             {MODELS.map((model) => (
               <option key={model} value={model}>
-                {MODEL_LABELS[model] ?? model}
+                {modelLabel(model)}
               </option>
             ))}
             {/* A persisted model no longer in MODELS must stay selectable, not silently remapped. */}

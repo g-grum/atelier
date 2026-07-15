@@ -113,7 +113,7 @@
   .session-title input { background: transparent; border: 0; outline: 0; color: var(--color-text); font: 600 13px var(--font-sans); width: 220px; padding: 0; }
   .streaming-chip { display: flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); color: var(--color-mint); background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 999px; padding: 4px 11px; }
   .streaming-chip .d { width: 6px; height: 6px; border-radius: 999px; background: var(--color-mint); }
-  .model-chip { display: flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); color: var(--color-violet); padding: 4px 11px; border: 1px solid rgba(177, 138, 255, 0.35); background: rgba(177, 138, 255, 0.08); border-radius: 999px; }
+  .model-chip { display: flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); color: var(--color-violet); padding: 4px 11px; border: 1px solid rgba(177, 138, 255, 0.35); background: rgba(177, 138, 255, 0.08); border-radius: 999px; cursor: pointer; }
   .model-chip .md { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet); }
 
   /* ── 3-zone layout ──────────────────── */
