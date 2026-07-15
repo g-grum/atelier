@@ -1,0 +1,114 @@
+import { MODELS, type ChatMessage, type Project, type ServerEvent, type SessionSummary } from '@atelier/shared'
+
+/**
+ * Scripted session data — production code, not test-only.
+ *
+ * Powers component development (replayed through the SessionController) and is
+ * the seed of the demo mode (spec: recorded fixtures replayed by a mock
+ * backend). Shapes come straight from @atelier/shared.
+ */
+
+const MODEL: string = MODELS[0]
+
+export const FIXTURE_PROJECT_ID = 'proj-atelier'
+export const FIXTURE_SESSION_ID = 'ses-refresh-token'
+export const FIXTURE_DRAFT_ID = 'draft-nouvelle-session'
+
+export const fixtureProjects: Project[] = [{ id: FIXTURE_PROJECT_ID, path: '/Users/demo/workspace/atelier', color: 'cyan' }]
+
+export const fixtureSessions: SessionSummary[] = [
+  {
+    id: FIXTURE_SESSION_ID,
+    projectId: FIXTURE_PROJECT_ID,
+    name: 'Refresh token expiré',
+    updatedAt: '2026-07-15T09:41:00.000Z',
+    messageCount: 5,
+    isDraft: false,
+    model: MODEL,
+  },
+  {
+    id: FIXTURE_DRAFT_ID,
+    projectId: FIXTURE_PROJECT_ID,
+    name: null,
+    updatedAt: '2026-07-15T09:45:00.000Z',
+    messageCount: 0,
+    isDraft: true,
+    model: MODEL,
+  },
+]
+
+/** Persisted history per session — what GET /api/sessions/:id/messages returns. */
+export const fixtureMessages: Record<string, ChatMessage[]> = {
+  [FIXTURE_SESSION_ID]: [
+    {
+      role: 'user',
+      text: 'Les sessions expirent au bout d’une heure — le refresh token ne se renouvelle jamais.',
+      at: '2026-07-15T09:30:00.000Z',
+    },
+    { role: 'assistant', text: 'Je regarde la gestion du refresh token.', at: '2026-07-15T09:30:04.000Z' },
+    {
+      role: 'tool',
+      toolUseId: 'tu-h1',
+      kind: 'Read',
+      summary: 'src/auth/session.ts',
+      ok: true,
+      file: 'src/auth/session.ts',
+      at: '2026-07-15T09:30:06.000Z',
+    },
+    {
+      role: 'tool',
+      toolUseId: 'tu-h2',
+      kind: 'Edit',
+      summary: 'src/auth/session.ts',
+      ok: true,
+      file: 'src/auth/session.ts',
+      line: 42,
+      diffstat: { added: 6, removed: 2 },
+      at: '2026-07-15T09:30:20.000Z',
+    },
+    {
+      role: 'assistant',
+      text: 'Le renouvellement était court-circuité quand `expiresAt` était déjà dépassé. Corrigé : le token se rafraîchit dès qu’il reste moins de cinq minutes.',
+      at: '2026-07-15T09:30:30.000Z',
+    },
+  ],
+  [FIXTURE_DRAFT_ID]: [],
+}
+
+/**
+ * One realistic live turn for FIXTURE_SESSION_ID: connect snapshot, streamed
+ * text, a Bash tool call with its result, a permission prompt, more text,
+ * usage, then idle.
+ */
+export const fixtureTurn: ServerEvent[] = [
+  { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'streaming' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Je relance la suite de tests' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: ' pour vérifier le correctif.' },
+  {
+    type: 'tool_use',
+    sessionId: FIXTURE_SESSION_ID,
+    toolUseId: 'tu-l1',
+    kind: 'Bash',
+    summary: 'bun test src/auth',
+  },
+  { type: 'tool_result', sessionId: FIXTURE_SESSION_ID, toolUseId: 'tu-l1', ok: true, summary: '18 pass, 0 fail' },
+  {
+    type: 'permission_request',
+    sessionId: FIXTURE_SESSION_ID,
+    requestId: 'perm-l1',
+    toolName: 'Bash',
+    rendered: 'git push origin main',
+    proposedRule: { toolName: 'Bash', matcher: 'git push' },
+  },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Tous les tests passent.' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: ' Il ne reste qu’à pousser la branche.' },
+  {
+    type: 'usage',
+    sessionId: FIXTURE_SESSION_ID,
+    inputTokens: 2413,
+    outputTokens: 486,
+    cacheReadTokens: 1820,
+    cacheCreationTokens: 0,
+  },
+  { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'idle' },
+]
