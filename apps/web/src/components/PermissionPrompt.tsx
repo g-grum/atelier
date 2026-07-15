@@ -1,13 +1,19 @@
-import type { ProposedRule } from '@atelier/shared'
+import { useRef } from 'react'
+import type { PermissionDecision, ProposedRule } from '@atelier/shared'
 import type { ChatItem } from '../state/stream-reducer'
 
 export type PermissionChatItem = Extract<ChatItem, { kind: 'permission' }>
 
-export type PermissionDecision = 'allow' | 'deny' | 'always'
-
 export type PermissionPromptProps = {
   item: PermissionChatItem
   onDecision: (decision: PermissionDecision) => void
+}
+
+/** French outcome line shown once the one-shot decision has been taken. */
+const OUTCOME_LABELS: Record<PermissionDecision, string> = {
+  allow: 'Autorisé',
+  deny: 'Refusé',
+  always: 'Toujours autorisé',
 }
 
 /**
@@ -25,29 +31,48 @@ function ruleLabel(rule: ProposedRule): string {
  * permissions in the design system, this is the only amber element in the app.
  * When the server proposes no safe rule (proposedRule null, unknown tools),
  * the "Toujours" button is absent — never a blanket allow.
+ *
+ * Semantics: the card is a labelled group, not an alertdialog — it is inline
+ * and non-modal, and resolved cards linger in the transcript. The announcement
+ * duty falls to an assertive live region (role="alert") wrapping the head and
+ * command while the request is pending: a card inserted mid-turn is announced
+ * to screen readers, and the alert role is dropped on resolution so history
+ * stays silent.
  */
 export function PermissionPrompt({ item, onDecision }: PermissionPromptProps) {
-  // Resolved locally (optimistic) or via history — the decision is one-shot.
-  const disabled = item.resolved !== undefined
+  const cardRef = useRef<HTMLDivElement>(null)
+  const resolved = item.resolved
+  const disabled = resolved !== undefined
+
+  const decide = (decision: PermissionDecision) => {
+    // The buttons are about to disable — park focus on the card first, or the
+    // browser drops it to <body> and the keyboard user loses their place.
+    cardRef.current?.focus()
+    onDecision(decision)
+  }
+
   return (
-    <div className="permission" role="alertdialog" aria-label="Demande de permission">
-      <div className="p-head">
-        <span className="k">Permission</span> Claude veut exécuter :
+    <div ref={cardRef} tabIndex={-1} className="permission" role="group" aria-label="Demande de permission">
+      <div role={disabled ? undefined : 'alert'}>
+        <div className="p-head">
+          <span className="k">Permission</span> Claude veut exécuter :
+        </div>
+        <code className="cmd">{item.rendered}</code>
       </div>
-      <code className="cmd">{item.rendered}</code>
       <div className="p-actions">
-        <button type="button" className="deny" disabled={disabled} onClick={() => onDecision('deny')}>
+        <button type="button" className="deny" disabled={disabled} onClick={() => decide('deny')}>
           Refuser
         </button>
-        <button type="button" disabled={disabled} onClick={() => onDecision('allow')}>
+        <button type="button" disabled={disabled} onClick={() => decide('allow')}>
           Autoriser une fois
         </button>
         {item.proposedRule !== null && (
-          <button type="button" className="allow" disabled={disabled} onClick={() => onDecision('always')}>
+          <button type="button" className="allow" disabled={disabled} onClick={() => decide('always')}>
             Toujours pour ce projet : {ruleLabel(item.proposedRule)}
           </button>
         )}
       </div>
+      {resolved !== undefined && <div className="p-outcome">{OUTCOME_LABELS[resolved]}</div>}
     </div>
   )
 }

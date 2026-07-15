@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
+import type { PermissionDecision } from '@atelier/shared'
 import type { ChatItem, StreamState } from '../state/stream-reducer'
 import { MessageItem, TypingIndicator } from './MessageItem'
-import { PermissionPrompt, type PermissionChatItem, type PermissionDecision } from './PermissionPrompt'
+import { PermissionPrompt, type PermissionChatItem } from './PermissionPrompt'
 import { ToolCallItem, type ToolChatItem } from './ToolCallItem'
 
 export type ChatViewProps = {

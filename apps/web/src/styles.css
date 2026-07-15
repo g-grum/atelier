@@ -212,10 +212,13 @@
   .permission .p-head .k { color: var(--color-amber); font: 700 10px var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; }
   .permission code.cmd { display: block; font: 12px var(--font-mono); color: #ffe9b3; background: var(--color-ground); border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 9px 12px; margin: 8px 0 12px; overflow-x: auto; white-space: pre; }
   .permission .p-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .permission .p-actions button { font: 600 12px var(--font-sans); border-radius: 8px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--color-line); background: var(--color-surface-2); color: var(--color-text); }
+  /* min-width:0 + overflow-wrap:anywhere: a pathological unbreakable matcher in the
+     « Toujours » label wraps inside the button instead of overflowing the card. */
+  .permission .p-actions button { font: 600 12px var(--font-sans); border-radius: 8px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--color-line); background: var(--color-surface-2); color: var(--color-text); min-width: 0; overflow-wrap: anywhere; }
   .permission .p-actions .deny { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
   .permission .p-actions .allow { background: linear-gradient(135deg, var(--color-amber), #f59e0b); border-color: transparent; color: #1a1204; }
   .permission .p-actions button:disabled { opacity: 0.55; cursor: default; }
+  .permission .p-outcome { margin-top: 10px; font: 600 11px var(--font-mono); color: var(--color-muted); }
 
   /* Failure banners: mutation notices + failed session open (with retry).
      Red is the critical color — amber stays reserved for permissions. */

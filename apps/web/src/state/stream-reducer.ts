@@ -1,4 +1,4 @@
-import type { ChatMessage, ProposedRule, ServerEvent, ToolKind } from '@atelier/shared'
+import type { ChatMessage, PermissionDecision, ProposedRule, ServerEvent, ToolKind } from '@atelier/shared'
 
 export type ChatItem =
   | { kind: 'user'; text: string }
@@ -19,7 +19,7 @@ export type ChatItem =
       toolName: string
       rendered: string
       proposedRule: ProposedRule | null
-      resolved?: 'allow' | 'deny' | 'always'
+      resolved?: PermissionDecision
     }
 
 export type StreamState = {
@@ -97,7 +97,7 @@ export function reduce(state: StreamState, event: ServerEvent): StreamState {
 }
 
 /** Local (optimistic) resolution — the definitive removal happens server-side. */
-export function resolvePermission(state: StreamState, requestId: string, decision: 'allow' | 'deny' | 'always'): StreamState {
+export function resolvePermission(state: StreamState, requestId: string, decision: PermissionDecision): StreamState {
   return {
     ...state,
     items: state.items.map((item) =>

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { PermissionPrompt, type PermissionChatItem, type PermissionDecision } from './PermissionPrompt'
+import type { PermissionDecision } from '@atelier/shared'
+import { PermissionPrompt, type PermissionChatItem } from './PermissionPrompt'
 
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -31,6 +32,45 @@ describe('PermissionPrompt', () => {
     renderPrompt()
     const command = screen.getByText('git push --force-with-lease origin main')
     expect(command.tagName).toBe('CODE')
+  })
+
+  // Semantics: the card is a labelled group (NOT an alertdialog — it is inline
+  // and non-modal); the announcement duty falls to a live region inside it.
+  test('the card is a labelled group and an unresolved request announces the command assertively', () => {
+    renderPrompt()
+    expect(screen.getByRole('group', { name: 'Demande de permission' })).toBeTruthy()
+    // role="alert" is an assertive live region: inserting the card mid-turn is
+    // announced — without it a screen-reader user hears the turn silently hang.
+    expect(screen.getByRole('alert').textContent).toContain('git push --force-with-lease origin main')
+  })
+
+  test('a resolved card no longer announces itself', () => {
+    renderPrompt({ resolved: 'allow' })
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  test('a resolved card states the decision taken, in French', () => {
+    renderPrompt({ resolved: 'deny' })
+    expect(screen.getByText('Refusé')).toBeTruthy()
+    cleanup()
+    renderPrompt({ resolved: 'allow' })
+    expect(screen.getByText('Autorisé')).toBeTruthy()
+    cleanup()
+    renderPrompt({ resolved: 'always' })
+    expect(screen.getByText('Toujours autorisé')).toBeTruthy()
+  })
+
+  test('no outcome line while the request is pending', () => {
+    renderPrompt()
+    expect(screen.queryByText(/^(Autorisé|Refusé|Toujours autorisé)$/)).toBeNull()
+  })
+
+  test('deciding parks focus on the card — never dropped to <body> when the button disables', () => {
+    renderPrompt()
+    const button = screen.getByRole('button', { name: 'Autoriser une fois' })
+    button.focus()
+    fireEvent.click(button)
+    expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Demande de permission' }))
   })
 
   // The spec's safety display: the user must see exactly what "Always" will

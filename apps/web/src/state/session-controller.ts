@@ -1,4 +1,4 @@
-import type { ChatMessage, ServerEvent } from '@atelier/shared'
+import type { ChatMessage, PermissionDecision, ServerEvent } from '@atelier/shared'
 import { getMessages } from '../api/client'
 import { SessionSocket } from '../api/ws'
 import { initialState, reduce, reset, resolvePermission, type StreamState } from './stream-reducer'
@@ -104,7 +104,7 @@ export class SessionController {
     return true
   }
 
-  respondPermission(requestId: string, decision: 'allow' | 'deny' | 'always'): void {
+  respondPermission(requestId: string, decision: PermissionDecision): void {
     if (this.socket === null) return
     this.socket.send({ type: 'permission_response', requestId, decision })
     this.setState(resolvePermission(this.state, requestId, decision))

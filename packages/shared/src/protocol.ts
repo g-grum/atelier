@@ -40,9 +40,12 @@ export type ChatMessage =
   | { role: 'tool'; toolUseId: string; kind: ToolKind; summary: string; ok: boolean; file?: string; line?: number; diffstat?: { added: number; removed: number }; at: string }
 
 // ── WS client → server ──
+/** The three answers to a permission_request — 'always' also persists an AlwaysRule. */
+export type PermissionDecision = 'allow' | 'deny' | 'always'
+
 export type ClientMessage =
   | { type: 'user_message'; text: string }
-  | { type: 'permission_response'; requestId: string; decision: 'allow' | 'deny' | 'always' }
+  | { type: 'permission_response'; requestId: string; decision: PermissionDecision }
   | { type: 'abort' }
 
 // ── WS server → client ──
