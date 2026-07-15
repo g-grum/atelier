@@ -191,4 +191,85 @@ describe('POST /open-in-ide route', () => {
     expect(body.ok).toBe(false)
     expect(calls).toEqual([])
   })
+
+  test('lone UTF-16 surrogate in « file » responds { ok: false, reason } — never a 500', async () => {
+    const { app, calls } = freshRoutes([true])
+    const res = await app.request('/open-in-ide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Legal JSON: the \ud800 escape decodes to a lone high surrogate, which
+      // makes encodeURIComponent throw URIError inside escapePath if it gets through.
+      body: '{"file":"/p/\\ud800x.ts","line":3}',
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { ok: boolean; reason: string }
+    expect(body.ok).toBe(false)
+    expect(typeof body.reason).toBe('string')
+    expect(calls).toEqual([])
+  })
+
+  test('a throwing launch still responds { ok: false, reason } — the route is structurally 500-proof', async () => {
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-ide-')), 'data.json')
+    const data = new AppData(filePath)
+    const throwing: LaunchFn = async () => {
+      throw new Error('boom')
+    }
+    const app = settingsRoutes(data, throwing)
+    const res = await app.request('/open-in-ide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: FILE, line: 84 }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { ok: boolean; reason: string }
+    expect(body.ok).toBe(false)
+    expect(typeof body.reason).toBe('string')
+  })
+
+  test('relative « file » responds { ok: false, reason } without launching', async () => {
+    const { app, calls } = freshRoutes([true])
+    const res = await app.request('/open-in-ide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: 'src/app.ts', line: 84 }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { ok: boolean; reason: string }
+    expect(body.ok).toBe(false)
+    expect(body.reason).toContain('absolu')
+    expect(calls).toEqual([])
+  })
+
+  test('a "-"-prefixed file is rejected before it can reach the CLI fallback argv as a flag', async () => {
+    const { app, calls } = freshRoutes([true])
+    const res = await app.request('/open-in-ide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: '--goto=/etc/passwd' }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { ok: boolean }
+    expect(body.ok).toBe(false)
+    expect(calls).toEqual([])
+  })
+
+  test('non-positive-integer line values (-3, 1.5, Infinity) are ignored — the file opens without line', async () => {
+    const bodies = [
+      JSON.stringify({ file: FILE, line: -3 }),
+      JSON.stringify({ file: FILE, line: 1.5 }),
+      // JSON cannot spell Infinity, but 1e999 parses to it.
+      `{"file":"${FILE}","line":1e999}`,
+    ]
+    for (const raw of bodies) {
+      const { app, calls } = freshRoutes([true])
+      const res = await app.request('/open-in-ide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: raw,
+      })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ ok: true })
+      expect(calls).toEqual([['open', 'webstorm://open?file=/proj/src/app.ts']])
+    }
+  })
 })

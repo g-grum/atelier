@@ -58,9 +58,23 @@ export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): H
     if (typeof body.file !== 'string' || body.file.length === 0) {
       return c.json({ ok: false, reason: 'requête invalide : « file » (chemin absolu) est requis' })
     }
-    const line = typeof body.line === 'number' ? body.line : undefined
-    const result = await openInIde({ ide: data.get().preferences.ide, file: body.file, line, launch })
-    return c.json(result)
+    if (!body.file.isWellFormed()) {
+      // A legal JSON body can carry a lone UTF-16 surrogate (\ud800 escape) that
+      // makes encodeURIComponent throw URIError; no real macOS path contains one.
+      return c.json({ ok: false, reason: 'requête invalide : « file » contient une séquence UTF-16 mal formée' })
+    }
+    if (!body.file.startsWith('/')) {
+      // Also guarantees a '-'-prefixed value can never reach the CLI fallback argv as a flag.
+      return c.json({ ok: false, reason: 'requête invalide : « file » doit être un chemin absolu (commençant par /)' })
+    }
+    const line = typeof body.line === 'number' && Number.isInteger(body.line) && body.line > 0 ? body.line : undefined
+    try {
+      const result = await openInIde({ ide: data.get().preferences.ide, file: body.file, line, launch })
+      return c.json(result)
+    } catch {
+      // Structural guarantee of the never-500 contract against future openInIde regressions.
+      return c.json({ ok: false, reason: "erreur inattendue lors de l'ouverture dans l'IDE" })
+    }
   })
 
   // Rules
