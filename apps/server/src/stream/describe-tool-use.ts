@@ -1,0 +1,62 @@
+import { basename } from 'node:path'
+import { type ToolKind, ToolKinds } from '@atelier/shared'
+
+const SUMMARY_MAX = 80
+
+export type ToolUseDescription = {
+  kind: ToolKind
+  summary: string
+  file?: string
+  line?: number
+  diffstat?: { added: number; removed: number }
+}
+
+export function toolKindOf(toolName: string): ToolKind {
+  return toolName in ToolKinds && toolName !== ToolKinds.Other ? (toolName as ToolKind) : ToolKinds.Other
+}
+
+/** The single place that turns raw { toolName, input } into what the UI shows (chat items + tool_use events). */
+export function describeToolUse(toolName: string, input: unknown): ToolUseDescription {
+  const kind = toolKindOf(toolName)
+  const record = asRecord(input)
+
+  if (kind === 'Bash') {
+    return { kind, summary: truncate(str(record.command)) }
+  }
+
+  if (kind === 'Edit' || kind === 'Write' || kind === 'Read') {
+    const file = str(record.file_path)
+    const description: ToolUseDescription = { kind, summary: basename(file), file }
+    if (kind === 'Edit') description.diffstat = { added: lineCount(str(record.new_string)), removed: lineCount(str(record.old_string)) }
+    if (kind === 'Write') description.diffstat = { added: lineCount(str(record.content)), removed: 0 }
+    if (kind === 'Read' && typeof record.offset === 'number') description.line = record.offset
+    return description
+  }
+
+  return { kind: ToolKinds.Other, summary: toolName }
+}
+
+/** Full, untruncated rendering for permission prompts — the user must see exactly what runs. */
+export function renderForPermission(toolName: string, input: unknown): string {
+  const kind = toolKindOf(toolName)
+  const record = asRecord(input)
+  if (kind === 'Bash') return str(record.command)
+  if (kind === 'Edit' || kind === 'Write' || kind === 'Read') return str(record.file_path)
+  return JSON.stringify(input)
+}
+
+function asRecord(input: unknown): Record<string, unknown> {
+  return typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+}
+
+function str(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function truncate(text: string): string {
+  return text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX - 1)}…` : text
+}
+
+function lineCount(text: string): number {
+  return text === '' ? 0 : text.split('\n').length
+}

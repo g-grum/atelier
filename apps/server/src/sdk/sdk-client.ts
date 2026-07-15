@@ -10,6 +10,7 @@ import {
   type SDKRateLimitEvent,
 } from '@anthropic-ai/claude-agent-sdk'
 import type { ChatMessage } from '@atelier/shared'
+import { describeToolUse } from '../stream/describe-tool-use'
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -75,7 +76,6 @@ export class AgentSdkClient implements SdkClient {
                 // BetaTextBlock.text
                 result.push({ role: 'assistant', text: (block as { text: string }).text, at: new Date().toISOString() })
               } else if ((block as { type?: string }).type === 'tool_use') {
-                // seam for task 3.2: toChatToolMessage wires proper summary/file/line later
                 result.push(toChatToolMessage(block as { id: string; name: string; input: unknown }))
               }
             }
@@ -214,12 +214,9 @@ export class AgentSdkClient implements SdkClient {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/**
- * Seam for task 3.2: will be replaced with proper describe-module mapping.
- * Returns a minimal tool ChatMessage with rough values for now.
- */
+/** Maps a recorded tool_use block through describe-tool-use so resumed sessions render like live ones. */
 function toChatToolMessage(block: { id: string; name: string; input: unknown }): ChatMessage {
-  return { role: 'tool', toolUseId: block.id, kind: 'Other', summary: block.name, ok: true, at: new Date().toISOString() }
+  return { role: 'tool', toolUseId: block.id, ...describeToolUse(block.name, block.input), ok: true, at: new Date().toISOString() }
 }
 
 /**
