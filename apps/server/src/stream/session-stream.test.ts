@@ -483,6 +483,114 @@ describe('SessionStream', () => {
     expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
   })
 
+  // Same drain-gap race, event flavor: the real AgentSdkClient's generator catch
+  // converts ANY late rejection into a YIELDED turn_error (sdk-client.ts) — so
+  // post-turn_done failures arrive as events, not rejections. A drained turn's
+  // late turn_error must be dropped, not routed through handleTurnEvent.
+  test('a late turn_error EVENT from a turn draining past turn_done must not clobber the next turn', async () => {
+    let releaseDrain!: () => void
+    const drainGate = new Promise<void>((resolve) => {
+      releaseDrain = resolve
+    })
+    class DrainErrorEventSdk extends MockSdkClient {
+      private turnNo = 0
+      override async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
+        this.calls.push({ method: 'runTurn', args: [params] })
+        if (this.turnNo++ === 0) {
+          yield { type: 'turn_done' }
+          await drainGate // the post-turn_done drain gap
+          // the real client's catch yields the close failure as a turn_error event
+          yield { type: 'turn_error', reason: 'stream close failed' }
+          return
+        }
+        // turn 2: held open on canUseTool so the late event lands mid-turn
+        yield { type: 'text_delta', text: 'two' }
+        await params.canUseTool('Bash', { command: 'sleep 999' })
+        if (params.signal.aborted) return
+        yield { type: 'turn_done' }
+      }
+    }
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new DrainErrorEventSdk()
+    const registry = new SessionStreamRegistry(data, sdk)
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'first' }))
+    await tick()
+    // turn 1's generator is still draining; turn 2 starts in that gap
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'second' }))
+    await tick()
+    const countBeforeDrain = events.length
+
+    releaseDrain()
+    await tick()
+
+    // (a) no spurious status error broadcast mid-turn-2
+    expect(ofType(events, 'status').every((event) => event.state !== 'error')).toBe(true)
+    expect(events.length).toBe(countBeforeDrain)
+
+    // (b) state was not knocked off 'streaming': a user_message here must still
+    // be dropped by the one-turn guard, never starting a truly concurrent turn
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'third' }))
+    await tick()
+    expect(sdk.calls.filter((call) => call.method === 'runTurn')).toHaveLength(2)
+
+    // turn 2 finishes normally once its held permission is allowed
+    const pending = ofType(events, 'permission_request')
+    expect(pending).toHaveLength(1)
+    stream.onMessage(clientMessage({ type: 'permission_response', requestId: pending[0]!.requestId, decision: 'allow' }))
+    await tick()
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+  })
+
+  test('a late turn_error EVENT with no next turn must not flip an idle-settled session to error', async () => {
+    let releaseDrain!: () => void
+    const drainGate = new Promise<void>((resolve) => {
+      releaseDrain = resolve
+    })
+    class DrainErrorEventSdk extends MockSdkClient {
+      override async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
+        this.calls.push({ method: 'runTurn', args: [params] })
+        yield { type: 'turn_done' }
+        await drainGate
+        yield { type: 'turn_error', reason: 'stream close failed' }
+      }
+    }
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new DrainErrorEventSdk()
+    const registry = new SessionStreamRegistry(data, sdk)
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+    const countBeforeDrain = events.length
+
+    releaseDrain()
+    await tick()
+
+    // the settled-idle session must not flip to 'error' after the fact
+    expect(ofType(events, 'status').every((event) => event.state !== 'error')).toBe(true)
+    expect(events.length).toBe(countBeforeDrain)
+
+    // a fresh connect still sees idle, not error
+    const second = makeSink()
+    stream.onConnect(second.send)
+    expect(second.events[0]).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+  })
+
   test('onClose alone does NOT abort: the turn keeps running and the next connect resyncs', async () => {
     const { registry, sdk } = setup({
       turns: [[

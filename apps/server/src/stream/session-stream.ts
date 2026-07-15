@@ -110,7 +110,19 @@ export class SessionStream {
         canUseTool: (toolName, input) => this.broker.request(toolName, input),
         signal: abort.signal,
       })
+      // Owner-only event handling (drain-gap race, event flavor): the real
+      // AgentSdkClient keeps draining the SDK stream AFTER yielding turn_done,
+      // and its generator catch converts any late rejection into a YIELDED
+      // turn_error — so post-drain failures arrive as events, not rejections.
+      // Once this turn has settled (turn_done/turn_error seen) or a newer turn
+      // owns this.turnAbort, its generator is stale: drop every further event,
+      // or a late turn_error would flip an idle session to 'error' — and knock
+      // a mid-flight turn 2 off 'streaming', letting a further user_message
+      // violate the one-turn-per-session invariant.
+      let settled = false
       for await (const event of turn) {
+        if (settled || this.turnAbort !== abort) continue
+        if (event.type === 'turn_done' || event.type === 'turn_error') settled = true
         await this.handleTurnEvent(event, draft?.id, abort.signal)
       }
     } catch (err) {
