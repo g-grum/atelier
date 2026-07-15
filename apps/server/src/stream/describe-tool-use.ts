@@ -40,9 +40,12 @@ export function describeToolUse(toolName: string, input: unknown): ToolUseDescri
 export function renderForPermission(toolName: string, input: unknown): string {
   const kind = toolKindOf(toolName)
   const record = asRecord(input)
-  if (kind === 'Bash') return str(record.command)
-  if (kind === 'Edit' || kind === 'Write' || kind === 'Read') return str(record.file_path)
-  return JSON.stringify(input)
+  if (kind === 'Bash' && typeof record.command === 'string') return record.command
+  if ((kind === 'Edit' || kind === 'Write' || kind === 'Read') && typeof record.file_path === 'string') return record.file_path
+  // Malformed/unknown input: render the whole thing rather than '' — an empty
+  // permission prompt that still executes the real input on approval is fail-open.
+  const json: string | undefined = JSON.stringify(input)
+  return json ?? String(input)
 }
 
 function asRecord(input: unknown): Record<string, unknown> {

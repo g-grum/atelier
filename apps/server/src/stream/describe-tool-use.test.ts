@@ -64,4 +64,20 @@ describe('renderForPermission', () => {
   test('unknown tool: JSON of the input', () => {
     expect(renderForPermission('mcp__github__create_pr', { title: 'x' })).toBe('{"title":"x"}')
   })
+  test('malformed input never renders empty or undefined (fail-open guard)', () => {
+    // JSON.stringify(undefined) returns undefined at runtime despite the lib typing.
+    const rendered: string = renderForPermission('mcp__x', undefined)
+    expect(typeof rendered).toBe('string')
+    expect(rendered.length).toBeGreaterThan(0)
+  })
+  test('Bash with missing or non-string command falls back to the whole input', () => {
+    expect(renderForPermission('Bash', {})).toBe('{}')
+    expect(renderForPermission('Bash', { command: 42 })).toBe('{"command":42}')
+    expect(renderForPermission('Bash', undefined).length).toBeGreaterThan(0)
+  })
+  test('file tools with missing or non-string file_path fall back to the whole input', () => {
+    expect(renderForPermission('Edit', { old_string: 'a', new_string: 'b' })).toBe('{"old_string":"a","new_string":"b"}')
+    expect(renderForPermission('Write', { file_path: 7 })).toBe('{"file_path":7}')
+    expect(renderForPermission('Read', null)).toBe('null')
+  })
 })
