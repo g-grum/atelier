@@ -54,19 +54,33 @@ export class PermissionBroker {
   resolve(requestId: string, decision: PermissionDecision): void {
     const pending = this.requests.get(requestId)
     if (!pending) return
-    this.requests.delete(requestId)
 
-    if (decision === 'deny') {
-      pending.settle({ behavior: 'deny', message: 'User denied this tool use' })
-      return
+    switch (decision) {
+      case 'deny':
+        this.requests.delete(requestId)
+        pending.settle({ behavior: 'deny', message: 'User denied this tool use' })
+        return
+      case 'always': {
+        const rule = pending.request.proposedRule
+        if (rule !== null) {
+          this.data.update((d) => {
+            d.rules.push({ id: randomUUID(), projectId: this.projectId, ...rule })
+          })
+        }
+        this.requests.delete(requestId)
+        pending.settle({ behavior: 'allow' })
+        return
+      }
+      case 'allow':
+        this.requests.delete(requestId)
+        pending.settle({ behavior: 'allow' })
+        return
+      default:
+        // Fail closed: typing does not survive the wire (parseClientMessage checks only
+        // `type`), so an unrecognized decision must never grant permission. No-op — the
+        // request stays pending and answerable.
+        return
     }
-    const rule = pending.request.proposedRule
-    if (decision === 'always' && rule !== null) {
-      this.data.update((d) => {
-        d.rules.push({ id: randomUUID(), projectId: this.projectId, ...rule })
-      })
-    }
-    pending.settle({ behavior: 'allow' })
   }
 
   /** Outstanding requests, oldest first — re-emitted on (re)connect. */

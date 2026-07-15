@@ -6,7 +6,7 @@ import type { PermissionRequest } from '@atelier/shared'
 import type { SdkTurnEvent } from '../sdk/sdk-client'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
 import { AppData } from '../store/app-data'
-import { PermissionBroker } from './permission-broker'
+import { PermissionBroker, type PermissionDecision } from './permission-broker'
 
 function setup() {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-broker-')), 'data.json')
@@ -61,6 +61,32 @@ describe('PermissionBroker', () => {
     expect(data.get().rules).toEqual([
       { id: expect.any(String), projectId: 'p1', toolName: 'Bash', matcher: 'git push' },
     ])
+  })
+
+  test("resolve('always') on an unknown-tool request (null proposedRule) allows without persisting a rule", async () => {
+    const { broker, events, data } = setup()
+    const promise = broker.request('WebSearch', { query: 'atelier' })
+    expect(events[0]!.proposedRule).toBeNull()
+
+    broker.resolve(events[0]!.requestId, 'always')
+
+    await expect(promise).resolves.toEqual({ behavior: 'allow' })
+    expect(data.get().rules).toEqual([])
+  })
+
+  test('an unrecognized decision fails closed: never allows, the request stays pending', async () => {
+    const { broker, events } = setup()
+    const promise = broker.request('Bash', { command: 'rm -rf /' })
+
+    // parseClientMessage validates only `type`, so a junk decision can reach resolve() at runtime.
+    broker.resolve(events[0]!.requestId, 'banana' as PermissionDecision)
+
+    expect(broker.pending()).toEqual([events[0]!])
+    await expect(Promise.race([promise, Promise.resolve('still-pending')])).resolves.toBe('still-pending')
+
+    // The request is still answerable afterwards.
+    broker.resolve(events[0]!.requestId, 'deny')
+    await expect(promise).resolves.toMatchObject({ behavior: 'deny' })
   })
 
   test('a stored matching rule short-circuits: allow immediately, NO event emitted', async () => {
