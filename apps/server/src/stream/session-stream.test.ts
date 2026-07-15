@@ -200,6 +200,52 @@ describe('SessionStream', () => {
     expect(sdk.calls.filter((call) => call.method === 'runTurn')).toHaveLength(1)
   })
 
+  // tool_use forwarding + the partial-text run reset it implies
+  test("tool_use is forwarded with describeToolUse's shape and closes the partial-text run for reconnect snapshots", async () => {
+    const { registry } = setup({
+      turns: [[
+        { type: 'text_delta', text: 'Hel' },
+        { type: 'text_delta', text: 'lo' },
+        { type: 'tool_use', toolUseId: 'tu-1', toolName: 'Edit', input: { file_path: '/proj/src/main.ts', old_string: 'old', new_string: 'new\nline' } },
+        { type: 'text_delta', text: 'wor' },
+        // holds the turn open mid-stream so a reconnect can observe the snapshot
+        { type: 'needs_permission', toolName: 'Bash', input: { command: 'sleep 999' } },
+        { type: 'turn_done' },
+      ]],
+    })
+    const stream = registry.get('s1', 'p1')
+    const first = makeSink()
+    stream.onConnect(first.send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    // (a) the tool_use ServerEvent carries kind/summary/file/diffstat from
+    // describeToolUse, plus toolUseId and the stamped sessionId (protocol.ts shape)
+    expect(ofType(first.events, 'tool_use')).toEqual([{
+      type: 'tool_use',
+      sessionId: 's1',
+      toolUseId: 'tu-1',
+      kind: 'Edit',
+      summary: 'main.ts',
+      file: '/proj/src/main.ts',
+      diffstat: { added: 2, removed: 1 },
+    }])
+
+    // (b) the tool_use closed the 'Hello' run — a reconnect snapshot buffers only
+    // the post-tool run 'wor', never 'Hellowor'
+    const second = makeSink()
+    stream.onConnect(second.send)
+    expect(second.events[0]).toEqual({ type: 'status', sessionId: 's1', state: 'streaming', partialText: 'wor' })
+
+    // release the held permission so the turn settles to idle
+    const pending = ofType(second.events, 'permission_request')
+    expect(pending).toHaveLength(1)
+    stream.onMessage(clientMessage({ type: 'permission_response', requestId: pending[0]!.requestId, decision: 'allow' }))
+    await tick()
+    expect(second.events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+  })
+
   // 5. Usage forwarding + recording
   test('usage SDK events are forwarded AND recorded to AppData with all four counters', async () => {
     const { registry, data } = setup({
