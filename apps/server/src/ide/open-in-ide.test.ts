@@ -57,6 +57,30 @@ describe('buildSchemeUrl', () => {
     )
   })
 
+  test('percent-encodes non-ASCII whitespace as UTF-8 bytes (U+3000, NBSP)', () => {
+    // Ideographic space U+3000 → E3 80 80 in UTF-8. A code-unit-based encoder
+    // produces %3000 — which decodes as '0' + literal '00': a silently wrong path.
+    expect(buildSchemeUrl('webstorm', '/proj/a\u3000b.ts', 1)).toBe(
+      'webstorm://open?file=/proj/a%E3%80%80b.ts&line=1',
+    )
+    // NBSP U+00A0 (option+space on a French Mac keyboard) → C2 A0, not a lone %A0.
+    expect(buildSchemeUrl('webstorm', '/proj/a\u00A0b.ts', 1)).toBe(
+      'webstorm://open?file=/proj/a%C2%A0b.ts&line=1',
+    )
+  })
+
+  test('percent-encodes non-ASCII letters instead of passing them through raw', () => {
+    expect(buildSchemeUrl('webstorm', '/proj/Développement/app.ts', 2)).toBe(
+      'webstorm://open?file=/proj/D%C3%A9veloppement/app.ts&line=2',
+    )
+  })
+
+  test('percent-encodes + so form-decoding query parsers cannot turn it into a space', () => {
+    expect(buildSchemeUrl('webstorm', '/proj/a+b.ts', 3)).toBe(
+      'webstorm://open?file=/proj/a%2Bb.ts&line=3',
+    )
+  })
+
   test('CLI fallback args keep the raw path (argv needs no URL escaping)', () => {
     expect(buildCliArgs('webstorm', '/proj/My Project/a&b.ts', 84)).toEqual([
       'webstorm',

@@ -25,14 +25,19 @@ const LAUNCHER_FIX: Record<Ide, string> = {
 }
 
 /**
- * Escapes only the characters that are invalid (whitespace) or ambiguous (&, #, %, ?)
- * in the URL path/query-value position — `/` and `:` stay intact. Without this,
- * a space makes `open <url>` fail to parse (dead scheme route → misleading
- * "install the launcher"), and `&`/`#`/`%` yield a dispatchable-but-misparsed URL:
- * `open` exits 0, we report ok, and the IDE opens the wrong file — a silent failure.
+ * Percent-encodes the path for the URL path/query-value position, then restores
+ * `/` and `:` so both scheme shapes keep their documented canonical form
+ * (`webstorm://open?file=/abs/p.ts&line=n`, `vscode://file/abs/p.ts:n`). Without
+ * this, a space makes `open <url>` fail to parse (dead scheme route → misleading
+ * "install the launcher"), and `&`/`#`/`%`/`+` yield a dispatchable-but-misparsed
+ * URL: `open` exits 0, we report ok, and the IDE opens the wrong file — a silent
+ * failure. encodeURIComponent encodes UTF-8 *bytes* (NBSP → %C2%A0, U+3000 →
+ * %E3%80%80), unlike a charCodeAt-based encoder which corrupts non-ASCII.
+ * Restoring %2F/%3A is safe: a literal `/` or `:` is the only possible source
+ * (a literal `%` in the file name was already encoded to %25).
  */
 function escapePath(file: string): string {
-  return file.replace(/[%\s&#?]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`)
+  return encodeURIComponent(file).replace(/%2F/gi, '/').replace(/%3A/gi, ':')
 }
 
 export function buildSchemeUrl(ide: Ide, file: string, line?: number): string {
