@@ -245,6 +245,27 @@ describe('SessionController actions', () => {
     expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'Continue le correctif' })
   })
 
+  test('an accepted send flips status to streaming — a second send in the latency window is refused', async () => {
+    const { controller, socket, open } = makeHarness()
+    await open(history)
+    expect(controller.sendMessage('Lance le build')).toBe(true)
+    // The server flips to streaming synchronously on user_message — BEFORE the
+    // first assistant_delta (model latency, routinely 1s+). Mirror it locally,
+    // otherwise a second send in that window is echoed here but dropped there,
+    // and the echo-replay machinery makes the phantom immortal across resyncs.
+    expect(controller.getState().status).toBe('streaming')
+
+    const before = controller.getState()
+    expect(controller.sendMessage('trop vite')).toBe(false)
+    expect(socket().sent).toEqual([{ type: 'user_message', text: 'Lance le build' }]) // nothing else hit the socket
+    expect(controller.getState()).toBe(before) // no phantom echo, no state churn
+
+    // The turn ends server-side — the composer path reopens.
+    socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
+    expect(controller.sendMessage('au tour suivant')).toBe(true)
+    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'au tour suivant' })
+  })
+
   test('sendMessage is refused mid-turn — the server drops it, so no phantom echo', async () => {
     const { controller, socket, open } = makeHarness()
     await open(history)

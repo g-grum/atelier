@@ -86,6 +86,13 @@ export class SessionController {
    * server, and the imminent reset would race the echo). The UI gates the
    * composer on this contract. Once accepted, the local echo is guaranteed to
    * survive resync resets — see unconfirmedEchoes.
+   *
+   * An accepted send flips status to 'streaming' immediately, mirroring the
+   * server's synchronous transition on user_message (session-stream flips
+   * before the first delta). Without it, the time-to-first-token window keeps
+   * local status 'idle' and a double-send would echo a message the server
+   * drops. It also gates the composer and enables abort right away; the turn's
+   * terminal status event (idle/error) restores it.
    */
   sendMessage(text: string): boolean {
     if (this.socket === null || this.resyncing || this.state.status === 'streaming') return false
@@ -93,7 +100,7 @@ export class SessionController {
     // The server never echoes user messages as ServerEvents — append locally
     // (the persisted copy comes back on the next history fetch).
     this.pendingEchoes.push(text)
-    this.setState({ ...this.state, items: [...this.state.items, { kind: 'user', text }] })
+    this.setState({ ...this.state, status: 'streaming', items: [...this.state.items, { kind: 'user', text }] })
     return true
   }
 
