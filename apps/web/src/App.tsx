@@ -178,6 +178,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           <ChatView
             items={stream.items}
             status={stream.status}
+            // Sends permission_response on the socket and resolves the item locally.
+            onPermissionDecision={(requestId, decision) => controller.respondPermission(requestId, decision)}
             onOpenInIde={(file, line) => {
               // The server answers { ok: false, reason } instead of a 5xx when
               // the IDE cannot be opened — both that and a transport rejection

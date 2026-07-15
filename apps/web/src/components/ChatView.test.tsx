@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ChatItem } from '../state/stream-reducer'
 import { ChatView } from './ChatView'
 
@@ -17,7 +17,7 @@ function makeItems(count: number): ChatItem[] {
  * document in a 400px viewport, with a controllable scrollTop.
  */
 function setup(initialItems: ChatItem[]) {
-  const view = render(<ChatView items={initialItems} status="idle" onOpenInIde={() => {}} />)
+  const view = render(<ChatView items={initialItems} status="idle" onOpenInIde={() => {}} onPermissionDecision={() => {}} />)
   const el = view.container.querySelector('.messages')
   if (!(el instanceof HTMLElement)) throw new Error('no .messages scroller')
 
@@ -33,7 +33,8 @@ function setup(initialItems: ChatItem[]) {
   Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => geometry.scrollHeight })
   Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => geometry.clientHeight })
 
-  const rerender = (items: ChatItem[]) => view.rerender(<ChatView items={items} status="streaming" onOpenInIde={() => {}} />)
+  const rerender = (items: ChatItem[]) =>
+    view.rerender(<ChatView items={items} status="streaming" onOpenInIde={() => {}} onPermissionDecision={() => {}} />)
   const userScrollTo = (top: number) => {
     scrollTop = top
     fireEvent.scroll(el)
@@ -75,5 +76,29 @@ describe('ChatView auto-scroll', () => {
     geometry.scrollHeight = 1000 // history of the new session lands
     rerender(makeItems(5))
     expect(el.scrollTop).toBe(1000)
+  })
+})
+
+describe('ChatView permissions', () => {
+  test('a permission item renders the interactive prompt, wired with its requestId', () => {
+    const calls: [string, string][] = []
+    render(
+      <ChatView
+        items={[
+          {
+            kind: 'permission',
+            requestId: 'req-1',
+            toolName: 'Bash',
+            rendered: 'git push origin main',
+            proposedRule: { toolName: 'Bash', matcher: 'git push' },
+          },
+        ]}
+        status="streaming"
+        onOpenInIde={() => {}}
+        onPermissionDecision={(requestId, decision) => calls.push([requestId, decision])}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Autoriser une fois' }))
+    expect(calls).toEqual([['req-1', 'allow']])
   })
 })

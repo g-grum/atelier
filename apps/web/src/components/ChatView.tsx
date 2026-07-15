@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react'
 import type { ChatItem, StreamState } from '../state/stream-reducer'
 import { MessageItem, TypingIndicator } from './MessageItem'
+import { PermissionPrompt, type PermissionChatItem, type PermissionDecision } from './PermissionPrompt'
 import { ToolCallItem, type ToolChatItem } from './ToolCallItem'
-
-type PermissionChatItem = Extract<ChatItem, { kind: 'permission' }>
 
 export type ChatViewProps = {
   items: ChatItem[]
   status: StreamState['status']
   onOpenInIde: (file: string, line?: number) => void
+  onPermissionDecision: (requestId: string, decision: PermissionDecision) => void
 }
 
 /**
@@ -47,7 +47,7 @@ function toBlocks(items: ChatItem[]): Block[] {
 /** How close to the bottom (px) still counts as "pinned" — trackpad slack. */
 const PIN_THRESHOLD_PX = 48
 
-export function ChatView({ items, status, onOpenInIde }: ChatViewProps) {
+export function ChatView({ items, status, onOpenInIde, onPermissionDecision }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Follow-the-stream pin. Only a user scroll can unpin (see onScroll): while
   // unpinned, new deltas must NOT yank the view back down — the user is
@@ -95,8 +95,16 @@ export function ChatView({ items, status, onOpenInIde }: ChatViewProps) {
                 {isLast && typingInLastBlock && <TypingIndicator />}
               </MessageItem>
             )
-          case 'permission':
-            return <PermissionPlaceholder key={block.item.requestId} item={block.item} />
+          case 'permission': {
+            const { item } = block
+            return (
+              <PermissionPrompt
+                key={item.requestId}
+                item={item}
+                onDecision={(decision) => onPermissionDecision(item.requestId, decision)}
+              />
+            )
+          }
         }
       })}
       {showTyping && !typingInLastBlock && (
@@ -104,23 +112,6 @@ export function ChatView({ items, status, onOpenInIde }: ChatViewProps) {
           <TypingIndicator />
         </MessageItem>
       )}
-    </div>
-  )
-}
-
-/**
- * Minimal permission card — amber left border + rendered command only.
- * Task 5.1 replaces this boundary with the interactive PermissionPrompt
- * (Refuser / Autoriser une fois / Toujours pour ce projet).
- */
-function PermissionPlaceholder({ item }: { item: PermissionChatItem }) {
-  return (
-    <div className="permission" role="note" aria-label="Demande de permission">
-      <div className="p-head">
-        <span className="k">Permission</span> Claude veut exécuter :
-      </div>
-      <code className="cmd">{item.rendered}</code>
-      <div className="p-note">Actions de réponse bientôt disponibles</div>
     </div>
   )
 }
