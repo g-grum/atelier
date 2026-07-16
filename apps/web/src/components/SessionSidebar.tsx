@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import type { Project, SessionSummary } from '@atelier/shared'
+import type { ProjectSummary, SessionSummary } from '@atelier/shared'
 import { basename } from '../lib/utils'
 import { SessionListItem, type SessionDotState } from './SessionListItem'
 
 export type SessionSidebarProps = {
-  projects: Project[]
+  projects: ProjectSummary[]
   /**
    * Status of the projects fetch. The first-launch register form is gated on
    * 'success': while 'pending' nothing shows (no flash on startup), and
@@ -35,6 +35,18 @@ export type SessionSidebarProps = {
 export function SessionSidebar(props: SessionSidebarProps) {
   const { projects, projectsStatus, projectsError, onRetryProjects, sessions, openProjectId, onSelectProject, onCreateDraft } = props
 
+  // Permanent « + Projet » affordance (v0.2): a discreet footer toggle reusing
+  // the same RegisterProjectForm as the first-launch empty state.
+  const [registerOpen, setRegisterOpen] = useState(false)
+  // Auto-close on success: a grown projects list means the POST landed and the
+  // list refetched. Adjust-state-during-render (React's documented pattern for
+  // reacting to prop changes) so the form never flashes an extra frame.
+  const [seenProjectCount, setSeenProjectCount] = useState(projects.length)
+  if (projects.length !== seenProjectCount) {
+    setSeenProjectCount(projects.length)
+    if (projects.length > seenProjectCount) setRegisterOpen(false)
+  }
+
   return (
     <nav className="sidebar" aria-label="Projets et sessions">
       <div className="sidebar-head">
@@ -56,32 +68,57 @@ export function SessionSidebar(props: SessionSidebarProps) {
         </div>
       ) : projects.length === 0 ? (
         <RegisterProjectForm
+          intro="Aucun projet enregistré. Indiquez le dossier d’un dépôt pour commencer."
           onRegister={props.onRegisterProject}
           error={props.registerError ?? null}
           pending={props.registerPending ?? false}
         />
       ) : (
-        projects.map((project) => (
-          <div className="project" key={project.id}>
-            <div
-              className={`project-name${project.id === openProjectId ? ' open' : ''}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onSelectProject(project.id)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  onSelectProject(project.id)
-                }
-              }}
-            >
-              <span className="pj-dot" style={{ background: `var(--color-${project.color})` }} aria-hidden="true" />
-              {basename(project.path)}
-              {project.id === openProjectId && <span className="count">{sessions.length}</span>}
+        <>
+          {projects.map((project) => (
+            <div className="project" key={project.id}>
+              <div
+                className={`project-name${project.id === openProjectId ? ' open' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectProject(project.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onSelectProject(project.id)
+                  }
+                }}
+              >
+                <span className="pj-dot" style={{ background: `var(--color-${project.color})` }} aria-hidden="true" />
+                {basename(project.path)}
+                {/* The open project's count comes from the live sessions list
+                    (refetched on every draft/turn) — fresher than the projects
+                    snapshot's sessionCount, which only updates when the
+                    projects query refetches. Closed rows show the
+                    server-computed sessionCount. */}
+                <span className="count">{project.id === openProjectId ? sessions.length : project.sessionCount}</span>
+              </div>
+              {project.id === openProjectId && <SessionList {...props} />}
             </div>
-            {project.id === openProjectId && <SessionList {...props} />}
+          ))}
+          <div className="sidebar-foot">
+            <button
+              type="button"
+              className="add-project"
+              aria-expanded={registerOpen}
+              onClick={() => setRegisterOpen((open) => !open)}
+            >
+              + Projet
+            </button>
+            {registerOpen && (
+              <RegisterProjectForm
+                onRegister={props.onRegisterProject}
+                error={props.registerError ?? null}
+                pending={props.registerPending ?? false}
+              />
+            )}
           </div>
-        ))
+        </>
       )}
     </nav>
   )
@@ -115,10 +152,13 @@ function RegisterProjectForm({
   onRegister,
   error,
   pending,
+  intro,
 }: {
   onRegister: (path: string) => void
   error: string | null
   pending: boolean
+  /** Leading sentence — the empty state explains itself, the footer toggle does not need to. */
+  intro?: string
 }) {
   const [path, setPath] = useState('')
   const submit = () => {
@@ -133,7 +173,7 @@ function RegisterProjectForm({
         submit()
       }}
     >
-      <p>Aucun projet enregistré. Indiquez le dossier d’un dépôt pour commencer.</p>
+      {intro !== undefined && <p>{intro}</p>}
       <input
         value={path}
         onChange={(event) => setPath(event.target.value)}

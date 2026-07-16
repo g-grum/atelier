@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import type { Project, SessionSummary } from '@atelier/shared'
+import type { ProjectSummary, SessionSummary } from '@atelier/shared'
 import { SessionSidebar, type SessionSidebarProps } from './SessionSidebar'
 
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.
@@ -8,7 +8,10 @@ import { SessionSidebar, type SessionSidebarProps } from './SessionSidebar'
 
 afterEach(cleanup)
 
-const project: Project = { id: 'p1', path: '/Users/demo/workspace/atelier', color: 'cyan' }
+// sessionCount deliberately differs from sessions.length (2): the open row
+// must prefer the fresher live list, closed rows show the server count.
+const project: ProjectSummary = { id: 'p1', path: '/Users/demo/workspace/atelier', color: 'cyan', sessionCount: 5 }
+const otherProject: ProjectSummary = { id: 'p2', path: '/Users/demo/workspace/demoapp-backend', color: 'magenta', sessionCount: 7 }
 
 const realSession: SessionSummary = {
   id: 's1',
@@ -52,7 +55,7 @@ function renderSidebar(overrides: Partial<SessionSidebarProps> = {}) {
     ...overrides,
   }
   const view = render(<SessionSidebar {...props} />)
-  return { calls, view }
+  return { calls, view, props }
 }
 
 /** The session row element wrapping the given visible name. */
@@ -116,10 +119,65 @@ describe('SessionSidebar sessions', () => {
   })
 })
 
+describe('SessionSidebar projects', () => {
+  /** The project row element (`.project-name`) wrapping the given visible basename. */
+  function projectRowOf(name: string): HTMLElement {
+    const row = screen.getByText(name).closest('.project-name')
+    if (!(row instanceof HTMLElement)) throw new Error(`no project row for "${name}"`)
+    return row
+  }
+
+  test('every project row shows its session count, not only the open one', () => {
+    renderSidebar({ projects: [project, otherProject] })
+    // Closed row: the server-computed sessionCount from ProjectSummary.
+    expect(projectRowOf('demoapp-backend').querySelector('.count')?.textContent).toBe('7')
+    // Open row: the live sessions list (2 entries) is fresher than the
+    // projects snapshot (sessionCount: 5) — it wins.
+    expect(projectRowOf('atelier').querySelector('.count')?.textContent).toBe('2')
+  })
+
+  test('« + Projet » toggles the register form and submitting registers the typed path', () => {
+    const { calls } = renderSidebar({ projects: [project, otherProject] })
+
+    // Discreet permanent affordance: the form stays hidden until asked for.
+    const toggle = screen.getByRole('button', { name: '+ Projet' })
+    expect(screen.queryByPlaceholderText('/chemin/absolu/du/projet')).toBeNull()
+
+    // Same RegisterProjectForm as the first-launch empty state.
+    fireEvent.click(toggle)
+    const input = screen.getByPlaceholderText('/chemin/absolu/du/projet')
+    fireEvent.change(input, { target: { value: '/Users/demo/workspace/demoapp-frontend' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(calls.registered).toEqual(['/Users/demo/workspace/demoapp-frontend'])
+
+    // Toggling again hides the form.
+    fireEvent.click(toggle)
+    expect(screen.queryByPlaceholderText('/chemin/absolu/du/projet')).toBeNull()
+  })
+
+  test('the register form auto-closes when the registration lands (projects list grows)', () => {
+    const { view, props } = renderSidebar({ projects: [project] })
+    fireEvent.click(screen.getByRole('button', { name: '+ Projet' }))
+    expect(screen.getByPlaceholderText('/chemin/absolu/du/projet')).toBeTruthy()
+
+    // The POST landed: the refetched projects list grew by one.
+    view.rerender(<SessionSidebar {...props} projects={[project, otherProject]} />)
+    expect(screen.queryByPlaceholderText('/chemin/absolu/du/projet')).toBeNull()
+  })
+
+  test('a failed registration is surfaced inside the footer form', () => {
+    renderSidebar({ projects: [project], registerError: 'POST /api/projects → 500' })
+    fireEvent.click(screen.getByRole('button', { name: '+ Projet' }))
+    expect(screen.getByRole('alert').textContent).toContain('POST /api/projects → 500')
+  })
+})
+
 describe('SessionSidebar empty state', () => {
-  test('with no registered project, shows the folder-path register form', () => {
+  test('with no registered project, shows the folder-path register form directly (no toggle)', () => {
     const { calls } = renderSidebar({ projects: [], sessions: [], openProjectId: null, activeSessionId: null })
 
+    // First launch: the form IS the sidebar content — no « + Projet » detour.
+    expect(screen.queryByRole('button', { name: '+ Projet' })).toBeNull()
     const input = screen.getByPlaceholderText('/chemin/absolu/du/projet')
     const button = screen.getByRole('button', { name: 'Enregistrer' })
     fireEvent.change(input, { target: { value: '/Users/germain/workspace/atelier' } })

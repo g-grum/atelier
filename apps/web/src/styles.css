@@ -152,6 +152,11 @@
   .sess:focus-within .del { display: inline-flex; }
   .sess .del:hover { color: var(--color-red); background: rgba(251, 111, 95, 0.12); }
 
+  /* Sidebar footer (v0.2): permanent, discreet « + Projet » affordance below the project list. */
+  .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; }
+  .add-project { align-self: flex-start; margin: 4px 14px 0; padding: 5px 10px; font: 600 11px var(--font-mono); color: var(--color-faint); background: transparent; border: 1px dashed var(--color-line); border-radius: 7px; cursor: pointer; }
+  .add-project:hover { color: var(--color-muted); border-color: var(--color-muted); border-style: solid; }
+
   /* First-launch empty state (no registered project). */
   .register { display: flex; flex-direction: column; gap: 9px; margin: 4px 14px; padding: 13px 14px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface); }
   .register p { margin: 0; font-size: 12px; color: var(--color-muted); }
