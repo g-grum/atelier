@@ -100,18 +100,7 @@ export class AgentSdkClient implements SdkClient {
 
     const q = query({
       prompt: params.prompt,
-      options: {
-        cwd: params.cwd,
-        model: params.model,
-        resume: params.resumeSessionId,
-        abortController,
-        // SDK CanUseTool: (toolName, input, options) → PermissionResult
-        canUseTool: async (toolName, input) => {
-          const result = await params.canUseTool(toolName, input)
-          if (result.behavior === 'allow') return { behavior: 'allow' }
-          return { behavior: 'deny', message: result.message }
-        },
-      },
+      options: buildQueryOptions(params, abortController),
     })
 
     try {
@@ -124,17 +113,24 @@ export class AgentSdkClient implements SdkClient {
           continue
         }
 
-        // SDKPartialAssistantMessage: type='stream_event', event is BetaRawMessageStreamEvent
+        // SDKPartialAssistantMessage: type='stream_event', event is BetaRawMessageStreamEvent.
+        // Only emitted when options.includePartialMessages is true (sdk.d.ts) —
+        // see buildQueryOptions. parent_tool_use_id is non-null for subagent
+        // streams (sdk.d.ts: 'string | null'): only top-level text belongs in the chat.
         if (msg.type === 'stream_event') {
           const ev = msg.event
           // BetaRawContentBlockDeltaEvent: event.type='content_block_delta', event.delta.type='text_delta'
-          if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
+          if (msg.parent_tool_use_id === null && ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
             yield { type: 'text_delta', text: (ev.delta as { type: 'text_delta'; text: string }).text }
           }
           continue
         }
 
-        // SDKAssistantMessage: type='assistant', message is BetaMessage (content blocks)
+        // SDKAssistantMessage: type='assistant', message is BetaMessage (content blocks).
+        // Text blocks are deliberately NOT extracted here: with
+        // includePartialMessages on, the full reply already arrived as
+        // stream_event text_deltas — re-emitting the final text blocks would
+        // double every reply. Deltas are the single text source.
         if (msg.type === 'assistant') {
           const content = (msg.message as { content?: unknown }).content
           if (Array.isArray(content)) {
@@ -213,6 +209,42 @@ export class AgentSdkClient implements SdkClient {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+type QueryOptions = NonNullable<Parameters<typeof query>[0]['options']>
+
+/**
+ * Builds the SDK query() options for one turn. Exported as the unit-testable
+ * seam for two real-SDK boundary contracts the mock can't see:
+ *
+ * - includePartialMessages (sdk.d.ts Options): "When true,
+ *   SDKPartialAssistantMessage events will be emitted during streaming."
+ *   Without it the SDK emits NO stream_event at all — zero text deltas ever
+ *   reach the client (observed live).
+ *
+ * - canUseTool allow shape: PermissionResult (sdk.d.ts) declares
+ *   `updatedInput?: Record<string, unknown>` as OPTIONAL, but the BUNDLED CLI
+ *   binary the SDK actually spawns (claude-agent-sdk-darwin-arm64/claude, 2.1.198)
+ *   Zod-REQUIRES it on the permission control response:
+ *   `behavior:literal("allow"),updatedInput:record(string(),unknown())` — a
+ *   bare `{ behavior: 'allow' }` fails the whole permission request with
+ *   "Tool permission request failed: ZodError" (observed live). Echo the
+ *   original input back unchanged.
+ */
+export function buildQueryOptions(params: RunTurnParams, abortController: AbortController): QueryOptions {
+  return {
+    cwd: params.cwd,
+    model: params.model,
+    resume: params.resumeSessionId,
+    abortController,
+    includePartialMessages: true,
+    // SDK CanUseTool: (toolName, input: Record<string, unknown>, options) → PermissionResult
+    canUseTool: async (toolName, input) => {
+      const result = await params.canUseTool(toolName, input)
+      if (result.behavior === 'allow') return { behavior: 'allow', updatedInput: input }
+      return { behavior: 'deny', message: result.message }
+    },
+  }
+}
 
 /** Maps a recorded tool_use block through describe-tool-use so resumed sessions render like live ones. */
 function toChatToolMessage(block: { id: string; name: string; input: unknown }): ChatMessage {
