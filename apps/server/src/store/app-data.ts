@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AlwaysRule, Preferences, Project } from '@atelier/shared'
+import type { AlwaysRule, Preferences, Project, UsageEvent } from '@atelier/shared'
 
 export type Draft = { id: string; projectId: string; name: string | null; model: string; createdAt: string }
-/** All four counters persist — the v0.2 forecast's fidelity depends on cache counts; a lossy total can't be backfilled. */
-export type UsageEvent = { at: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
+// UsageEvent now lives in @atelier/shared (GET /api/usage/history ships it — single contract);
+// re-exported so store-side importers keep working.
+export type { UsageEvent }
 
 export type AppDataShape = {
   projects: Project[]
@@ -18,7 +19,14 @@ export type AppDataShape = {
 
 const EMPTY: AppDataShape = {
   projects: [],
-  preferences: { ide: 'webstorm', defaultModel: 'claude-fable-5' },
+  preferences: {
+    ide: 'webstorm',
+    defaultModel: 'claude-fable-5',
+    // Default budgets are honest ESTIMATES (no public API exposes plan limits);
+    // the user calibrates them from settings — spec « Usage & limits ».
+    windowBudgetTokens: 2_000_000,
+    weeklyBudgetTokens: 12_000_000,
+  },
   drafts: [],
   draftMap: {},
   modelOverrides: {},
@@ -32,9 +40,15 @@ export class AppData {
   private data: AppDataShape
 
   constructor(private readonly filePath: string) {
-    this.data = existsSync(filePath)
-      ? { ...EMPTY, ...JSON.parse(readFileSync(filePath, 'utf8')) }
-      : structuredClone(EMPTY)
+    if (existsSync(filePath)) {
+      const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<AppDataShape>
+      // Deep-merge preferences: a shallow `{ ...EMPTY, ...parsed }` replaces the
+      // nested object wholesale, so a v0.1 file (no budgets) would lose the new
+      // defaults. Merging per-key keeps saved values AND future defaults.
+      this.data = { ...EMPTY, ...parsed, preferences: { ...EMPTY.preferences, ...parsed.preferences } }
+    } else {
+      this.data = structuredClone(EMPTY)
+    }
   }
 
   get(): Readonly<AppDataShape> {

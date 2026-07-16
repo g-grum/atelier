@@ -13,7 +13,7 @@ function freshApp(webDist?: string) {
   const sdk = new MockSdkClient()
   const sessions = new SessionsService(sdk, data)
   const app = createApp({ data, sessions, sdk, token: 'test-token', webDist })
-  return { app, data, sessions }
+  return { app, data, sessions, filePath }
 }
 
 // A fake built web app: dist/ lives INSIDE a parent dir that also holds a
@@ -229,9 +229,11 @@ describe('createApp', () => {
       headers: { Authorization: 'Bearer test-token' },
     })
     expect(res.status).toBe(200)
-    const prefs = await res.json() as { ide: string; defaultModel: string }
+    const prefs = await res.json() as { ide: string; defaultModel: string; windowBudgetTokens: number; weeklyBudgetTokens: number }
     expect(prefs.ide).toBe('webstorm')
     expect(prefs.defaultModel).toBe('claude-fable-5')
+    expect(prefs.windowBudgetTokens).toBe(2_000_000)
+    expect(prefs.weeklyBudgetTokens).toBe(12_000_000)
   })
 
   test('PATCH /api/preferences persists changes', async () => {
@@ -248,6 +250,77 @@ describe('createApp', () => {
     const rg = await app.request('/api/preferences', { headers: auth })
     const prefs = await rg.json() as { ide: string }
     expect(prefs.ide).toBe('vscode')
+  })
+
+  // 8a. Calibratable budgets (v0.2): PATCH accepts the two optional integer
+  // budget fields; the gauges are honest ESTIMATES, so the user can calibrate.
+  test('PATCH /api/preferences accepts a budget calibration that survives a reload', async () => {
+    const { app, filePath } = freshApp()
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    const rp = await app.request('/api/preferences', {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ windowBudgetTokens: 3_000_000 }),
+    })
+    expect(rp.status).toBe(200)
+    const prefs = await rp.json() as { windowBudgetTokens: number; weeklyBudgetTokens: number }
+    expect(prefs.windowBudgetTokens).toBe(3_000_000)
+    expect(prefs.weeklyBudgetTokens).toBe(12_000_000)
+
+    // Reload: a fresh store on the same data file still carries the calibration.
+    const reloaded = new AppData(filePath)
+    expect(reloaded.get().preferences.windowBudgetTokens).toBe(3_000_000)
+  })
+
+  test('PATCH /api/preferences rejects invalid budgets with 400 JSON and leaves preferences untouched — never a 500', async () => {
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    const invalid: [field: string, value: unknown][] = [
+      ['windowBudgetTokens', 'x'],
+      ['windowBudgetTokens', -1],
+      ['windowBudgetTokens', 0],
+      ['windowBudgetTokens', 1.5],
+      ['weeklyBudgetTokens', 'x'],
+      ['weeklyBudgetTokens', 0],
+    ]
+    for (const [field, value] of invalid) {
+      const { app } = freshApp()
+      const res = await app.request('/api/preferences', {
+        method: 'PATCH',
+        headers: auth,
+        body: JSON.stringify({ [field]: value }),
+      })
+      expect(res.status).toBe(400)
+      const body = await res.json() as { error: string }
+      expect(typeof body.error).toBe('string')
+
+      const rg = await app.request('/api/preferences', { headers: auth })
+      const prefs = await rg.json() as Record<string, number>
+      expect(prefs['windowBudgetTokens']).toBe(2_000_000)
+      expect(prefs['weeklyBudgetTokens']).toBe(12_000_000)
+    }
+  })
+
+  // 8c. GET /api/usage/history — raw events for the web-side estimator.
+  test('GET /api/usage/history is token-guarded like every /api route', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/usage/history')
+    expect(res.status).toBe(401)
+  })
+
+  test('GET /api/usage/history returns the seeded usage events verbatim (4 counters each)', async () => {
+    const { app, data } = freshApp()
+    const events = [
+      { at: '2026-07-16T08:00:00.000Z', inputTokens: 1200, outputTokens: 450, cacheReadTokens: 90_000, cacheCreationTokens: 3_000 },
+      { at: '2026-07-16T09:30:00.000Z', inputTokens: 800, outputTokens: 200, cacheReadTokens: 12_000, cacheCreationTokens: 0 },
+    ]
+    data.update((d) => { d.usageEvents.push(...events) })
+
+    const res = await app.request('/api/usage/history', {
+      headers: { Authorization: 'Bearer test-token' },
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual(events)
   })
 
   // 8b. Body guards: JSON.parse also succeeds on 'null' and '[]' — property

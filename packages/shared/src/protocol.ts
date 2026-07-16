@@ -22,7 +22,17 @@ export type ProposedRule = Pick<AlwaysRule, 'toolName' | 'matcher'>
 export const MODELS = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6'] as const
 
 export type Project = { id: string; path: string; color: string }
-export type Preferences = { ide: 'webstorm' | 'vscode' | 'cursor' | 'idea'; defaultModel: string }
+export type Preferences = {
+  ide: 'webstorm' | 'vscode' | 'cursor' | 'idea'
+  defaultModel: string
+  /** Calibratable 5h-window token budget — an ESTIMATE (no public API exposes plan limits); the store guarantees a default. */
+  windowBudgetTokens: number
+  /** Calibratable weekly (trailing 7 days) token budget — same estimate policy as windowBudgetTokens. */
+  weeklyBudgetTokens: number
+}
+
+/** One recorded usage sample (REST: GET /api/usage/history). All four counters persist — the forecast's fidelity depends on cache counts; a lossy total can't be backfilled. */
+export type UsageEvent = { at: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
 
 export type SessionSummary = {
   id: string

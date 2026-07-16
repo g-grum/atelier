@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AppData } from './app-data'
@@ -26,6 +26,45 @@ describe('AppData', () => {
     store.recordUsage({ at: new Date(now).toISOString(), ...counters })
     expect(store.get().usageEvents).toHaveLength(1)
     expect(store.get().usageEvents[0]?.cacheReadTokens).toBe(100)
+  })
+
+  test('fresh store carries the default usage budgets', () => {
+    const store = freshStore()
+    expect(store.get().preferences.windowBudgetTokens).toBe(2_000_000)
+    expect(store.get().preferences.weeklyBudgetTokens).toBe(12_000_000)
+  })
+
+  test('migrates a v0.1 data file: budget defaults appear without clobbering saved preferences', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
+    // Exact v0.1 on-disk shape: preferences carries ONLY { ide, defaultModel }.
+    // A shallow `{ ...EMPTY, ...parsed }` would replace the nested preferences
+    // object wholesale and lose the new budget defaults — the constructor must
+    // deep-merge `{ ...EMPTY.preferences, ...parsed.preferences }`.
+    writeFileSync(path, JSON.stringify({
+      projects: [],
+      preferences: { ide: 'vscode', defaultModel: 'claude-opus-4-8' },
+      drafts: [],
+      draftMap: {},
+      modelOverrides: {},
+      rules: [],
+      usageEvents: [],
+    }))
+    const store = new AppData(path)
+    expect(store.get().preferences).toEqual({
+      ide: 'vscode',
+      defaultModel: 'claude-opus-4-8',
+      windowBudgetTokens: 2_000_000,
+      weeklyBudgetTokens: 12_000_000,
+    })
+  })
+
+  test('saved budgets win over the defaults on reload', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
+    const a = new AppData(path)
+    a.update((d) => { d.preferences.windowBudgetTokens = 5_000_000 })
+    const b = new AppData(path)
+    expect(b.get().preferences.windowBudgetTokens).toBe(5_000_000)
+    expect(b.get().preferences.weeklyBudgetTokens).toBe(12_000_000)
   })
 
   test('draft mapping: transfers model, returns deferred name, survives reload', () => {

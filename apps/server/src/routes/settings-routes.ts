@@ -57,13 +57,31 @@ export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): H
     if (parsed.defaultModel !== undefined && typeof parsed.defaultModel !== 'string') {
       return c.json({ error: 'requête invalide : « defaultModel » doit être une chaîne' }, 400)
     }
+    // Calibratable usage budgets (estimates by design — spec « Usage & limits »):
+    // optional, but when present they must be strictly positive integers.
+    for (const field of ['windowBudgetTokens', 'weeklyBudgetTokens'] as const) {
+      const value = parsed[field]
+      if (value !== undefined && (!Number.isInteger(value) || (value as number) <= 0)) {
+        return c.json({ error: `requête invalide : « ${field} » doit être un entier strictement positif` }, 400)
+      }
+    }
     const ide = parsed.ide as string | undefined
     const defaultModel = parsed.defaultModel as string | undefined
+    const windowBudgetTokens = parsed.windowBudgetTokens as number | undefined
+    const weeklyBudgetTokens = parsed.weeklyBudgetTokens as number | undefined
     data.update((d) => {
       if (ide !== undefined) d.preferences.ide = ide as typeof d.preferences.ide
       if (defaultModel !== undefined) d.preferences.defaultModel = defaultModel
+      if (windowBudgetTokens !== undefined) d.preferences.windowBudgetTokens = windowBudgetTokens
+      if (weeklyBudgetTokens !== undefined) d.preferences.weeklyBudgetTokens = weeklyBudgetTokens
     })
     return c.json(data.get().preferences)
+  })
+
+  // Usage history — the raw events (4 counters, 7-day retention); the web-side
+  // estimator derives the gauges from them. Token-guarded like every /api route.
+  app.get('/usage/history', (c) => {
+    return c.json(data.get().usageEvents)
   })
 
   // Open in IDE — always 200 with { ok } : the web toast consumes `reason`, a 500 would break it.
