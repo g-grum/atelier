@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { resolveRuntime, type RuntimeIo } from './resolve-runtime'
+import { parsePort, resolveRuntime, type RuntimeIo } from './resolve-runtime'
 
 const MAIN_DIR = '/Applications/Atelier.app/Contents/Resources/app/dist'
 const DEV_MAIN_DIR = '/repo/apps/desktop/dist'
@@ -12,6 +12,20 @@ function io(overrides: Partial<RuntimeIo> = {}): RuntimeIo {
     ...overrides,
   }
 }
+
+describe('parsePort', () => {
+  test('accepts a valid override', () => {
+    expect(parsePort('4527', 4517)).toBe(4527)
+  })
+
+  test('falls back to the default on garbage or absent values', () => {
+    expect(parsePort('garbage', 4517)).toBe(4517)
+    expect(parsePort('0', 4517)).toBe(4517)
+    expect(parsePort('70000', 4517)).toBe(4517)
+    expect(parsePort('45.17', 4517)).toBe(4517)
+    expect(parsePort(undefined, 4517)).toBe(4517)
+  })
+})
 
 describe('resolveRuntime', () => {
   test('uses runtime.json next to the compiled main when present (packaged mode)', () => {

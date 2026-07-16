@@ -19,6 +19,13 @@ export type RuntimeResolution =
   | { mode: 'dev'; repoRoot: string; bunPath: string }
   | { mode: 'error'; message: string }
 
+/** Parse a port override (ATELIER_PORT); anything but 1–65535 → fallback. */
+export function parsePort(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || !/^\d+$/.test(raw)) return fallback
+  const port = Number(raw)
+  return port >= 1 && port <= 65535 ? port : fallback
+}
+
 export function resolveRuntime(mainDir: string, io: RuntimeIo): RuntimeResolution {
   // mainDir is <desktop package root>/dist — the config sits at the package
   // root (Contents/Resources/app/runtime.json inside the bundle).

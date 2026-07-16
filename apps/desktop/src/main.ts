@@ -4,14 +4,15 @@ import { readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog } from 'electron'
-import { resolveRuntime } from './resolve-runtime'
+import { parsePort, resolveRuntime } from './resolve-runtime'
 
 // Thin shell (spec: the desktop unit carries no business logic): generate a
 // token, spawn the server, wait for /health, open one window on the served UI.
 // Security model: loopback binding + token injected via the initial URL.
 
 const DEV = process.env.ATELIER_DEV === '1'
-const SERVER_PORT = 4517
+// ATELIER_PORT overrides the server port (smoke runs on a busy machine).
+const SERVER_PORT = parsePort(process.env.ATELIER_PORT, 4517)
 const UI_PORT = DEV ? 4518 : SERVER_PORT // dev: Vite serves the SPA on 4518
 
 // Packaged (Atelier.app): runtime.json at the package root records the repo
