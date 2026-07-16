@@ -3,6 +3,8 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AppData } from '../store/app-data'
+import { MockSdkClient } from '../sdk/sdk-client.mock'
+import { SessionsService } from '../sessions/sessions-service'
 import { settingsRoutes } from '../routes/settings-routes'
 import { buildCliArgs, buildSchemeUrl, openInIde, type LaunchFn } from './open-in-ide'
 
@@ -134,7 +136,8 @@ describe('POST /open-in-ide route', () => {
     const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-ide-')), 'data.json')
     const data = new AppData(filePath)
     const { launch, calls } = fakeLaunch(launchResults)
-    return { app: settingsRoutes(data, launch), data, calls }
+    const sessions = new SessionsService(new MockSdkClient(), data)
+    return { app: settingsRoutes(data, sessions, launch), data, calls }
   }
 
   test('responds { ok: true } and uses the IDE preference from AppData', async () => {
@@ -234,7 +237,7 @@ describe('POST /open-in-ide route', () => {
     const throwing: LaunchFn = async () => {
       throw new Error('boom')
     }
-    const app = settingsRoutes(data, throwing)
+    const app = settingsRoutes(data, new SessionsService(new MockSdkClient(), data), throwing)
     // mockRestore clears recorded calls — capture them in a local array instead.
     const loggedErrors: unknown[][] = []
     const errorLog = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {

@@ -1,18 +1,25 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
+import type { ProjectSummary } from '@atelier/shared'
 import type { AppData } from '../store/app-data'
+import type { SessionsService } from '../sessions/sessions-service'
 import { openInIde, spawnLaunch, type LaunchFn } from '../ide/open-in-ide'
 import { readJsonObject } from './read-json'
 
 // No amber here: the design system reserves amber EXCLUSIVELY for permission prompts (spec).
 const COLOR_PALETTE = ['cyan', 'magenta', 'violet', 'mint', 'teal'] as const
 
-export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): Hono {
+export function settingsRoutes(data: AppData, sessions: SessionsService, launch: LaunchFn = spawnLaunch): Hono {
   const app = new Hono()
 
-  // Projects
-  app.get('/projects', (c) => {
-    return c.json(data.get().projects)
+  // Projects — REST shape is ProjectSummary: the persisted Project enriched with
+  // its sessionCount at response time (a derived count is never persisted;
+  // countSessions never throws, so one unreadable folder cannot break the list).
+  app.get('/projects', async (c) => {
+    const summaries: ProjectSummary[] = await Promise.all(
+      data.get().projects.map(async (project) => ({ ...project, sessionCount: await sessions.countSessions(project.id) })),
+    )
+    return c.json(summaries)
   })
 
   app.post('/projects', async (c) => {
@@ -31,7 +38,9 @@ export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): H
     data.update((d) => {
       d.projects.push(project)
     })
-    return c.json(project, 201)
+    // Registering an already-populated folder reports its real count right away.
+    const summary: ProjectSummary = { ...project, sessionCount: await sessions.countSessions(id) }
+    return c.json(summary, 201)
   })
 
   app.delete('/projects/:id', (c) => {

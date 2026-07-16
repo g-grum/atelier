@@ -33,7 +33,7 @@ export function createApp({ data, sessions, sdk, token, webDist }: { data: AppDa
 
   const api = new Hono()
   api.route('/', sessionsRoutes(data, sessions))
-  api.route('/', settingsRoutes(data))
+  api.route('/', settingsRoutes(data, sessions))
 
   // WS glue only — all behavior lives in SessionStream (tested socket-free).
   const streams = new SessionStreamRegistry(data, sdk)

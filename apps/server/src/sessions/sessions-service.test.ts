@@ -100,4 +100,36 @@ describe('SessionsService', () => {
 
     expect(result.every((s) => s.id !== draft.id)).toBe(true)
   })
+
+  describe('countSessions', () => {
+    test('counts SDK sessions for the project path plus its unsent drafts', async () => {
+      const sdkSessions = [
+        { id: 's1', name: 'one', updatedAt: '2025-01-01T00:00:00.000Z', messageCount: 2 },
+        { id: 's2', name: 'two', updatedAt: '2025-01-02T00:00:00.000Z', messageCount: 5 },
+      ]
+      const { service } = freshSetup(sdkSessions)
+      service.createDraft('p1', { name: 'brouillon' })
+
+      expect(await service.countSessions('p1')).toBe(3)
+    })
+
+    test('drafts of OTHER projects are not counted', async () => {
+      const { service, data } = freshSetup()
+      data.update((d) => {
+        d.projects.push({ id: 'p2', path: '/tmp/y', color: 'magenta' })
+      })
+      service.createDraft('p2', {})
+
+      expect(await service.countSessions('p1')).toBe(0)
+    })
+
+    test('a throwing listSessions yields 0 — never a throw, the projects list must render even if one folder is unreadable', async () => {
+      const { service, sdk } = freshSetup()
+      sdk.listSessions = async () => {
+        throw new Error('EACCES: dossier illisible')
+      }
+
+      expect(await service.countSessions('p1')).toBe(0)
+    })
+  })
 })

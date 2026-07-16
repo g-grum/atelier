@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { ChatMessage, Project, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, ProjectSummary, SessionSummary } from '@atelier/shared'
 import type { Backend } from './api/backend'
 import App from './App'
 
@@ -10,7 +10,7 @@ import App from './App'
 
 afterEach(cleanup)
 
-const project: Project = { id: 'p1', path: '/Users/demo/workspace/atelier', color: 'cyan' }
+const project: ProjectSummary = { id: 'p1', path: '/Users/demo/workspace/atelier', color: 'cyan', sessionCount: 1 }
 
 const session: SessionSummary = {
   id: 's1',
@@ -33,7 +33,7 @@ const idleSocket = {
 function fakeBackend(overrides: Partial<Backend> = {}): Backend {
   return {
     listProjects: async () => [project],
-    registerProject: async (path) => ({ id: 'p2', path, color: 'magenta' }),
+    registerProject: async (path) => ({ id: 'p2', path, color: 'magenta', sessionCount: 0 }),
     listSessions: async () => [session],
     createDraft: async (projectId) => ({ ...session, id: 'd1', projectId, name: null, isDraft: true, messageCount: 0 }),
     getMessages: async () => [],

@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, Project, SessionSummary } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, SessionSummary } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -51,12 +51,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 // ── Projects ──
 
-export function listProjects(): Promise<Project[]> {
-  return request<Project[]>('GET', '/projects')
+// GET/POST /api/projects respond with the ProjectSummary DTO (Project + sessionCount).
+export function listProjects(): Promise<ProjectSummary[]> {
+  return request<ProjectSummary[]>('GET', '/projects')
 }
 
-export function registerProject(path: string): Promise<Project> {
-  return request<Project>('POST', '/projects', { path })
+export function registerProject(path: string): Promise<ProjectSummary> {
+  return request<ProjectSummary>('POST', '/projects', { path })
 }
 
 export function deleteProject(id: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { MODELS, type ChatMessage, type Project, type ServerEvent, type SessionSummary } from '@atelier/shared'
+import { MODELS, type ChatMessage, type ProjectSummary, type ServerEvent, type SessionSummary } from '@atelier/shared'
 
 /**
  * Scripted session data — production code, not test-only.
@@ -14,7 +14,8 @@ export const FIXTURE_PROJECT_ID = 'proj-atelier'
 export const FIXTURE_SESSION_ID = 'ses-refresh-token'
 export const FIXTURE_DRAFT_ID = 'draft-nouvelle-session'
 
-export const fixtureProjects: Project[] = [{ id: FIXTURE_PROJECT_ID, path: '/Users/demo/workspace/atelier', color: 'cyan' }]
+// sessionCount mirrors fixtureSessions below (1 session + 1 draft) — the REST DTO carries it.
+export const fixtureProjects: ProjectSummary[] = [{ id: FIXTURE_PROJECT_ID, path: '/Users/demo/workspace/atelier', color: 'cyan', sessionCount: 2 }]
 
 export const fixtureSessions: SessionSummary[] = [
   {

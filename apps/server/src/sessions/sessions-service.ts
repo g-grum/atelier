@@ -41,6 +41,19 @@ export class SessionsService {
     return [...draftSummaries, ...sdkSummaries]
   }
 
+  /**
+   * Sessions visible for a project: SDK sessions on its path + its unsent drafts.
+   * NEVER throws — an unreadable folder (or unknown id) yields 0 so the projects
+   * list keeps rendering even when one folder's history cannot be read.
+   */
+  async countSessions(projectId: string): Promise<number> {
+    try {
+      return (await this.list(projectId)).length
+    } catch {
+      return 0
+    }
+  }
+
   createDraft(projectId: string, { name, model }: { name?: string; model?: string }): SessionSummary {
     const { preferences } = this.data.get()
     const id = randomUUID()

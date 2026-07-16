@@ -7,10 +7,9 @@ import { MockSdkClient } from './sdk/sdk-client.mock'
 import { SessionsService } from './sessions/sessions-service'
 import { createApp } from './app'
 
-function freshApp(webDist?: string) {
+function freshApp(webDist?: string, sdk: MockSdkClient = new MockSdkClient()) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-app-')), 'data.json')
   const data = new AppData(filePath)
-  const sdk = new MockSdkClient()
   const sessions = new SessionsService(sdk, data)
   const app = createApp({ data, sessions, sdk, token: 'test-token', webDist })
   return { app, data, sessions, filePath }
@@ -84,6 +83,70 @@ describe('createApp', () => {
     const res = await app.request('/api/projects', { headers })
     const projects = await res.json() as unknown[]
     expect(projects).toHaveLength(1)
+  })
+
+  // 2b. Per-project session counts (v0.2): GET/POST /api/projects return the
+  // ProjectSummary DTO — the persisted Project stays count-free, the routes
+  // enrich through SessionsService.countSessions at response time.
+  test('GET /api/projects enriches every project with its sessionCount (SDK sessions + drafts, per path)', async () => {
+    const populated = [
+      { id: 's1', name: 'one', updatedAt: '2026-07-01T00:00:00.000Z', messageCount: 2 },
+      { id: 's2', name: 'two', updatedAt: '2026-07-02T00:00:00.000Z', messageCount: 4 },
+    ]
+    const sdk = new MockSdkClient()
+    // Per-path scripting: only /tmp/populated has Claude Code history.
+    sdk.listSessions = async (cwd) => (cwd === '/tmp/populated' ? populated : [])
+    const { app } = freshApp(undefined, sdk)
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    const bodies: { id: string; path: string }[] = []
+    for (const path of ['/tmp/populated', '/tmp/fresh']) {
+      const res = await app.request('/api/projects', { method: 'POST', headers: auth, body: JSON.stringify({ path }) })
+      bodies.push(await res.json() as { id: string; path: string })
+    }
+    // A draft on the fresh project must count too (unsent drafts are sessions to the user).
+    await app.request(`/api/projects/${bodies[1]?.id}/sessions`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ name: 'brouillon' }),
+    })
+
+    const res = await app.request('/api/projects', { headers: auth })
+    expect(res.status).toBe(200)
+    const projects = await res.json() as { path: string; sessionCount: number }[]
+    expect(projects).toHaveLength(2)
+    expect(projects.find((p) => p.path === '/tmp/populated')?.sessionCount).toBe(2)
+    expect(projects.find((p) => p.path === '/tmp/fresh')?.sessionCount).toBe(1)
+  })
+
+  test('POST /api/projects responds with the enriched ProjectSummary — count of an already-populated folder, else 0', async () => {
+    const populated = [
+      { id: 's1', name: 'one', updatedAt: '2026-07-01T00:00:00.000Z', messageCount: 2 },
+      { id: 's2', name: 'two', updatedAt: '2026-07-02T00:00:00.000Z', messageCount: 4 },
+    ]
+    const sdk = new MockSdkClient()
+    sdk.listSessions = async (cwd) => (cwd === '/tmp/populated' ? populated : [])
+    const { app } = freshApp(undefined, sdk)
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    const rPopulated = await app.request('/api/projects', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ path: '/tmp/populated' }),
+    })
+    expect(rPopulated.status).toBe(201)
+    const populatedProject = await rPopulated.json() as { id: string; path: string; color: string; sessionCount: number }
+    expect(populatedProject.sessionCount).toBe(2)
+    expect(populatedProject.path).toBe('/tmp/populated')
+
+    const rFresh = await app.request('/api/projects', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ path: '/tmp/fresh' }),
+    })
+    expect(rFresh.status).toBe(201)
+    const freshProject = await rFresh.json() as { sessionCount: number }
+    expect(freshProject.sessionCount).toBe(0)
   })
 
   // 3. POST /api/projects/:id/sessions + GET /api/projects/:id/sessions

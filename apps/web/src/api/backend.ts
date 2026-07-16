@@ -1,4 +1,4 @@
-import type { ChatMessage, ClientMessage, Project, ServerEvent, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, ProjectSummary, ServerEvent, SessionSummary } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixtureProjects, fixtureSessions, fixtureTurn } from '../state/fixtures'
 import * as client from './client'
@@ -10,8 +10,8 @@ import { SessionSocket } from './ws'
  * (component development + the seed of the demo mode). Default dev = real.
  */
 export type Backend = {
-  listProjects: () => Promise<Project[]>
-  registerProject: (path: string) => Promise<Project>
+  listProjects: () => Promise<ProjectSummary[]>
+  registerProject: (path: string) => Promise<ProjectSummary>
   listSessions: (projectId: string) => Promise<SessionSummary[]>
   createDraft: (projectId: string, init?: { name?: string; model?: string }) => Promise<SessionSummary>
   getMessages: (sessionId: string) => Promise<ChatMessage[]>
@@ -44,7 +44,7 @@ const realBackend: Backend = {
 const REPLAY_STEP_MS = 250
 
 function createFixtureBackend(): Backend {
-  let projects: Project[] = fixtureProjects.map((project) => ({ ...project }))
+  let projects: ProjectSummary[] = fixtureProjects.map((project) => ({ ...project }))
   let sessions: SessionSummary[] = fixtureSessions.map((session) => ({ ...session }))
   const messages = new Map<string, ChatMessage[]>(Object.entries(fixtureMessages))
   let nextId = 1
@@ -52,7 +52,8 @@ function createFixtureBackend(): Backend {
   return {
     listProjects: async () => projects,
     registerProject: async (path) => {
-      const project: Project = { id: `proj-${nextId++}`, path, color: 'cyan' }
+      // A folder registered in demo mode has no replayable history → count 0.
+      const project: ProjectSummary = { id: `proj-${nextId++}`, path, color: 'cyan', sessionCount: 0 }
       projects = [...projects, project]
       return project
     },
