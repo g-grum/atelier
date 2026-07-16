@@ -22,6 +22,19 @@ describe('ErrorBanner', () => {
     expect(banner.textContent).not.toContain('usage_limit')
   })
 
+  test('usage_limit without resetAt → « Limite d’usage atteinte » (time-less), never the raw slug', () => {
+    const state = reduce(initialState(), {
+      type: 'status',
+      sessionId: 'ses-1',
+      state: 'error',
+      error: { reason: 'usage_limit' },
+    })
+    render(<ErrorBanner status={state.status} error={state.error} />)
+    const banner = screen.getByRole('alert')
+    expect(banner.textContent).toBe('Limite d’usage atteinte')
+    expect(banner.textContent).not.toContain('usage_limit')
+  })
+
   test('error without resetAt → the reason text', () => {
     const state = reduce(initialState(), {
       type: 'status',

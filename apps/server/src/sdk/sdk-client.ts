@@ -220,13 +220,24 @@ function toChatToolMessage(block: { id: string; name: string; input: unknown }):
 }
 
 /**
- * SDK's SDKSessionInfo has no messageCount. Fall back to counting JSONL lines.
- * Reads ~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl; never throws.
+ * Mirrors the CLI's ~/.claude/projects directory encoding, verified empirically
+ * against the real entries AND the SDK bundle (`replace(/[^a-zA-Z0-9]/g,"-")`):
+ * EVERY non-alphanumeric character becomes '-', and the leading dash is KEPT —
+ * '/Users/x/ws/atelier' → '-Users-x-ws-atelier', '/ws/app/.claude' → '-ws-app--claude'.
  */
-function deriveMessageCount(sessionId: string, cwd: string): number {
+export function encodeProjectDir(cwd: string): string {
+  return cwd.replace(/[^a-zA-Z0-9]/g, '-')
+}
+
+/**
+ * SDK's SDKSessionInfo has no messageCount. Fall back to counting JSONL lines.
+ * Reads <projectsRoot>/<encoded-cwd>/<sessionId>.jsonl; never throws.
+ */
+export function deriveMessageCount(sessionId: string, cwd: string, projectsRoot?: string): number {
   try {
-    const projectKey = cwd.replaceAll('/', '-').replace(/^-/, '')
-    const path = join(homedir(), '.claude', 'projects', projectKey, `${sessionId}.jsonl`)
+    // Resolved INSIDE the try — the never-throws contract covers homedir() too.
+    const root = projectsRoot ?? join(homedir(), '.claude', 'projects')
+    const path = join(root, encodeProjectDir(cwd), `${sessionId}.jsonl`)
     const lines = readFileSync(path, 'utf8').split('\n').filter(Boolean)
     return lines.length
   } catch {

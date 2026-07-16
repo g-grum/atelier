@@ -4,7 +4,7 @@
 /*
  * Design tokens transcribed from docs/mockups/v4.2.html :root.
  * Semantic mapping (from the mockup):
- *  - project identities cycle cyan / magenta / violet / mint / amber
+ *  - project identities cycle cyan / magenta / violet / mint / teal
  *  - tool kinds: Bash = cyan, Edit/Write = violet, Read/Other = muted
  *  - states: mint = running/open, violet = merged, red = critical only
  *  - AMBER IS RESERVED EXCLUSIVELY FOR PERMISSION PROMPTS

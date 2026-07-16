@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -228,22 +228,34 @@ describe('POST /open-in-ide route', () => {
     }
   })
 
-  test('a throwing launch still responds { ok: false, reason } — the route is structurally 500-proof', async () => {
+  test('a throwing launch still responds { ok: false, reason } — the route is structurally 500-proof, and the error is logged, not swallowed silently', async () => {
     const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-ide-')), 'data.json')
     const data = new AppData(filePath)
     const throwing: LaunchFn = async () => {
       throw new Error('boom')
     }
     const app = settingsRoutes(data, throwing)
-    const res = await app.request('/open-in-ide', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file: FILE, line: 84 }),
+    // mockRestore clears recorded calls — capture them in a local array instead.
+    const loggedErrors: unknown[][] = []
+    const errorLog = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      loggedErrors.push(args)
     })
+    let res: Response
+    try {
+      res = await app.request('/open-in-ide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: FILE, line: 84 }),
+      })
+    } finally {
+      errorLog.mockRestore()
+    }
     expect(res.status).toBe(200)
     const body = await res.json() as { ok: boolean; reason: string }
     expect(body.ok).toBe(false)
     expect(typeof body.reason).toBe('string')
+    // the outer catch must not be a silent swallow
+    expect(loggedErrors.some((args) => args.some((a) => a instanceof Error && a.message === 'boom'))).toBe(true)
   })
 
   test('relative « file » responds { ok: false, reason } without launching', async () => {

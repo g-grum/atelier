@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -657,11 +657,17 @@ describe('SessionStream', () => {
     expect(events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
   })
 
-  // Guard: an SDK failure mid-turn surfaces as a status error, never an unhandled rejection
-  test('a throwing SDK call mid-turn emits status error instead of crashing', async () => {
-    class ThrowingSdk extends MockSdkClient {
-      override async renameSession(): Promise<void> {
-        throw new Error('rename failed')
+  // Bug fix (live acceptance pass): at session_started the SDK CLI has not yet
+  // flushed the session JSONL to ~/.claude/projects, so the deferred rename
+  // threw "Session not found in any project directory" — and the exception
+  // killed the ENTIRE first turn (no mapping, no deltas, no usage, status
+  // error). A rename failure must never kill the turn: a lost rename is
+  // cosmetic (spec: it surfaces as a toast), a lost turn is not.
+  test('a throwing renameSession never kills the draft turn: mapping broadcast, deltas, usage recorded, idle — rename attempted once, error logged', async () => {
+    class ThrowingRenameSdk extends MockSdkClient {
+      override async renameSession(sessionId: string, name: string): Promise<void> {
+        await super.renameSession(sessionId, name) // records the attempt in calls
+        throw new Error('Session sdk-1 not found in any project directory')
       }
     }
     const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
@@ -670,22 +676,105 @@ describe('SessionStream', () => {
       d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
       d.drafts.push({ id: 'd1', projectId: 'p1', name: 'boom', model: 'claude-fable-5', createdAt: new Date().toISOString() })
     })
-    const sdk = new ThrowingSdk({ turns: [[{ type: 'session_started', sessionId: 'sdk-1' }, { type: 'turn_done' }]] })
+    const sdk = new ThrowingRenameSdk({
+      turns: [[
+        { type: 'session_started', sessionId: 'sdk-1' },
+        { type: 'text_delta', text: 'Hel' },
+        { type: 'text_delta', text: 'lo' },
+        { type: 'usage', inputTokens: 11, outputTokens: 22, cacheReadTokens: 33, cacheCreationTokens: 44 },
+        { type: 'turn_done' },
+      ]],
+    })
     const registry = new SessionStreamRegistry(data, sdk)
     const stream = registry.get('d1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
 
-    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
-    await tick()
+    // mockRestore clears recorded calls — capture them in a local array instead.
+    const loggedErrors: unknown[][] = []
+    const errorLog = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      loggedErrors.push(args)
+    })
+    try {
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+    } finally {
+      errorLog.mockRestore()
+    }
 
-    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 'sdk-1', state: 'error', error: { reason: 'rename failed' } })
+    // the mapping still reached the client
+    expect(ofType(events, 'status').filter((event) => event.mapping)).toEqual([
+      { type: 'status', sessionId: 'sdk-1', state: 'streaming', mapping: { draftId: 'd1', sessionId: 'sdk-1' } },
+    ])
+    // the deltas still streamed
+    expect(ofType(events, 'assistant_delta').map((event) => event.text)).toEqual(['Hel', 'lo'])
+    // the usage was still recorded
+    expect(data.get().usageEvents).toEqual([
+      { at: expect.any(String), inputTokens: 11, outputTokens: 22, cacheReadTokens: 33, cacheCreationTokens: 44 },
+    ])
+    // the turn settled idle — never error
+    expect(ofType(events, 'status').every((event) => event.state !== 'error')).toBe(true)
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 'sdk-1', state: 'idle' })
+    // the rename was attempted exactly once, and its failure was logged, not thrown
+    expect(sdk.calls.filter((call) => call.method === 'renameSession')).toEqual([
+      { method: 'renameSession', args: ['sdk-1', 'boom'] },
+    ])
+    expect(loggedErrors.length).toBeGreaterThanOrEqual(1)
+    expect(loggedErrors.some((args) => args.some((a) => a instanceof Error && a.message.includes('not found')))).toBe(true)
 
-    // The registry must have been re-keyed BEFORE the (failing) awaited rename:
+    // The registry must have been re-keyed at session_started (with mapDraft):
     // mapDraft already redirects both ids to 'sdk-1', so a stale 'd1' key would
     // make every future get() miss and mint a DUPLICATE stream, stranding this one.
     expect(registry.get('d1', 'p1')).toBe(stream)
     expect(registry.get('sdk-1', 'p1')).toBe(stream)
+  })
+
+  // Companion timing test: the deferred rename must run at TURN END — by then
+  // the SDK CLI has flushed the session JSONL — never at session_started.
+  test('the deferred rename is applied at TURN END: after every content event of the turn, before the idle settle', async () => {
+    const { events, send } = makeSink()
+    let eventsSeenAtRename = -1
+    class RenameOrderSdk extends MockSdkClient {
+      override async renameSession(sessionId: string, name: string): Promise<void> {
+        eventsSeenAtRename = events.length
+        await super.renameSession(sessionId, name)
+      }
+    }
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+      d.drafts.push({ id: 'd1', projectId: 'p1', name: 'refacto broker', model: 'claude-fable-5', createdAt: new Date().toISOString() })
+    })
+    const sdk = new RenameOrderSdk({
+      turns: [[
+        { type: 'session_started', sessionId: 'sdk-1' },
+        { type: 'text_delta', text: 'Hel' },
+        { type: 'tool_use', toolUseId: 'tu-1', toolName: 'Bash', input: { command: 'bun test' } },
+        { type: 'tool_result', toolUseId: 'tu-1', ok: true, summary: 'ok' },
+        { type: 'text_delta', text: 'lo' },
+        { type: 'turn_done' },
+      ]],
+    })
+    const registry = new SessionStreamRegistry(data, sdk)
+    const stream = registry.get('d1', 'p1')
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    // rename called exactly once, with the deferred name, AFTER runTurn started
+    expect(sdk.calls.filter((call) => call.method === 'renameSession')).toEqual([
+      { method: 'renameSession', args: ['sdk-1', 'refacto broker'] },
+    ])
+    expect(sdk.calls.map((call) => call.method)).toEqual(['runTurn', 'renameSession'])
+
+    // at rename time, EVERY event of the turn except the final idle settle had
+    // already been broadcast (deltas, tool_use, tool_result all processed)
+    expect(eventsSeenAtRename).toBe(events.length - 1)
+    expect(ofType(events, 'assistant_delta').map((event) => event.text)).toEqual(['Hel', 'lo'])
+    expect(ofType(events, 'tool_result')).toHaveLength(1)
+    expect(events.at(-1)).toEqual({ type: 'status', sessionId: 'sdk-1', state: 'idle' })
   })
 
   // Guard: a turn against an unknown project must fail loudly, not crash the process

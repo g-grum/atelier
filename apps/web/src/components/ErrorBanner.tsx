@@ -23,11 +23,14 @@ export function ErrorBanner({ status, error }: ErrorBannerProps) {
 function message(error: NonNullable<StreamState['error']>): string {
   if (error.resetAt !== undefined) {
     const at = new Date(error.resetAt)
-    // An unparseable resetAt falls through to the raw reason.
+    // An unparseable resetAt falls through to the time-less cases below.
     if (!Number.isNaN(at.getTime())) {
       const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
       return `Limite d’usage atteinte — réinitialisation à ${hhmm}`
     }
   }
+  // The machine slug must never leak into the French UI: a usage_limit without
+  // a (parseable) resetAt still reads as the human message, just time-less.
+  if (error.reason === 'usage_limit') return 'Limite d’usage atteinte'
   return error.reason
 }

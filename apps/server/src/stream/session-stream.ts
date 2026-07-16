@@ -36,6 +36,8 @@ export class SessionStream {
   private partialText = ''
   private lastError?: { reason: string; resetAt?: string }
   private turnAbort: AbortController | null = null
+  /** Draft name awaiting renameSession — applied at turn end, once the SDK CLI has flushed the session JSONL. */
+  private pendingRename: { sessionId: string; name: string } | null = null
 
   constructor({ id, projectId, data, sdk, onRekey }: SessionStreamParams) {
     this.id = id
@@ -198,9 +200,13 @@ export class SessionStream {
         })
         return
       case 'session_started':
-        if (draftId !== undefined) await this.materializeDraft(draftId, event.sessionId)
+        if (draftId !== undefined) this.materializeDraft(draftId, event.sessionId)
         return
       case 'turn_done':
+        // The SDK CLI has flushed the session JSONL by turn end — apply the
+        // deferred rename now, before the idle settle, so a sessions-list
+        // refetch triggered by the idle status already sees the new name.
+        await this.applyPendingRename()
         this.state = 'idle'
         this.broadcast(this.snapshot())
         return
@@ -216,21 +222,39 @@ export class SessionStream {
     }
   }
 
-  private async materializeDraft(draftId: string, sdkSessionId: string): Promise<void> {
+  private materializeDraft(draftId: string, sdkSessionId: string): void {
     // mapDraft moves the draft's model into modelOverrides[sdkSessionId] — loss-less.
     const { deferredName } = this.data.mapDraft(draftId, sdkSessionId)
     // Re-key the registry in the SAME synchronous step as mapDraft: from here on
     // both ids resolve to sdkSessionId, so a stale draft-id key would make every
-    // future lookup miss and mint a duplicate stream (and the awaited rename
-    // below yields — or throws — before a deferred re-key could ever run).
+    // future lookup miss and mint a duplicate stream.
     this.onRekey?.(draftId, sdkSessionId)
-    if (deferredName !== null) await this.sdk.renameSession(sdkSessionId, deferredName)
+    // The rename itself must WAIT for turn end: at session_started the SDK CLI
+    // has not yet flushed the session JSONL to ~/.claude/projects, so renaming
+    // here throws "Session not found in any project directory" (observed live).
+    if (deferredName !== null) this.pendingRename = { sessionId: sdkSessionId, name: deferredName }
     this.broadcast({
       type: 'status',
       sessionId: sdkSessionId,
       state: 'streaming',
       mapping: { draftId, sessionId: sdkSessionId },
     })
+  }
+
+  /**
+   * Applies the deferred draft rename, at most once. NEVER fatal: a rename
+   * failure is cosmetic (the draft name is lost; spec surfaces it as a toast) —
+   * letting it throw would kill the turn's event loop mid-stream instead.
+   */
+  private async applyPendingRename(): Promise<void> {
+    const pending = this.pendingRename
+    if (pending === null) return
+    this.pendingRename = null
+    try {
+      await this.sdk.renameSession(pending.sessionId, pending.name)
+    } catch (err) {
+      console.error(`[session-stream] deferred rename of ${pending.sessionId} failed:`, err)
+    }
   }
 
   /** Events are stamped with the resolved id — after materialization the SDK id. */

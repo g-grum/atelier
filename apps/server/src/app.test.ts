@@ -51,27 +51,24 @@ describe('createApp', () => {
   })
 
   // 2. POST /api/projects color cycling + GET list
-  test('POST /api/projects assigns colors by cycling the palette', async () => {
+  test('POST /api/projects assigns colors by cycling the palette — amber excluded (reserved for permission prompts)', async () => {
     const { app } = freshApp()
     const headers = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
 
-    const r1 = await app.request('/api/projects', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ path: '/tmp/x' }),
-    })
-    expect(r1.status).toBe(201)
-    const p1 = await r1.json() as { color: string }
-    expect(p1.color).toBe('cyan')
-
-    const r2 = await app.request('/api/projects', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ path: '/tmp/y' }),
-    })
-    expect(r2.status).toBe(201)
-    const p2 = await r2.json() as { color: string }
-    expect(p2.color).toBe('magenta')
+    // Six creates cover the full palette plus the wrap-around. The design
+    // system reserves amber EXCLUSIVELY for permission prompts (spec) — a
+    // project identity must never claim it.
+    const expected = ['cyan', 'magenta', 'violet', 'mint', 'teal', 'cyan']
+    for (const [index, color] of expected.entries()) {
+      const res = await app.request('/api/projects', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ path: `/tmp/p${index}` }),
+      })
+      expect(res.status).toBe(201)
+      const project = await res.json() as { color: string }
+      expect(project.color).toBe(color)
+    }
   })
 
   test('GET /api/projects returns created projects', async () => {
@@ -251,6 +248,62 @@ describe('createApp', () => {
     const rg = await app.request('/api/preferences', { headers: auth })
     const prefs = await rg.json() as { ide: string }
     expect(prefs.ide).toBe('vscode')
+  })
+
+  // 8b. Body guards: JSON.parse also succeeds on 'null' and '[]' — property
+  // access on those killed the handler with a TypeError → 500 (same class as
+  // the open-in-ide bug). Any legal JSON body must yield a 4xx JSON error.
+  test("POST /api/projects with raw bodies 'null', '[]' and '{}' responds 400 JSON — never a 500", async () => {
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    for (const raw of ['null', '[]', '{}']) {
+      const { app } = freshApp()
+      const res = await app.request('/api/projects', { method: 'POST', headers: auth, body: raw })
+      expect(res.status).toBe(400)
+      const body = await res.json() as { error: string }
+      expect(typeof body.error).toBe('string')
+    }
+  })
+
+  test('POST /api/projects with a malformed JSON body responds 400 JSON — never a 500', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/projects', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: 'not json{',
+    })
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: string }
+    expect(typeof body.error).toBe('string')
+  })
+
+  test("PATCH /api/preferences with raw bodies 'null' and '[]' responds 400 JSON and leaves preferences untouched", async () => {
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    for (const raw of ['null', '[]']) {
+      const { app } = freshApp()
+      const res = await app.request('/api/preferences', { method: 'PATCH', headers: auth, body: raw })
+      expect(res.status).toBe(400)
+      const body = await res.json() as { error: string }
+      expect(typeof body.error).toBe('string')
+
+      const rg = await app.request('/api/preferences', { headers: auth })
+      const prefs = await rg.json() as { ide: string }
+      expect(prefs.ide).toBe('webstorm')
+    }
+  })
+
+  test('PATCH /api/preferences with wrong-typed fields (ide: 42) responds 400 instead of corrupting preferences', async () => {
+    const { app } = freshApp()
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    const res = await app.request('/api/preferences', {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ ide: 42 }),
+    })
+    expect(res.status).toBe(400)
+
+    const rg = await app.request('/api/preferences', { headers: auth })
+    const prefs = await rg.json() as { ide: string }
+    expect(prefs.ide).toBe('webstorm')
   })
 
   // 9. WS stream route guard: a bad projectId must be rejected BEFORE the

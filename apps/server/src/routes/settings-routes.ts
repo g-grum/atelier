@@ -3,7 +3,8 @@ import { Hono } from 'hono'
 import type { AppData } from '../store/app-data'
 import { openInIde, spawnLaunch, type LaunchFn } from '../ide/open-in-ide'
 
-const COLOR_PALETTE = ['cyan', 'magenta', 'violet', 'mint', 'amber'] as const
+// No amber here: the design system reserves amber EXCLUSIVELY for permission prompts (spec).
+const COLOR_PALETTE = ['cyan', 'magenta', 'violet', 'mint', 'teal'] as const
 
 export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): Hono {
   const app = new Hono()
@@ -14,11 +15,18 @@ export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): H
   })
 
   app.post('/projects', async (c) => {
-    const body = await c.req.json<{ path: string }>()
+    // JSON.parse also succeeds on 'null', '[]', '"x"', '42', 'true' — property
+    // access must survive ANY legal JSON body (`body.path` on null was a 500:
+    // same class as the open-in-ide lone-surrogate bug).
+    const parsed = await readJsonObject(c.req)
+    if (parsed === null) return c.json({ error: 'requête invalide : objet JSON attendu' }, 400)
+    if (typeof parsed.path !== 'string' || parsed.path.length === 0) {
+      return c.json({ error: 'requête invalide : « path » (chemin du projet) est requis' }, 400)
+    }
     const id = randomUUID()
     const { projects } = data.get()
     const color = COLOR_PALETTE[projects.length % COLOR_PALETTE.length] as string
-    const project = { id, path: body.path, color }
+    const project = { id, path: parsed.path, color }
     data.update((d) => {
       d.projects.push(project)
     })
@@ -39,10 +47,20 @@ export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): H
   })
 
   app.patch('/preferences', async (c) => {
-    const body = await c.req.json<Partial<{ ide: string; defaultModel: string }>>()
+    // Same body-guard class as POST /projects: any legal JSON body → 4xx, never a 500.
+    const parsed = await readJsonObject(c.req)
+    if (parsed === null) return c.json({ error: 'requête invalide : objet JSON attendu' }, 400)
+    if (parsed.ide !== undefined && typeof parsed.ide !== 'string') {
+      return c.json({ error: 'requête invalide : « ide » doit être une chaîne' }, 400)
+    }
+    if (parsed.defaultModel !== undefined && typeof parsed.defaultModel !== 'string') {
+      return c.json({ error: 'requête invalide : « defaultModel » doit être une chaîne' }, 400)
+    }
+    const ide = parsed.ide as string | undefined
+    const defaultModel = parsed.defaultModel as string | undefined
     data.update((d) => {
-      if (body.ide !== undefined) d.preferences.ide = body.ide as typeof d.preferences.ide
-      if (body.defaultModel !== undefined) d.preferences.defaultModel = body.defaultModel
+      if (ide !== undefined) d.preferences.ide = ide as typeof d.preferences.ide
+      if (defaultModel !== undefined) d.preferences.defaultModel = defaultModel
     })
     return c.json(data.get().preferences)
   })
@@ -79,7 +97,9 @@ export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): H
       const line = typeof body.line === 'number' && Number.isInteger(body.line) && body.line > 0 ? body.line : undefined
       const result = await openInIde({ ide: data.get().preferences.ide, file: body.file, line, launch })
       return c.json(result)
-    } catch {
+    } catch (err) {
+      // Never-500 contract: swallowed into { ok:false } — but never silently.
+      console.error('[settings-routes] /open-in-ide failed:', err)
       return c.json({ ok: false, reason: "erreur inattendue lors de l'ouverture dans l'IDE" })
     }
   })
@@ -98,4 +118,19 @@ export function settingsRoutes(data: AppData, launch: LaunchFn = spawnLaunch): H
   })
 
   return app
+}
+
+/**
+ * Parses a request body and normalizes it to a plain object — null for
+ * malformed JSON AND for any legal non-object JSON value ('null', '[]', '"x"',
+ * '42', 'true'), so handlers can 400 instead of TypeError-ing into a 500.
+ */
+async function readJsonObject(req: { json(): Promise<unknown> }): Promise<Record<string, unknown> | null> {
+  let parsed: unknown
+  try {
+    parsed = await req.json()
+  } catch {
+    return null
+  }
+  return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
 }
