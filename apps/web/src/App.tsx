@@ -198,7 +198,13 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
               )
             }}
           />
-          <Composer disabled={selected === null} onSend={(text) => controller.sendMessage(text)} />
+          <Composer
+            disabled={selected === null}
+            status={stream.status}
+            onSend={(text) => controller.sendMessage(text)}
+            // Explicit abort — the only ClientMessage that stops a turn.
+            onAbort={() => controller.abort()}
+          />
         </main>
         <aside className="dash" aria-label="Usage et activité">
           <UsagePanel tokens={stream.sessionTokens} />

@@ -235,6 +235,14 @@
   .composer textarea { flex: 1; background: transparent; border: 0; outline: 0; resize: none; color: var(--color-text); font: 13px/1.5 var(--font-sans); padding: 0; }
   .composer textarea::placeholder { color: var(--color-faint); }
   .composer kbd { font: 500 10px var(--font-mono); border: 1px solid var(--color-line); border-radius: 4px; padding: 1px 6px; color: var(--color-faint); }
+  /* Send / Stop affordance. Stop is red — the critical color; amber stays
+     reserved for permissions. */
+  .composer .action { flex-shrink: 0; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 7px; background: var(--color-surface-2); border: 1px solid var(--color-line); color: var(--color-muted); cursor: pointer; }
+  .composer .action svg { width: 14px; height: 14px; }
+  .composer .action:hover { color: var(--color-text); border-color: var(--color-indigo); }
+  .composer .action.stop { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
+  .composer .action.stop:hover { border-color: var(--color-red); }
+  .composer .action:disabled { cursor: default; }
 
   /* ── Right panel ────────────────────── */
   .dash { background: rgba(18, 24, 40, 0.5); border-left: 1px solid var(--color-line); overflow-y: auto; padding: 16px 15px 20px; display: flex; flex-direction: column; gap: 20px; }
