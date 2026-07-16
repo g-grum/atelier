@@ -16,9 +16,7 @@ export function Topbar({ project, session, status, onRename }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="brand">
-        <span className="logo" aria-hidden="true">
-          ◆
-        </span>
+        <img className="logo" src="/favicon.svg" alt="Logo Atelier" width={22} height={22} />
         Atelier
       </div>
       {project !== null && (

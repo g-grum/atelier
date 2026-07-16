@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    Atelier brand mark — transcribed from the .brand .logo recipe in
+    docs/mockups/v4.2.html: rounded square (22% corner radius), 135° gradient
+    indigo → cyan, centered dark diamond. The top sheen and inner hairline are
+    the only additions; they read as craft at large sizes and vanish at 16px.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c86ff"/>
+      <stop offset="1" stop-color="#4dd8e6"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect width="512" height="512" rx="113"/>
+    </clipPath>
+  </defs>
+  <rect width="512" height="512" rx="113" fill="url(#bg)"/>
+  <g clip-path="url(#squircle)">
+    <rect width="512" height="512" fill="url(#sheen)"/>
+    <!-- inner hairline: 12px stroke on the clipped edge leaves 6px inside -->
+    <rect width="512" height="512" rx="113" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="12"/>
+  </g>
+  <path d="M256 134 378 256 256 378 134 256Z" fill="#0b0e18"/>
+</svg>

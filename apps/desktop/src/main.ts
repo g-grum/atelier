@@ -1,8 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog } from 'electron'
+import { resolveRuntime } from './resolve-runtime'
 
 // Thin shell (spec: the desktop unit carries no business logic): generate a
 // token, spawn the server, wait for /health, open one window on the served UI.
@@ -12,8 +14,27 @@ const DEV = process.env.ATELIER_DEV === '1'
 const SERVER_PORT = 4517
 const UI_PORT = DEV ? 4518 : SERVER_PORT // dev: Vite serves the SPA on 4518
 
-// Compiled to apps/desktop/dist/main.js — the repo root is three levels up.
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
+// Packaged (Atelier.app): runtime.json at the package root records the repo
+// root and the absolute bun path — a Dock launch gets a minimal PATH, so a
+// bare 'bun' would not resolve. Dev: repo root is three levels up from dist.
+const runtime = resolveRuntime(dirname(fileURLToPath(import.meta.url)), {
+  readTextFile: (path) => {
+    try {
+      return readFileSync(path, 'utf8')
+    } catch {
+      return null
+    }
+  },
+  isDirectory: (path) => {
+    try {
+      return statSync(path).isDirectory()
+    } catch {
+      return false
+    }
+  },
+})
+const repoRoot = runtime.mode === 'error' ? null : runtime.repoRoot
+const bunPath = runtime.mode === 'error' ? null : runtime.bunPath
 
 const token = randomUUID()
 
@@ -23,6 +44,7 @@ let serverExit: { code: number | null; signal: NodeJS.Signals | null } | null = 
 let win: BrowserWindow | null = null
 
 function startServer(): void {
+  if (repoRoot === null || bunPath === null) return // unreachable: whenReady exits on runtime error first
   const args = [
     join(repoRoot, 'apps', 'server', 'src', 'index.ts'),
     '--port',
@@ -36,7 +58,7 @@ function startServer(): void {
   // explicit override is provided (used by smoke runs to isolate real data).
   if (process.env.ATELIER_DATA) args.push('--data', process.env.ATELIER_DATA)
 
-  serverProc = spawn('bun', args, { stdio: ['ignore', 'ignore', 'pipe'] })
+  serverProc = spawn(bunPath, args, { cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe'] })
   serverProc.stderr?.on('data', (chunk: Buffer) => {
     serverStderr = (serverStderr + chunk.toString()).slice(-8192)
   })
@@ -102,6 +124,11 @@ if (!gotLock) {
   })
 
   app.whenReady().then(async () => {
+    if (runtime.mode === 'error') {
+      dialog.showErrorBox('Atelier — server failed to start', runtime.message)
+      app.exit(1)
+      return
+    }
     startServer()
     try {
       await waitForHealth(15000)

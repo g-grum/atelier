@@ -8,7 +8,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
-    "types": ["node"]
+    "types": ["node", "bun-types"]
   },
   "include": ["src"]
 }

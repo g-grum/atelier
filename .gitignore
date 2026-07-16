@@ -2,3 +2,4 @@ node_modules/
 dist/
 *.local.json
 .DS_Store
+dist-app/

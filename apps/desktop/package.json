@@ -1,5 +1,6 @@
 {
   "name": "@atelier/desktop",
+  "version": "0.1.0",
   "type": "module",
   "private": true,
   "main": "dist/main.js",
@@ -8,6 +9,7 @@
     "dev": "bun run build && electron dist/main.js"
   },
   "devDependencies": {
+    "@electron/packager": "^20.0.3",
     "@types/node": "^22",
     "electron": "^37"
   }
