@@ -9,6 +9,7 @@ function io(overrides: Partial<RuntimeIo> = {}): RuntimeIo {
   return {
     readTextFile: () => null,
     isDirectory: () => true,
+    isFile: () => true,
     ...overrides,
   }
 }
@@ -59,6 +60,19 @@ describe('resolveRuntime', () => {
   test('falls back to dev mode when runtime.json lacks the expected fields', () => {
     const result = resolveRuntime(DEV_MAIN_DIR, io({ readTextFile: () => JSON.stringify({ repoRoot: 42 }) }))
     expect(result.mode).toBe('dev')
+  })
+
+  test('signals an error when the configured bun binary no longer exists', () => {
+    const config = JSON.stringify({ repoRoot: '/Users/g/atelier', bunPath: '/gone/bin/bun' })
+    const result = resolveRuntime(
+      MAIN_DIR,
+      io({ readTextFile: () => config, isFile: (path) => path !== '/gone/bin/bun' })
+    )
+    expect(result.mode).toBe('error')
+    if (result.mode === 'error') {
+      expect(result.message).toContain('/gone/bin/bun')
+      expect(result.message).toContain('package:mac')
+    }
   })
 
   test('signals an error when the configured repoRoot no longer exists', () => {

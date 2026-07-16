@@ -33,6 +33,13 @@ const runtime = resolveRuntime(dirname(fileURLToPath(import.meta.url)), {
       return false
     }
   },
+  isFile: (path) => {
+    try {
+      return statSync(path).isFile()
+    } catch {
+      return false
+    }
+  },
 })
 const repoRoot = runtime.mode === 'error' ? null : runtime.repoRoot
 const bunPath = runtime.mode === 'error' ? null : runtime.bunPath

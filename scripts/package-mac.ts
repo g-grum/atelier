@@ -24,6 +24,8 @@ async function run(cmd: string[], cwd: string): Promise<void> {
 
 // ── 1. Build the web UI and the desktop shell ─────────────────────────────
 await run(['bun', 'run', 'build:web'], repoRoot)
+// Clean first so stale artifacts in dist/ can never ship into the bundle.
+await rm(join(desktopDir, 'dist'), { recursive: true, force: true })
 await run(['bun', 'run', '--cwd', 'apps/desktop', 'build'], repoRoot)
 
 if (!existsSync(icnsPath)) {

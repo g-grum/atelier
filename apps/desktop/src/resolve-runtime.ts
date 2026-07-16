@@ -12,6 +12,7 @@ export type RuntimeIo = {
   /** Returns the file's text, or null when it is missing/unreadable. */
   readTextFile: (path: string) => string | null
   isDirectory: (path: string) => boolean
+  isFile: (path: string) => boolean
 }
 
 export type RuntimeResolution =
@@ -38,6 +39,14 @@ export function resolveRuntime(mainDir: string, io: RuntimeIo): RuntimeResolutio
           mode: 'error',
           message:
             `the Atelier repo recorded at package time no longer exists: ${config.repoRoot}. ` +
+            'Run `bun run package:mac` from the repo to rebuild the app bundle.',
+        }
+      }
+      if (!io.isFile(config.bunPath)) {
+        return {
+          mode: 'error',
+          message:
+            `the bun executable recorded at package time no longer exists: ${config.bunPath}. ` +
             'Run `bun run package:mac` from the repo to rebuild the app bundle.',
         }
       }
