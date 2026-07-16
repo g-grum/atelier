@@ -112,3 +112,19 @@ export const fixtureTurn: ServerEvent[] = [
   },
   { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'idle' },
 ]
+
+/**
+ * A turn cut short by the usage limit: the closing status carries
+ * { reason, resetAt } exactly as the server's turn_error path emits it —
+ * the ErrorBanner's reset-time variant (fixtureTurn already covers usage).
+ */
+export const fixtureErrorTurn: ServerEvent[] = [
+  { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'streaming' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Je reprends l’analyse des tests restants.' },
+  {
+    type: 'status',
+    sessionId: FIXTURE_SESSION_ID,
+    state: 'error',
+    error: { reason: 'usage_limit', resetAt: '2026-07-15T19:10:00.000Z' },
+  },
+]

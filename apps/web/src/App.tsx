@@ -4,9 +4,11 @@ import type { SessionSummary } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
+import { ErrorBanner } from './components/ErrorBanner'
 import { ModifiedFilesPanel } from './components/ModifiedFilesPanel'
 import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
+import { UsagePanel } from './components/UsagePanel'
 import { Toaster } from './components/ui/sonner'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
@@ -161,6 +163,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           registerPending={registerProject.isPending}
         />
         <main className="chat">
+          {/* Above the messages: the conversation stays mounted and readable below it. */}
+          <ErrorBanner status={stream.status} error={stream.error} />
           {notice !== null && (
             <div className="banner" role="alert">
               <span className="banner-text">{notice}</span>
@@ -197,7 +201,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           <Composer disabled={selected === null} onSend={(text) => controller.sendMessage(text)} />
         </main>
         <aside className="dash" aria-label="Usage et activité">
-          {/* Usage card (Task 5.5) mounts above the files section. */}
+          <UsagePanel tokens={stream.sessionTokens} />
           <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
         </aside>
       </div>
