@@ -80,8 +80,10 @@ function SettingsBody({ api }: { api: SettingsApi }) {
   const prefsQuery = useQuery({ queryKey: ['preferences'], queryFn: api.getPreferences })
   const rulesQuery = useQuery({ queryKey: ['rules'], queryFn: api.listRules })
   // SHARED key with App's sidebar query: invalidating it below refreshes both
-  // lists at once. (Under fixtures the refetch fails and react-query keeps the
-  // cached data on error, so the sidebar is never clobbered.)
+  // lists at once. Under fixtures, opening the dialog refetches this key with
+  // the REST queryFn, which FAILS: react-query keeps the cached data but flips
+  // the status to 'error' — App masks error-with-data as 'success' so the
+  // sidebar keeps its rendered list (this section shows its own retry card).
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: api.listProjects })
 
   /**
@@ -287,6 +289,7 @@ function ProjectRow({
       {armed ? (
         <button
           type="button"
+          aria-label={`Confirmer le retrait de « ${name} »`}
           disabled={deleting}
           onClick={onConfirm}
           className="ml-auto flex-shrink-0 cursor-pointer rounded-[5px] border-0 bg-red/10 px-2 py-0.5 text-[11px] font-bold text-red hover:bg-red/20 disabled:cursor-default disabled:opacity-50"

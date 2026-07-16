@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ChatMessage, ProjectSummary, SessionSummary } from '@atelier/shared'
 import type { Backend } from './api/backend'
 import App from './App'
@@ -49,11 +49,12 @@ function renderApp(backend: Backend) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  return render(
+  render(
     <QueryClientProvider client={queryClient}>
       <App backend={backend} />
     </QueryClientProvider>,
   )
+  return { queryClient }
 }
 
 describe('App failure surfacing', () => {
@@ -142,5 +143,64 @@ describe('App failure surfacing', () => {
 
     const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
     expect(notice.textContent).toContain('POST /api/open-in-ide → 401')
+  })
+})
+
+describe('App projects list resilience', () => {
+  test('unregistering the OPEN project falls back to the first remaining one, and « + Session » targets it', async () => {
+    const other: ProjectSummary = { id: 'p2', path: '/Users/demo/workspace/blog', color: 'magenta', sessionCount: 0 }
+    let projects = [project, other]
+    const draftTargets: string[] = []
+    const backend = fakeBackend({
+      listProjects: async () => projects,
+      createDraft: async (projectId) => {
+        draftTargets.push(projectId)
+        return { ...session, id: 'd1', projectId, name: null, isDraft: true, messageCount: 0 }
+      },
+    })
+    const { queryClient } = renderApp(backend)
+
+    // Open project B, then unregister it server-side (what the settings dialog
+    // does: DELETE then invalidate the shared ['projects'] key).
+    fireEvent.click(await screen.findByText('blog'))
+    projects = [project]
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['projects'] })
+    })
+
+    // The stale openProjectId must not shadow the fallback: A reads as open…
+    await waitFor(() => expect(screen.getByText('atelier').className).toContain('open'))
+    expect(screen.queryByText('blog')).toBeNull()
+    // …and a new session is created against the fallback, never the dead id.
+    fireEvent.click(screen.getByRole('button', { name: '+ Session' }))
+    await waitFor(() => expect(draftTargets).toEqual(['p1']))
+  })
+
+  test('a failed background refetch keeps the rendered list — no retry-card clobber', async () => {
+    let fail = false
+    const backend = fakeBackend({
+      listProjects: async () => {
+        if (fail) throw new Error('GET /api/projects → 401')
+        return [project]
+      },
+    })
+    const { queryClient } = renderApp(backend)
+    await screen.findByText('atelier')
+
+    // E.g. the settings dialog refetching the shared ['projects'] key under
+    // fixtures: the refetch fails but cached data exists — the list must stay.
+    fail = true
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['projects'] })
+    })
+    // react-query batches observer notifications through setTimeout(0): flush
+    // that macrotask so the error-status re-render (if any) lands before we assert.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(queryClient.getQueryState(['projects'])?.status).toBe('error') // the refetch really failed…
+    expect(screen.getByText('atelier')).toBeTruthy() // …yet the cached list keeps rendering
+    expect(screen.queryByText(/Impossible de charger les projets/)).toBeNull()
   })
 })

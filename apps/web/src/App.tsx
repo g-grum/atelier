@@ -62,7 +62,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
 
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: backend.listProjects })
   const projects = projectsQuery.data ?? []
-  const projectId = openProjectId ?? projects[0]?.id ?? null
+  // Validate openProjectId against the fetched list: a stale id (the open
+  // project was just unregistered in the settings dialog) must not shadow the
+  // fallback — « + Session » would target a dead project (POST → 404).
+  const projectId = projects.some((project) => project.id === openProjectId) ? openProjectId : (projects[0]?.id ?? null)
+  // A failed background refetch (e.g. the settings dialog refetching the shared
+  // ['projects'] key under fixtures) flips the query status to 'error' while
+  // react-query keeps the cached data: with data on hand the sidebar must keep
+  // rendering the list — the retry card is reserved for the no-data case.
+  const projectsStatus = projectsQuery.status === 'error' && projectsQuery.data !== undefined ? 'success' : projectsQuery.status
 
   const sessionsQuery = useQuery({
     queryKey: ['sessions', projectId],
@@ -145,7 +153,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
       <div className="app">
         <SessionSidebar
           projects={projects}
-          projectsStatus={projectsQuery.status}
+          projectsStatus={projectsStatus}
           projectsError={projectsQuery.error !== null ? errorMessage(projectsQuery.error) : undefined}
           onRetryProjects={() => void projectsQuery.refetch()}
           sessions={sessions}

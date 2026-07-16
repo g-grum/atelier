@@ -108,7 +108,10 @@ describe('SettingsPanel', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Retirer le projet « atelier »' }))
     expect(removed).toEqual([]) // armed, nothing deleted yet
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmer le retrait ?' }))
+    // The armed button keeps naming the project (aria-label); its visible text asks confirmation.
+    const confirm = screen.getByRole('button', { name: 'Confirmer le retrait de « atelier »' })
+    expect(confirm.textContent).toBe('Confirmer le retrait ?')
+    fireEvent.click(confirm)
     await waitFor(() => expect(removed).toEqual(['p1']))
     // ['projects'] invalidated → the list refetches through the seam and empties.
     await waitFor(() => expect(screen.queryByTitle('/tmp/demo/atelier')).toBeNull())
@@ -122,7 +125,8 @@ describe('SettingsPanel', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Retirer le projet « atelier »' }))
     fireEvent.click(screen.getByRole('button', { name: 'Retirer le projet « blog »' }))
-    expect(screen.getAllByRole('button', { name: 'Confirmer le retrait ?' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Confirmer le retrait de « blog »' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Confirmer le retrait de « atelier »' })).toBeNull()
     // atelier's row reverted to its unarmed button
     expect(screen.getByRole('button', { name: 'Retirer le projet « atelier »' })).toBeTruthy()
   })
