@@ -1,0 +1,14 @@
+{
+  "name": "@atelier/desktop",
+  "type": "module",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "bun build src/main.ts --target=node --external electron --outdir dist",
+    "dev": "bun run build && electron dist/main.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "electron": "^37"
+  }
+}

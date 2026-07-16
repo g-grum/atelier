@@ -6,11 +6,12 @@ import { AgentSdkClient } from './sdk/sdk-client'
 import { SessionsService } from './sessions/sessions-service'
 import { createApp } from './app'
 
-function parseArgs(): { port: number; token: string; dataPath: string } {
+function parseArgs(): { port: number; token: string; dataPath: string; webDist?: string } {
   const args = Bun.argv.slice(2)
   let port = 4517
   let token: string | undefined
   let dataPath = join(homedir(), '.atelier', 'app-data.json')
+  let webDist: string | undefined
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -21,6 +22,8 @@ function parseArgs(): { port: number; token: string; dataPath: string } {
     } else if (arg === '--data' && args[i + 1]) {
       const raw = args[++i] as string
       dataPath = raw.startsWith('~') ? join(homedir(), raw.slice(1)) : raw
+    } else if (arg === '--web-dist' && args[i + 1]) {
+      webDist = args[++i] as string
     }
   }
 
@@ -29,15 +32,15 @@ function parseArgs(): { port: number; token: string; dataPath: string } {
     process.exit(1)
   }
 
-  return { port, token, dataPath }
+  return { port, token, dataPath, webDist }
 }
 
-const { port, token, dataPath } = parseArgs()
+const { port, token, dataPath, webDist } = parseArgs()
 
 const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
 const sessions = new SessionsService(sdk, data)
-const app = createApp({ data, sessions, sdk, token })
+const app = createApp({ data, sessions, sdk, token, webDist })
 
 Bun.serve({
   hostname: '127.0.0.1',

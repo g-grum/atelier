@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AppData } from './store/app-data'
@@ -7,13 +7,25 @@ import { MockSdkClient } from './sdk/sdk-client.mock'
 import { SessionsService } from './sessions/sessions-service'
 import { createApp } from './app'
 
-function freshApp() {
+function freshApp(webDist?: string) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-app-')), 'data.json')
   const data = new AppData(filePath)
   const sdk = new MockSdkClient()
   const sessions = new SessionsService(sdk, data)
-  const app = createApp({ data, sessions, sdk, token: 'test-token' })
+  const app = createApp({ data, sessions, sdk, token: 'test-token', webDist })
   return { app, data, sessions }
+}
+
+// A fake built web app: dist/ lives INSIDE a parent dir that also holds a
+// secret file, so traversal tests can prove '..' never escapes the dist root.
+function makeWebDist() {
+  const parent = mkdtempSync(join(tmpdir(), 'atelier-webdist-'))
+  const dist = join(parent, 'dist')
+  mkdirSync(join(dist, 'assets'), { recursive: true })
+  writeFileSync(join(dist, 'index.html'), '<!doctype html><title>atelier-test-index</title>')
+  writeFileSync(join(dist, 'assets', 'index-abc123.js'), 'console.log("atelier-test-asset")')
+  writeFileSync(join(parent, 'secret.txt'), 'top-secret')
+  return dist
 }
 
 describe('createApp', () => {
@@ -297,5 +309,66 @@ describe('createApp', () => {
 
     const rg = await app.request('/api/rules', { headers: auth })
     expect(await rg.json()).toEqual([])
+  })
+
+  // 11. Static serving of the built web app (packaged mode, --web-dist)
+  describe('static serving (webDist)', () => {
+    test('GET / serves index.html with a text/html content-type', async () => {
+      const { app } = freshApp(makeWebDist())
+      const res = await app.request('/')
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toContain('text/html')
+      expect(await res.text()).toContain('atelier-test-index')
+    })
+
+    test('GET /assets/* serves the asset with a javascript content-type', async () => {
+      const { app } = freshApp(makeWebDist())
+      const res = await app.request('/assets/index-abc123.js')
+      expect(res.status).toBe(200)
+      expect(res.headers.get('content-type')).toContain('javascript')
+      expect(await res.text()).toContain('atelier-test-asset')
+    })
+
+    test('encoded-slash ../ traversal (..%2F) is rejected with 403', async () => {
+      const { app } = freshApp(makeWebDist())
+      // %2F hides the segment boundary from WHATWG URL normalization; the
+      // handler's post-decode '..' check must catch it.
+      const res = await app.request('/..%2Fsecret.txt')
+      expect(res.status).toBe(403)
+      expect(await res.text()).not.toContain('top-secret')
+    })
+
+    test('encoded dot-segment traversal (%2e%2e) never escapes the dist root', async () => {
+      const { app } = freshApp(makeWebDist())
+      // The URL parser normalizes %2e%2e away, so this resolves inside the
+      // dist root and 404s — the point is the sibling secret is never served.
+      const res = await app.request('/assets/%2e%2e/%2e%2e/secret.txt')
+      expect(res.status).toBe(404)
+      expect(await res.text()).not.toContain('top-secret')
+    })
+
+    test('missing file under webDist returns 404', async () => {
+      const { app } = freshApp(makeWebDist())
+      const res = await app.request('/nope.js')
+      expect(res.status).toBe(404)
+    })
+
+    test('/api/* stays token-guarded when webDist is set', async () => {
+      const { app } = freshApp(makeWebDist())
+      const res = await app.request('/api/projects')
+      expect(res.status).toBe(401)
+    })
+
+    test('/health stays reachable when webDist is set', async () => {
+      const { app } = freshApp(makeWebDist())
+      const res = await app.request('/health')
+      expect(res.status).toBe(200)
+    })
+
+    test('GET / without webDist stays a 404 (dev mode: Vite serves the SPA)', async () => {
+      const { app } = freshApp()
+      const res = await app.request('/')
+      expect(res.status).toBe(404)
+    })
   })
 })

@@ -1,3 +1,4 @@
+import { join, resolve, sep } from 'node:path'
 import { Hono } from 'hono'
 import { upgradeWebSocket } from 'hono/bun'
 import type { ServerEvent } from '@atelier/shared'
@@ -13,7 +14,7 @@ import { SessionStreamRegistry } from './stream/session-stream'
 // client is served from the same origin. The token covers WS upgrades too via
 // the ?token= query param (browsers cannot set headers on WS handshakes).
 
-export function createApp({ data, sessions, sdk, token }: { data: AppData; sessions: SessionsService; sdk: SdkClient; token: string }): Hono {
+export function createApp({ data, sessions, sdk, token, webDist }: { data: AppData; sessions: SessionsService; sdk: SdkClient; token: string; webDist?: string }): Hono {
   const app = new Hono()
 
   // Token middleware scoped to /api/* so that /health and static assets stay open
@@ -72,6 +73,36 @@ export function createApp({ data, sessions, sdk, token }: { data: AppData; sessi
   app.route('/api', api)
 
   app.get('/health', (c) => c.json({ ok: true }))
+
+  // Packaged mode: serve the built web app (--web-dist). Registered LAST so
+  // /api/* and /health keep precedence. Kept manual (Bun.file) on purpose —
+  // decode once, deny any '..' segment, and double-check the resolved path
+  // stays under the dist root before touching the filesystem.
+  if (webDist) {
+    const root = resolve(webDist)
+    app.get('*', async (c) => {
+      let pathname: string
+      try {
+        pathname = decodeURIComponent(new URL(c.req.url).pathname)
+      } catch {
+        return c.text('Bad Request', 400)
+      }
+      if (pathname.includes('..') || pathname.includes('\0')) {
+        return c.text('Forbidden', 403)
+      }
+      const filePath = resolve(join(root, pathname === '/' ? 'index.html' : pathname))
+      if (filePath !== root && !filePath.startsWith(root + sep)) {
+        return c.text('Forbidden', 403)
+      }
+      const file = Bun.file(filePath)
+      if (!(await file.exists())) return c.notFound()
+      // Bun.file infers the MIME type from the extension. Serve the bytes with
+      // an explicit Content-Type (a BunFile body would rely on Response
+      // internals to derive both, which the test-side DOM polyfill breaks) —
+      // SPA assets are small, buffering them is fine for a local app.
+      return new Response(await file.arrayBuffer(), { headers: { 'Content-Type': file.type } })
+    })
+  }
 
   return app
 }
