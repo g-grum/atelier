@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings } from 'lucide-react'
 import { useState } from 'react'
-import { MODELS, type AlwaysRule, type Preferences } from '@atelier/shared'
+import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary } from '@atelier/shared'
 import * as client from '../api/client'
 import { modelLabel } from '../lib/models'
-import { errorMessage } from '../lib/utils'
+import { basename, errorMessage } from '../lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 
 /** The slice of the REST client the panel needs — injectable for tests. */
@@ -13,6 +13,8 @@ export type SettingsApi = {
   patchPreferences: typeof client.patchPreferences
   listRules: typeof client.listRules
   deleteRule: typeof client.deleteRule
+  listProjects: typeof client.listProjects
+  deleteProject: typeof client.deleteProject
 }
 
 const defaultApi: SettingsApi = {
@@ -20,6 +22,8 @@ const defaultApi: SettingsApi = {
   patchPreferences: client.patchPreferences,
   listRules: client.listRules,
   deleteRule: client.deleteRule,
+  listProjects: client.listProjects,
+  deleteProject: client.deleteProject,
 }
 
 const IDE_LABELS: Record<Preferences['ide'], string> = {
@@ -75,6 +79,18 @@ function SettingsBody({ api }: { api: SettingsApi }) {
 
   const prefsQuery = useQuery({ queryKey: ['preferences'], queryFn: api.getPreferences })
   const rulesQuery = useQuery({ queryKey: ['rules'], queryFn: api.listRules })
+  // SHARED key with App's sidebar query: invalidating it below refreshes both
+  // lists at once. (Under fixtures the refetch fails and react-query keeps the
+  // cached data on error, so the sidebar is never clobbered.)
+  const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: api.listProjects })
+
+  /**
+   * Two-step unregister: the armed row shows « Confirmer le retrait ? » and only
+   * its second click deletes. At most one row is armed; arming another row
+   * disarms the previous one, and closing the dialog resets the state (Radix
+   * unmounts closed content). No click-elsewhere disarm — kept simple on purpose.
+   */
+  const [armedProjectId, setArmedProjectId] = useState<string | null>(null)
 
   const patchPrefs = useMutation({
     mutationFn: api.patchPreferences,
@@ -97,6 +113,19 @@ function SettingsBody({ api }: { api: SettingsApi }) {
       return queryClient.invalidateQueries({ queryKey: ['rules'] })
     },
     onError: (error) => setNotice(`Impossible de supprimer la règle : ${errorMessage(error)}`),
+  })
+
+  const removeProject = useMutation({
+    mutationFn: api.deleteProject,
+    onSuccess: () => {
+      setNotice(null)
+      setArmedProjectId(null)
+      return queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onError: (error) => {
+      setArmedProjectId(null) // a failed retrait must be re-confirmed from scratch
+      setNotice(`Impossible de retirer le projet : ${errorMessage(error)}`)
+    },
   })
 
   const prefs = prefsQuery.data
@@ -185,6 +214,31 @@ function SettingsBody({ api }: { api: SettingsApi }) {
         )}
         <p className={HINT_CLASS}>Supprimer une règle rétablit la demande de permission au prochain usage.</p>
       </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className={`m-0 ${LABEL_CLASS}`}>Projets</h3>
+        {projectsQuery.isPending ? (
+          <p className={HINT_CLASS}>Chargement…</p>
+        ) : projectsQuery.data === undefined ? (
+          <LoadError what="les projets" error={projectsQuery.error} onRetry={() => void projectsQuery.refetch()} />
+        ) : projectsQuery.data.length === 0 ? (
+          <p className="m-0 text-xs text-muted">Aucun projet enregistré.</p>
+        ) : (
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+            {projectsQuery.data.map((project) => (
+              <ProjectRow
+                key={project.id}
+                project={project}
+                armed={armedProjectId === project.id}
+                deleting={removeProject.isPending && removeProject.variables === project.id}
+                onArm={() => setArmedProjectId(project.id)}
+                onConfirm={() => removeProject.mutate(project.id)}
+              />
+            ))}
+          </ul>
+        )}
+        <p className={HINT_CLASS}>Retirer le projet (les conversations restent dans ~/.claude)</p>
+      </section>
     </div>
   )
 }
@@ -207,6 +261,49 @@ function RuleRow({ rule, deleting, onDelete }: { rule: AlwaysRule; deleting: boo
       >
         ×
       </button>
+    </li>
+  )
+}
+
+function ProjectRow({
+  project,
+  armed,
+  deleting,
+  onArm,
+  onConfirm,
+}: {
+  project: ProjectSummary
+  armed: boolean
+  deleting: boolean
+  onArm: () => void
+  onConfirm: () => void
+}) {
+  const name = basename(project.path)
+  return (
+    <li className="flex items-center gap-2 rounded-lg border border-line-soft bg-ground px-3 py-2 font-mono text-[11.5px] text-muted">
+      <span className="min-w-0 font-bold text-text [overflow-wrap:anywhere]" title={project.path}>
+        {name}
+      </span>
+      {armed ? (
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={onConfirm}
+          className="ml-auto flex-shrink-0 cursor-pointer rounded-[5px] border-0 bg-red/10 px-2 py-0.5 text-[11px] font-bold text-red hover:bg-red/20 disabled:cursor-default disabled:opacity-50"
+        >
+          Confirmer le retrait ?
+        </button>
+      ) : (
+        <button
+          type="button"
+          aria-label={`Retirer le projet « ${name} »`}
+          disabled={deleting}
+          onClick={onArm}
+          className="ml-auto flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[5px] border-0 bg-transparent p-0 text-sm leading-none text-faint hover:bg-red/10 hover:text-red disabled:cursor-default disabled:opacity-50"
+        >
+          ×
+        </button>
+      )}
     </li>
   )
 }
