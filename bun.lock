@@ -20,7 +20,7 @@
     "apps/server": {
       "name": "@atelier/server",
       "dependencies": {
-        "@anthropic-ai/claude-agent-sdk": "latest",
+        "@anthropic-ai/claude-agent-sdk": "^0.3.198",
         "@atelier/shared": "workspace:*",
         "hono": "^4",
       },

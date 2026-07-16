@@ -223,7 +223,7 @@ describe('SessionController draft remap', () => {
     socket().emit({ type: 'status', sessionId: 'sdk-1', state: 'streaming', mapping: { draftId: 'draft-1', sessionId: 'sdk-1' } })
     expect(remaps).toEqual([{ draftId: 'draft-1', sessionId: 'sdk-1' }])
 
-    // Further events must not re-fire the callback (remappedTo stays set in state).
+    // Further events must not re-fire the callback (the remap already happened).
     socket().emit({ type: 'assistant_delta', sessionId: 'sdk-1', text: 'ok' })
     socket().emit({ type: 'status', sessionId: 'sdk-1', state: 'idle' })
     expect(remaps).toHaveLength(1)

@@ -28,8 +28,6 @@ export type StreamState = {
   error?: { reason: string; resetAt?: string }
   sessionTokens: { input: number; output: number; cacheRead: number; cacheCreation: number }
   modifiedFiles: Map<string, { added: number; removed: number; lastLine?: number }>
-  /** Set when a status.mapping arrives: the app must re-key the selected session and invalidate the session list. */
-  remappedTo?: string
 }
 
 export function initialState(): StreamState {
@@ -161,8 +159,9 @@ function applyPermissionRequest(state: StreamState, event: Extract<ServerEvent, 
 }
 
 function applyStatus(state: StreamState, event: Extract<ServerEvent, { type: 'status' }>): StreamState {
+  // event.mapping is deliberately ignored here: draft remap is handled by the
+  // controller (onSessionRemapped), not by the view-model state.
   const next: StreamState = { ...state, status: event.state, error: event.state === 'error' ? event.error : undefined }
-  if (event.mapping !== undefined) next.remappedTo = event.mapping.sessionId
   if (event.state === 'idle' || event.state === 'error') {
     // The turn is over — no more deltas will arrive.
     next.items = state.items.map((item) => (item.kind === 'assistant' && item.streaming ? { ...item, streaming: false } : item))

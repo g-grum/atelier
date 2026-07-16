@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { readJsonObject } from '../routes/read-json'
 import type { AppData } from '../store/app-data'
 import type { SessionsService } from './sessions-service'
 
@@ -17,14 +18,30 @@ export function sessionsRoutes(data: AppData, sessions: SessionsService): Hono {
     const { id } = c.req.param()
     const project = data.get().projects.find((p) => p.id === id)
     if (!project) return c.json({ error: 'Not found' }, 404)
-    const body = await c.req.json<{ name?: string; model?: string }>()
+    // Same body-guard class as settings-routes: JSON.parse also succeeds on
+    // 'null', '[]', '"x"', '42', 'true' — any legal JSON body → 4xx, never a 500.
+    const body = await readJsonObject(c.req)
+    if (body === null) return c.json({ error: 'requête invalide : objet JSON attendu' }, 400)
+    if (body.name !== undefined && typeof body.name !== 'string') {
+      return c.json({ error: 'requête invalide : « name » doit être une chaîne' }, 400)
+    }
+    if (body.model !== undefined && typeof body.model !== 'string') {
+      return c.json({ error: 'requête invalide : « model » doit être une chaîne' }, 400)
+    }
     const draft = sessions.createDraft(id, { name: body.name, model: body.model })
     return c.json(draft, 201)
   })
 
   app.patch('/sessions/:id', async (c) => {
     const { id } = c.req.param()
-    const body = await c.req.json<{ name?: string; model?: string }>()
+    const body = await readJsonObject(c.req)
+    if (body === null) return c.json({ error: 'requête invalide : objet JSON attendu' }, 400)
+    if (body.name !== undefined && typeof body.name !== 'string') {
+      return c.json({ error: 'requête invalide : « name » doit être une chaîne' }, 400)
+    }
+    if (body.model !== undefined && typeof body.model !== 'string') {
+      return c.json({ error: 'requête invalide : « model » doit être une chaîne' }, 400)
+    }
     if (body.name !== undefined) await sessions.rename(id, body.name)
     if (body.model !== undefined) sessions.setModel(id, body.model)
     return c.json({ ok: true })

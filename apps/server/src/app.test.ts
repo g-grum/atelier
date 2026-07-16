@@ -306,6 +306,53 @@ describe('createApp', () => {
     expect(prefs.ide).toBe('webstorm')
   })
 
+  test("POST /api/projects/:id/sessions with raw bodies 'null' and '[]' responds 400 JSON — never a 500", async () => {
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    for (const raw of ['null', '[]']) {
+      const { app } = freshApp()
+      const rp = await app.request('/api/projects', {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ path: '/tmp/x' }),
+      })
+      const project = await rp.json() as { id: string }
+
+      const res = await app.request(`/api/projects/${project.id}/sessions`, { method: 'POST', headers: auth, body: raw })
+      expect(res.status).toBe(400)
+      const body = await res.json() as { error: string }
+      expect(typeof body.error).toBe('string')
+    }
+  })
+
+  test("PATCH /api/sessions/:id with raw bodies 'null' and '[]' responds 400 JSON and leaves the draft untouched", async () => {
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    for (const raw of ['null', '[]']) {
+      const { app } = freshApp()
+      const rp = await app.request('/api/projects', {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ path: '/tmp/x' }),
+      })
+      const project = await rp.json() as { id: string }
+
+      const rs = await app.request(`/api/projects/${project.id}/sessions`, {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ name: 'intact' }),
+      })
+      const draft = await rs.json() as { id: string }
+
+      const res = await app.request(`/api/sessions/${draft.id}`, { method: 'PATCH', headers: auth, body: raw })
+      expect(res.status).toBe(400)
+      const body = await res.json() as { error: string }
+      expect(typeof body.error).toBe('string')
+
+      const rl = await app.request(`/api/projects/${project.id}/sessions`, { headers: auth })
+      const list = await rl.json() as { name: string }[]
+      expect(list[0]?.name).toBe('intact')
+    }
+  })
+
   // 9. WS stream route guard: a bad projectId must be rejected BEFORE the
   // upgrade — otherwise the registry caches a permanently broken singleton
   // that even later connects with the CORRECT projectId would attach to.

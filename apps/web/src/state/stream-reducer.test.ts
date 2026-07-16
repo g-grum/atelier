@@ -138,10 +138,10 @@ describe('status', () => {
     expect(state.items[0]).toMatchObject({ streaming: false })
   })
 
-  test('mapping sets remappedTo', () => {
+  test('mapping is ignored by the reducer — remap handling lives in the controller (onSessionRemapped)', () => {
     const state = reduce(initialState(), status({ state: 'streaming', mapping: { draftId: 'draft-1', sessionId: 'sdk-1' } }))
-    expect(state.remappedTo).toBe('sdk-1')
     expect(state.status).toBe('streaming')
+    expect('remappedTo' in state).toBe(false)
   })
 })
 
