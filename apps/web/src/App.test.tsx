@@ -44,6 +44,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     openInIde: async () => ({ ok: true }),
     createSocket: () => idleSocket,
     getVersion: async () => currentVersion,
+    getUsageLimits: async () => [],
     ...overrides,
   }
 }
@@ -195,6 +196,20 @@ describe('App per-session permissions gate', () => {
     fireEvent.click(await screen.findByText('Session un'))
     await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
     expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
+  })
+})
+
+describe('App plan limits panel', () => {
+  test('the right panel shows the plan gauges fetched from the backend', async () => {
+    renderApp(
+      fakeBackend({
+        getUsageLimits: async () => [
+          { window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:00:00.000Z' },
+        ],
+      }),
+    )
+    await screen.findByText('Session (5 h)')
+    expect(screen.getByText('34 %')).toBeTruthy()
   })
 })
 

@@ -280,6 +280,14 @@
   .kv b { color: var(--color-text); font: 700 12px var(--font-mono); font-variant-numeric: tabular-nums; }
   .kv.total { margin-top: 8px; }
 
+  /* Limites du plan — the claude.ai/usage gauges. Warn is red (amber = permissions only). */
+  .limit-row { padding: 3px 0; }
+  .gauge { height: 5px; border-radius: 3px; background: var(--color-surface-2); overflow: hidden; margin-top: 2px; }
+  .gauge i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--color-indigo), var(--color-magenta)); transition: width 300ms ease; }
+  .gauge.warn i { background: var(--color-red); }
+  .limit-reset { font: 500 10px var(--font-mono); color: var(--color-faint); margin-top: 3px; }
+  .limits-empty { font-size: 11.5px; color: var(--color-faint); margin: 0; }
+
   /* Fichiers modifiés — rows are native buttons (mockup: div[role=button]). */
   .file-row { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; padding: 7px 8px; border-radius: 7px; cursor: pointer; color: var(--color-muted); font: 500 11.5px var(--font-mono); text-align: left; }
   .file-row:hover { background: var(--color-surface-2); color: var(--color-text); }

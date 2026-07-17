@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AlwaysRule, Preferences, Project, SessionPermissionMode, UsageEvent } from '@atelier/shared'
+import type { AlwaysRule, Preferences, Project, RateLimitSnapshot, SessionPermissionMode, UsageEvent } from '@atelier/shared'
 
 /** permissionMode is optional for on-disk backward compatibility — absent/undefined means "not chosen yet" (same as null). */
 export type Draft = { id: string; projectId: string; name: string | null; model: string; createdAt: string; permissionMode?: SessionPermissionMode | null }
@@ -18,6 +18,8 @@ export type AppDataShape = {
   permissionModes: Record<string, SessionPermissionMode>
   rules: AlwaysRule[]
   usageEvents: UsageEvent[]
+  /** Last-known plan limit per window (five_hour, seven_day, …) — REAL SDK data, honest-data policy. */
+  rateLimits: Record<string, RateLimitSnapshot>
 }
 
 const EMPTY: AppDataShape = {
@@ -36,6 +38,7 @@ const EMPTY: AppDataShape = {
   permissionModes: {},
   rules: [],
   usageEvents: [],
+  rateLimits: {},
 }
 
 const USAGE_RETENTION_MS = 7 * 86400_000
@@ -61,6 +64,12 @@ export class AppData {
 
   update(mutate: (draft: AppDataShape) => void): void {
     mutate(this.data)
+    this.flush()
+  }
+
+  /** Latest snapshot wins per window — the panel shows current state, not history. */
+  recordRateLimit(snapshot: RateLimitSnapshot): void {
+    this.data.rateLimits[snapshot.window] = snapshot
     this.flush()
   }
 

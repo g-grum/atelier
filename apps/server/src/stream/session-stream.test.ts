@@ -86,6 +86,29 @@ describe('SessionStream', () => {
     expect(runTurnParams(sdk, 1).bypassPermissions).toBeFalsy()
   })
 
+  // 1ter. Plan rate limits — broadcast live + persisted for the REST snapshot
+  test('a rate_limit turn event is broadcast to the sinks and persisted per window', async () => {
+    const { registry, data } = setup({
+      turns: [[
+        { type: 'rate_limit', window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z' },
+        { type: 'turn_done' },
+      ]],
+    })
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    const broadcasts = ofType(events, 'rate_limit')
+    expect(broadcasts).toHaveLength(1)
+    expect(broadcasts[0]?.limit).toMatchObject({ window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z' })
+    expect(typeof broadcasts[0]?.limit.recordedAt).toBe('string')
+
+    expect(data.get().rateLimits['five_hour']?.utilization).toBe(34)
+  })
+
   // 2. Draft materialization
   test('user_message on a draft: mapping status, mapDraft + deferred rename, model kept, deltas, final idle', async () => {
     const draft: Draft = { id: 'd1', projectId: 'p1', name: 'refacto broker', model: 'claude-opus-4-8', createdAt: new Date().toISOString() }

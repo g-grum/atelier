@@ -341,6 +341,33 @@ describe('SessionController actions', () => {
   })
 })
 
+describe('SessionController rate limits', () => {
+  test('a rate_limit event fires the onRateLimit callback (app-global data, not chat state)', async () => {
+    const limits: unknown[] = []
+    const sockets: FakeControllerSocket[] = []
+    const controller = new SessionController({
+      fetchMessages: async () => [],
+      createSocket: () => {
+        const socket = new FakeControllerSocket()
+        sockets.push(socket)
+        return socket
+      },
+      onRateLimit: (limit) => limits.push(limit),
+    })
+    await controller.open('s1', 'p1')
+
+    const before = controller.getState()
+    sockets[0]?.emit({
+      type: 'rate_limit',
+      sessionId: 's1',
+      limit: { window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:00:00.000Z' },
+    })
+
+    expect(limits).toEqual([{ window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:00:00.000Z' }])
+    expect(controller.getState()).toBe(before) // chat state untouched — no re-render churn
+  })
+})
+
 describe('SessionController sendMessage vs resync', () => {
   test('sendMessage during a pending resync refetch is refused — the stale status cannot vouch for the server', async () => {
     const { controller, socket, lastFetch, open } = makeHarness()

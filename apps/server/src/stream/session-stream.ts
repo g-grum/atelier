@@ -203,6 +203,20 @@ export class SessionStream {
           cacheCreationTokens: event.cacheCreationTokens,
         })
         return
+      case 'rate_limit': {
+        // Plan gauges: persist the latest per window (REST snapshot for app
+        // open) and broadcast live so open panels move during the turn.
+        const limit = {
+          window: event.window,
+          utilization: event.utilization,
+          status: event.status,
+          ...(event.resetsAt !== undefined ? { resetsAt: event.resetsAt } : {}),
+          recordedAt: new Date().toISOString(),
+        }
+        this.data.recordRateLimit(limit)
+        this.broadcast({ type: 'rate_limit', sessionId: this.sessionId(), limit })
+        return
+      }
       case 'session_started':
         if (draftId !== undefined) this.materializeDraft(draftId, event.sessionId)
         return

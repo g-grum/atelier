@@ -1,4 +1,4 @@
-import type { ChatMessage, PermissionDecision, ServerEvent } from '@atelier/shared'
+import type { ChatMessage, PermissionDecision, RateLimitSnapshot, ServerEvent } from '@atelier/shared'
 import { getMessages } from '../api/client'
 import { SessionSocket } from '../api/ws'
 import { initialState, reduce, reset, resolvePermission, type StreamState } from './stream-reducer'
@@ -14,6 +14,8 @@ export type SessionControllerOptions = {
    * selected id and invalidates the sessions query (react-query invalidation).
    */
   onSessionRemapped?: (mapping: { draftId: string; sessionId: string }) => void
+  /** Fired on every live rate_limit event — app-global plan data (the UI feeds its query cache). */
+  onRateLimit?: (limit: RateLimitSnapshot) => void
 }
 
 /**
@@ -30,6 +32,7 @@ export class SessionController {
   private readonly fetchMessages: (sessionId: string) => Promise<ChatMessage[]>
   private readonly createSocket: (sessionId: string, projectId: string) => ControllerSocket
   private readonly onSessionRemapped: ((mapping: { draftId: string; sessionId: string }) => void) | undefined
+  private readonly onRateLimit: ((limit: RateLimitSnapshot) => void) | undefined
   private readonly listeners = new Set<() => void>()
   private state: StreamState = initialState()
   private socket: ControllerSocket | null = null
@@ -54,6 +57,7 @@ export class SessionController {
     this.fetchMessages = options.fetchMessages ?? getMessages
     this.createSocket = options.createSocket ?? ((sessionId, projectId) => new SessionSocket(sessionId, projectId))
     this.onSessionRemapped = options.onSessionRemapped
+    this.onRateLimit = options.onRateLimit
   }
 
   subscribe(listener: () => void): () => void {
@@ -168,6 +172,11 @@ export class SessionController {
   }
 
   private apply(event: ServerEvent): void {
+    if (event.type === 'rate_limit') {
+      // App-global — bypasses the per-session reducer entirely.
+      this.onRateLimit?.(event.limit)
+      return
+    }
     this.setState(reduce(this.state, event))
     if (event.type === 'status' && event.mapping !== undefined && event.mapping.sessionId !== this.activeSessionId) {
       this.activeSessionId = event.mapping.sessionId

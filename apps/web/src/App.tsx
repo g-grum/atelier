@@ -2,13 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import currentVersion from '../../../version.json'
-import type { SessionPermissionMode, SessionSummary } from '@atelier/shared'
+import type { RateLimitSnapshot, SessionPermissionMode, SessionSummary } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
 import { ErrorBanner } from './components/ErrorBanner'
 import { ModifiedFilesPanel } from './components/ModifiedFilesPanel'
 import { PermissionModeGate } from './components/PermissionModeGate'
+import { RateLimitsPanel } from './components/RateLimitsPanel'
 import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
 import { UsagePanel } from './components/UsagePanel'
@@ -53,6 +54,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           )
           void queryClient.invalidateQueries({ queryKey: ['sessions'] })
         },
+        // Live plan gauges: each rate_limit event replaces its window in the
+        // query cache — the panel moves during the turn, no refetch round-trip.
+        onRateLimit: (limit) => {
+          queryClient.setQueryData<RateLimitSnapshot[]>(['usageLimits'], (current = []) => [
+            ...current.filter((entry) => entry.window !== limit.window),
+            limit,
+          ])
+        },
       }),
     [backend, queryClient],
   )
@@ -92,6 +101,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
       ),
     })
   }, [versionQuery.data])
+
+  // Baseline for the plan gauges (last-known snapshot); live rate_limit events
+  // overwrite entries via onRateLimit above. Silent on failure.
+  const usageLimitsQuery = useQuery({
+    queryKey: ['usageLimits'],
+    queryFn: backend.getUsageLimits,
+    refetchInterval: 60_000,
+    retry: false,
+  })
 
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: backend.listProjects })
   const projects = projectsQuery.data ?? []
@@ -267,6 +285,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           />
         </main>
         <aside className="dash" aria-label="Usage et activité">
+          <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
           <UsagePanel tokens={stream.sessionTokens} />
           <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
         </aside>

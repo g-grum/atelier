@@ -1,4 +1,4 @@
-import type { ChatMessage, ClientMessage, ProjectSummary, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixtureProjects, fixtureSessions, fixtureTurn } from '../state/fixtures'
 import * as client from './client'
@@ -22,6 +22,8 @@ export type Backend = {
   createSocket: (sessionId: string, projectId: string) => ControllerSocket
   /** Repo-current version (server reads version.json from disk) — drives the update toast. */
   getVersion: () => Promise<VersionInfo>
+  /** Last-known plan limits (five_hour, seven_day, …) — the claude.ai/usage gauges. */
+  getUsageLimits: () => Promise<RateLimitSnapshot[]>
 }
 
 const realBackend: Backend = {
@@ -37,6 +39,7 @@ const realBackend: Backend = {
   openInIde: client.openInIde,
   createSocket: (sessionId, projectId) => new SessionSocket(sessionId, projectId),
   getVersion: client.getVersion,
+  getUsageLimits: client.getUsageLimits,
 }
 
 // ── Fixture backend ──
@@ -97,6 +100,12 @@ function createFixtureBackend(): Backend {
     createSocket: (sessionId) => new FixtureSocket(sessionId),
     // Demo mode is always "up to date" — the toast never fires under fixtures.
     getVersion: async () => currentVersion,
+    // Plausible demo gauges — the same shape a real turn records.
+    getUsageLimits: async () => [
+      { window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: new Date(Date.now() + 2 * 3600_000).toISOString(), recordedAt: new Date().toISOString() },
+      { window: 'seven_day', utilization: 61, status: 'allowed', resetsAt: new Date(Date.now() + 4 * 86400_000).toISOString(), recordedAt: new Date().toISOString() },
+      { window: 'seven_day_opus', utilization: 12, status: 'allowed', resetsAt: new Date(Date.now() + 4 * 86400_000).toISOString(), recordedAt: new Date().toISOString() },
+    ],
   }
 }
 

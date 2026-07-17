@@ -10,7 +10,7 @@ import {
   type SDKRateLimitEvent,
   type SessionMessage,
 } from '@anthropic-ai/claude-agent-sdk'
-import type { ChatMessage } from '@atelier/shared'
+import type { ChatMessage, RateLimitWindow } from '@atelier/shared'
 import { describeToolUse } from '../stream/describe-tool-use'
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ export type SdkTurnEvent =
   | { type: 'tool_use'; toolUseId: string; toolName: string; input: unknown }
   | { type: 'tool_result'; toolUseId: string; ok: boolean; summary: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
+  | { type: 'rate_limit'; window: RateLimitWindow; utilization: number; status: 'allowed' | 'allowed_warning' | 'rejected'; resetsAt?: string }
   | { type: 'session_started'; sessionId: string }
   | { type: 'turn_done' }
   | { type: 'turn_error'; reason: string; resetAt?: string }
@@ -152,6 +153,9 @@ export class AgentSdkClient implements SdkClient {
           if (rle.rate_limit_info.resetsAt != null) {
             pendingResetAt = new Date(rle.rate_limit_info.resetsAt).toISOString()
           }
+          // Plan gauges (the claude.ai/usage numbers) — yielded when complete.
+          const limit = mapRateLimitInfo(rle.rate_limit_info)
+          if (limit !== null) yield limit
           continue
         }
 
@@ -278,6 +282,36 @@ function userText(content: unknown): string | null {
 /** Maps a recorded tool_use block through describe-tool-use so resumed sessions render like live ones. */
 function toChatToolMessage(block: { id: string; name: string; input: unknown }): ChatMessage {
   return { role: 'tool', toolUseId: block.id, ...describeToolUse(block.name, block.input), ok: true, at: new Date().toISOString() }
+}
+
+/**
+ * Maps one SDKRateLimitInfo to a rate_limit turn event. Unit-testable seam for
+ * two boundary contracts the mock can't see:
+ * - `utilization` is a 0–1 FRACTION: the bundled CLI renders it via
+ *   `Math.floor(e.utilization*100)` — mirror that, clamped to 0–100.
+ * - `resetsAt` is epoch ms in practice, but guard the seconds flavor: any
+ *   value below 1e12 cannot be milliseconds in this century — promote it.
+ * Returns null when rateLimitType or utilization is missing (honest-data
+ * policy: nothing to display).
+ */
+export function mapRateLimitInfo(info: {
+  status: 'allowed' | 'allowed_warning' | 'rejected'
+  rateLimitType?: RateLimitWindow
+  utilization?: number
+  resetsAt?: number
+}): Extract<SdkTurnEvent, { type: 'rate_limit' }> | null {
+  if (info.rateLimitType === undefined || info.utilization === undefined) return null
+  const utilization = Math.min(100, Math.max(0, Math.floor(info.utilization * 100)))
+  const event: Extract<SdkTurnEvent, { type: 'rate_limit' }> = {
+    type: 'rate_limit',
+    window: info.rateLimitType,
+    utilization,
+    status: info.status,
+  }
+  if (info.resetsAt != null) {
+    event.resetsAt = new Date(info.resetsAt < 1e12 ? info.resetsAt * 1000 : info.resetsAt).toISOString()
+  }
+  return event
 }
 
 /**

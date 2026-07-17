@@ -89,6 +89,10 @@ export function reduce(state: StreamState, event: ServerEvent): StreamState {
           cacheCreation: state.sessionTokens.cacheCreation + event.cacheCreationTokens,
         },
       }
+    case 'rate_limit':
+      // App-global plan data — surfaced through the controller's onRateLimit
+      // callback (react-query cache), never part of the per-session view-model.
+      return state
     case 'status':
       return applyStatus(state, event)
   }

@@ -243,6 +243,25 @@ describe('createApp', () => {
     expect(list[0]?.permissionMode).toBe('bypassPermissions')
   })
 
+  // 4bis-b. GET /api/usage/limits — plan gauges snapshot
+  test('GET /api/usage/limits returns the last-known snapshot per window', async () => {
+    const { app, data } = freshApp()
+    const auth = { Authorization: 'Bearer test-token' }
+
+    const empty = await app.request('/api/usage/limits', { headers: auth })
+    expect(empty.status).toBe(200)
+    expect(await empty.json()).toEqual([])
+
+    data.recordRateLimit({ window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:00:00.000Z' })
+    data.recordRateLimit({ window: 'seven_day', utilization: 61, status: 'allowed_warning', recordedAt: '2026-07-17T12:00:00.000Z' })
+
+    const res = await app.request('/api/usage/limits', { headers: auth })
+    const limits = await res.json() as { window: string; utilization: number }[]
+    expect(limits).toHaveLength(2)
+    expect(limits.find((l) => l.window === 'five_hour')?.utilization).toBe(34)
+    expect(limits.find((l) => l.window === 'seven_day')?.utilization).toBe(61)
+  })
+
   // 4ter. GET /api/version — update detection
   test('GET /api/version reads version.json from DISK at request time — a repo update while running is visible', async () => {
     const versionFile = join(mkdtempSync(join(tmpdir(), 'atelier-version-')), 'version.json')

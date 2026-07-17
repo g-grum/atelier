@@ -93,6 +93,13 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
     return c.json(data.get().usageEvents)
   })
 
+  // Plan limits — last-known snapshot per window (five_hour, seven_day, …),
+  // recorded from SDK rate_limit_events. REAL claude.ai/usage numbers; empty
+  // until a turn has reported them (honest-data policy).
+  app.get('/usage/limits', (c) => {
+    return c.json(Object.values(data.get().rateLimits))
+  })
+
   // Open in IDE — always 200 with { ok } : the web toast consumes `reason`, a 500 would break it.
   app.post('/open-in-ide', async (c) => {
     // Structural never-500 invariant: the ENTIRE handler runs inside this try, so

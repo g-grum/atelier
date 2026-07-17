@@ -34,6 +34,19 @@ describe('AppData', () => {
     expect(store.get().preferences.weeklyBudgetTokens).toBe(12_000_000)
   })
 
+  test('recordRateLimit keeps the LATEST snapshot per window and persists across instances', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
+    const store = new AppData(path)
+    store.recordRateLimit({ window: 'five_hour', utilization: 12, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:00:00.000Z' })
+    store.recordRateLimit({ window: 'seven_day', utilization: 40, status: 'allowed', recordedAt: '2026-07-17T12:00:00.000Z' })
+    store.recordRateLimit({ window: 'five_hour', utilization: 34, status: 'allowed_warning', resetsAt: '2026-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:05:00.000Z' })
+
+    const reloaded = new AppData(path)
+    expect(reloaded.get().rateLimits['five_hour']?.utilization).toBe(34)
+    expect(reloaded.get().rateLimits['five_hour']?.status).toBe('allowed_warning')
+    expect(reloaded.get().rateLimits['seven_day']?.utilization).toBe(40)
+  })
+
   test('mapDraft moves the draft permissionMode into permissionModes (loss-less, like model)', () => {
     const store = freshStore()
     store.update((d) => {

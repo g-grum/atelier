@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapSessionMessages, type RunTurnParams } from './sdk-client'
+import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, type RunTurnParams } from './sdk-client'
 
 function makeRunTurnParams(overrides: Partial<RunTurnParams> = {}): RunTurnParams {
   return {
@@ -73,6 +73,33 @@ describe('buildQueryOptions', () => {
     const result = await options.canUseTool!('Bash', { command: 'rm -rf /' }, sdkCanUseToolOptions)
 
     expect(result).toEqual({ behavior: 'deny', message: 'refusé par la règle' })
+  })
+})
+
+describe('mapRateLimitInfo', () => {
+  test('maps a full info: fraction → percent (floored like the CLI), epoch-ms resetsAt → ISO', () => {
+    expect(mapRateLimitInfo({ status: 'allowed', rateLimitType: 'five_hour', utilization: 0.347, resetsAt: 1784736000000 })).toEqual({
+      type: 'rate_limit',
+      window: 'five_hour',
+      utilization: 34,
+      status: 'allowed',
+      resetsAt: new Date(1784736000000).toISOString(),
+    })
+  })
+
+  test('an epoch-SECONDS resetsAt is promoted to ms (guard: anything below 1e12 cannot be ms in this century)', () => {
+    const event = mapRateLimitInfo({ status: 'allowed', rateLimitType: 'seven_day', utilization: 0.5, resetsAt: 1784736000 })
+    expect(event?.resetsAt).toBe(new Date(1784736000000).toISOString())
+  })
+
+  test('missing rateLimitType or utilization yields null — nothing to display honestly', () => {
+    expect(mapRateLimitInfo({ status: 'allowed', utilization: 0.5 })).toBeNull()
+    expect(mapRateLimitInfo({ status: 'allowed', rateLimitType: 'five_hour' })).toBeNull()
+  })
+
+  test('utilization is clamped to 0–100', () => {
+    expect(mapRateLimitInfo({ status: 'rejected', rateLimitType: 'five_hour', utilization: 1.2 })?.utilization).toBe(100)
+    expect(mapRateLimitInfo({ status: 'allowed', rateLimitType: 'five_hour', utilization: -0.1 })?.utilization).toBe(0)
   })
 })
 

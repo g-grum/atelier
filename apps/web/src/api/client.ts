@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -90,6 +90,13 @@ export function deleteSession(sessionId: string): Promise<void> {
 
 export function getPreferences(): Promise<Preferences> {
   return request<Preferences>('GET', '/preferences')
+}
+
+// ── Usage limits ──
+
+/** Last-known plan limit per window — the claude.ai/usage numbers, recorded from SDK turns. */
+export function getUsageLimits(): Promise<RateLimitSnapshot[]> {
+  return request<RateLimitSnapshot[]>('GET', '/usage/limits')
 }
 
 // ── Version ──
