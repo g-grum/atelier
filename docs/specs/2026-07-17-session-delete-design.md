@@ -35,24 +35,30 @@ Let the user delete any conversation from the sidebar — real SDK sessions, not
 
 **`SdkClient` interface + `AgentSdkClient` + `MockSdkClient`** — add `deleteSession(sessionId: string, dir: string): Promise<void>`. The real client forwards to the SDK with `{ dir }` (the project path, same convention as `listSessions`). The mock records the call in `calls` like every other method.
 
-**`SessionStreamRegistry.dispose(id)`** (new) — if a stream exists for the resolved id: abort the in-flight turn (`turnAbort?.abort()` + broker abort, the same path the WS `abort` message takes), close attached sockets, remove the entry from the registry map. Idempotent: disposing an unknown id is a no-op. Without this, the in-memory singleton would outlive the deleted file and a reconnection would resurrect a ghost session.
+**`SessionStreamRegistry.dispose(id)`** (new) — if a stream exists for the given id (the registry re-keys draft→SDK ids at materialization; dispose accepts either): abort the in-flight turn (`turnAbort?.abort()` + broker abort, the same path the WS `abort` message takes), drop all registered sinks so no further events flow, remove the entry from the registry map. Idempotent: disposing an unknown id is a no-op. Without this, the in-memory singleton would outlive the deleted file and a reconnection would resurrect a ghost session.
+
+Server-side socket closing is deliberately **not** part of dispose: `SessionStream` is socket-free by design (sinks are send callbacks; the WebSockets live in the WS glue in `app.ts`). Atelier is a single-window app (single-instance lock), and the one client that can be attached is the deleting client, which closes its own socket (`controller.close()`, see Web section). An orphaned socket that never reconnects is harmless and cleaned up by its `onClose`.
+
+Wiring note: the registry is currently constructed inside `createApp`, after `SessionsService` is built in `index.ts`. Move its construction to the composition root (`index.ts`) and inject it into both `createApp` and `SessionsService`.
 
 **`SessionsService.delete(id)`** (replaces `deleteDraft` as the route's target) —
 
-1. If `id` is an unsent draft: filter `AppData.drafts`; done.
-2. Else resolve the SDK id (`draftMap` honors materialized-draft ids) and locate the owning project (the session must belong to a registered project's dir; otherwise 404).
-3. `registry.dispose(resolvedId)`.
-4. `sdk.deleteSession(resolvedId, project.path)`.
-5. Clean `AppData`: drop `modelOverrides[resolvedId]`, `permissionModes[resolvedId]`, and the `draftMap` entry pointing at `resolvedId`. **Keep `usageEvents`** — consumption history stays meaningful after the conversation is gone.
-6. Unknown id or SDK "not found" → throw the service's not-found error → route maps to 404.
+1. Resolve `sdkId = draftMap[id]` if present, else `id` itself if it names a real session.
+2. `registry.dispose(id)` — runs for drafts too. A draft whose *first turn is still in flight* is still in `AppData.drafts`; disposing aborts that turn so the "deleted" draft doesn't materialize into a resurrected SDK session. (Narrow accepted race: if the SDK flushes the `.jsonl` despite the abort, the session simply reappears in the list and can be deleted again.)
+3. If a draft record exists for `id`: filter it from `AppData.drafts`.
+4. If `sdkId` names a real session: locate the owning project by scanning registered projects' dirs via `sdk.listSessions` (O(projects) local calls — acceptable for a personal app; the DELETE route carries no project id), then `sdk.deleteSession(sdkId, project.path)`.
+5. Clean `AppData`: drop `modelOverrides[sdkId]`, `permissionModes[sdkId]`, and the `draftMap` entry pointing at `sdkId`. **Keep `usageEvents`** — consumption history stays meaningful after the conversation is gone.
+6. If neither a draft record nor a real session was found → not-found → route maps to 404.
 
-Ordering note: dispose-before-delete guarantees the SDK process is no longer appending to the `.jsonl` when it is removed.
+Not-found convention: no such error class exists yet; the service throws a small dedicated error (e.g. `SessionNotFoundError`), the route catches it → 404. SDK "not found" is detected by message-sniffing the untyped `Error` (acceptable; stated so the plan doesn't rediscover it). Other failures propagate → 500.
+
+Ordering note: dispose-before-delete guarantees the SDK process is no longer appending to the `.jsonl` when it is removed. A WS reconnect between dispose and SDK delete could theoretically re-mint the stream via `registry.get()`, but the only client is the deleting one, which has already deselected — accepted, out of scope.
 
 ### Web
 
 **`SessionSidebar`** — pass `onDelete` for every session, not only drafts. Draft → call delete immediately (unchanged). Real session → open the confirmation dialog.
 
-**Confirmation dialog** — use the existing, currently unused `components/ui/dialog.tsx`. Copy: title « Supprimer la conversation ? », body « "{name}" sera définitivement supprimée. », buttons Annuler / Supprimer (destructive style). `Escape`/Annuler closes with no action. The × button's `aria-label` distinguishes « Supprimer la conversation » from « Supprimer le brouillon ».
+**Confirmation dialog** — use the existing `components/ui/dialog.tsx` (already used by `SettingsPanel`). Copy: title « Supprimer la conversation ? », body « "{name}" sera définitivement supprimée. », buttons Annuler / Supprimer (destructive style). `Escape`/Annuler closes with no action. The × button's `aria-label` distinguishes « Supprimer la conversation » from « Supprimer le brouillon ».
 
 **`App.tsx` mutation** — `deleteSession` mutation mirrors the existing `deleteDraft` one: on success invalidate `['sessions']`; if the deleted session is the selected one, `controller.close()`, `setSelected(null)`, bump `openAttempt` to orphan any in-flight `open()`. On error → `setNotice(...)` banner; the list is only invalidated on success, so a failed delete leaves the UI intact.
 
@@ -65,9 +71,9 @@ Ordering note: dispose-before-delete guarantees the SDK process is no longer app
 
 TDD, mirroring existing patterns:
 
-- `sessions-service.test.ts` — real-session delete calls `sdk.deleteSession` with resolved id + project dir; disposes the stream first; cleans `modelOverrides`/`permissionModes`/`draftMap`; keeps `usageEvents`; unknown id throws not-found; draft delete unchanged.
+- `sessions-service.test.ts` — real-session delete calls `sdk.deleteSession` with resolved id + project dir; disposes the stream first; cleans `modelOverrides`/`permissionModes`/`draftMap`; keeps `usageEvents`; unknown id throws `SessionNotFoundError`; draft delete unchanged; deleting a draft also disposes its stream (mid-first-turn case).
 - `app.test.ts` — `DELETE /api/sessions/:id`: 204 for a real session, 204 for a draft, **404 for an unknown id** (regression test for the old silent no-op).
-- `session-stream.test.ts` — `registry.dispose(id)` aborts the in-flight turn, closes sockets, removes the entry; disposing an unknown id is a no-op.
+- `session-stream.test.ts` — `registry.dispose(id)` aborts the in-flight turn, drops sinks (no events delivered afterwards), removes the entry (a later `get` builds a fresh stream); disposing an unknown id is a no-op; dispose works with either the draft id or the re-keyed SDK id.
 - `SessionSidebar.test.tsx` — × visible on real sessions; clicking it opens the dialog; confirming calls delete; cancelling does not.
 - `App.test.tsx` — full flow: delete selected real session → confirmation → deselection + list invalidation; delete non-selected session leaves selection alone.
 
