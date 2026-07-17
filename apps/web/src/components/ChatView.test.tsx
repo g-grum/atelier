@@ -102,3 +102,27 @@ describe('ChatView permissions', () => {
     expect(calls).toEqual([['req-1', 'allow']])
   })
 })
+
+describe('ChatView queued messages', () => {
+  test('a queued user message is marked « En attente » until it actually goes out', () => {
+    const { rerender } = render(
+      <ChatView
+        items={[{ kind: 'user', text: 'à envoyer plus tard', queued: true }]}
+        status="streaming"
+        onOpenInIde={() => {}}
+        onPermissionDecision={() => {}}
+      />,
+    )
+    expect(screen.getByText('En attente')).toBeTruthy()
+
+    rerender(
+      <ChatView
+        items={[{ kind: 'user', text: 'à envoyer plus tard' }]}
+        status="streaming"
+        onOpenInIde={() => {}}
+        onPermissionDecision={() => {}}
+      />,
+    )
+    expect(screen.queryByText('En attente')).toBeNull()
+  })
+})

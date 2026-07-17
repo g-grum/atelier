@@ -245,43 +245,61 @@ describe('SessionController actions', () => {
     expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'Continue le correctif' })
   })
 
-  test('an accepted send flips status to streaming — a second send in the latency window is refused', async () => {
+  test('an accepted send flips status to streaming — a send in the latency window is queued, never a phantom', async () => {
     const { controller, socket, open } = makeHarness()
     await open(history)
     expect(controller.sendMessage('Lance le build')).toBe(true)
     // The server flips to streaming synchronously on user_message — BEFORE the
-    // first assistant_delta (model latency, routinely 1s+). Mirror it locally,
-    // otherwise a second send in that window is echoed here but dropped there,
-    // and the echo-replay machinery makes the phantom immortal across resyncs.
+    // first assistant_delta (model latency, routinely 1s+). Mirror it locally:
+    // the server would DROP a second user_message in that window, so it must
+    // be queued client-side, never sent mid-turn.
     expect(controller.getState().status).toBe('streaming')
 
-    const before = controller.getState()
-    expect(controller.sendMessage('trop vite')).toBe(false)
+    expect(controller.sendMessage('à la suite')).toBe(true)
     expect(socket().sent).toEqual([{ type: 'user_message', text: 'Lance le build' }]) // nothing else hit the socket
-    expect(controller.getState()).toBe(before) // no phantom echo, no state churn
-
-    // The turn ends server-side — the composer path reopens.
-    socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
-    expect(controller.sendMessage('au tour suivant')).toBe(true)
-    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'au tour suivant' })
+    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'à la suite', queued: true })
   })
 
-  test('sendMessage is refused mid-turn — the server drops it, so no phantom echo', async () => {
+  test('sendMessage mid-turn queues — the queue drains FIFO, one user_message per idle', async () => {
     const { controller, socket, open } = makeHarness()
     await open(history)
     socket().emit(delta('je travaille'))
     expect(controller.getState().status).toBe('streaming')
 
-    const before = controller.getState()
-    expect(controller.sendMessage('trop tôt')).toBe(false)
-    expect(socket().sent).toEqual([]) // mirrors session-stream: mid-turn user_message is dropped
-    expect(controller.getState()).toBe(before)
+    expect(controller.sendMessage('message B')).toBe(true)
+    expect(controller.sendMessage('message C')).toBe(true)
+    expect(socket().sent).toEqual([]) // mirrors session-stream: mid-turn user_message would be dropped
 
-    // Once the turn ends the composer path reopens.
+    // Turn ends — exactly ONE queued message goes out and re-opens a turn.
     socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
-    expect(controller.sendMessage('maintenant oui')).toBe(true)
-    expect(socket().sent).toEqual([{ type: 'user_message', text: 'maintenant oui' }])
-    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'maintenant oui' })
+    expect(socket().sent).toEqual([{ type: 'user_message', text: 'message B' }])
+    expect(controller.getState().status).toBe('streaming')
+    const users = controller.getState().items.filter((item) => item.kind === 'user')
+    expect(users.at(-2)).toEqual({ kind: 'user', text: 'message B' }) // sent — no longer queued
+    expect(users.at(-1)).toEqual({ kind: 'user', text: 'message C', queued: true })
+
+    // Next idle drains the rest.
+    socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
+    expect(socket().sent).toEqual([
+      { type: 'user_message', text: 'message B' },
+      { type: 'user_message', text: 'message C' },
+    ])
+    expect(controller.getState().items.some((item) => item.kind === 'user' && item.queued)).toBe(false)
+  })
+
+  test('abort clears the queue and removes the pending items — Stop stops everything', async () => {
+    const { controller, socket, open } = makeHarness()
+    await open(history)
+    socket().emit(delta('je travaille'))
+    expect(controller.sendMessage('en attente')).toBe(true)
+
+    controller.abort()
+    expect(socket().sent).toEqual([{ type: 'abort' }])
+    expect(controller.getState().items.some((item) => item.kind === 'user' && item.queued)).toBe(false)
+
+    // The settle to idle must NOT auto-send the aborted message.
+    socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
+    expect(socket().sent).toEqual([{ type: 'abort' }])
   })
 
   test('sendMessage without an open socket is refused', () => {
@@ -387,6 +405,23 @@ describe('SessionController sendMessage vs resync', () => {
       { kind: 'user', text: 'Continue' },
       { kind: 'user', text: 'Continue' }, // the new echo survives
     ])
+  })
+
+  test('queued messages survive a resync reset — re-appended after the refetched history', async () => {
+    const { controller, socket, lastFetch, open } = makeHarness()
+    await open(history)
+    socket().emit(delta('je travaille'))
+    expect(controller.sendMessage('en file pendant le stream')).toBe(true)
+
+    socket().reconnect()
+    lastFetch().resolve(history)
+    await flush()
+
+    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'en file pendant le stream', queued: true })
+
+    // The post-resync snapshot says idle — the queue drains now.
+    socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
+    expect(socket().sent).toEqual([{ type: 'user_message', text: 'en file pendant le stream' }])
   })
 
   test('pending echoes do not leak across open() — a new session resync cannot replay them', async () => {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ChatMessage, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, SessionPermissionMode, SessionSummary } from '@atelier/shared'
 import type { AppData } from '../store/app-data'
 import type { SdkClient } from '../sdk/sdk-client'
 
@@ -10,7 +10,7 @@ export class SessionsService {
   ) {}
 
   async list(projectId: string): Promise<SessionSummary[]> {
-    const { projects, drafts, modelOverrides, preferences } = this.data.get()
+    const { projects, drafts, modelOverrides, permissionModes, preferences } = this.data.get()
     const project = projects.find((p) => p.id === projectId)
     if (!project) throw new Error(`Unknown project: ${projectId}`)
 
@@ -24,6 +24,8 @@ export class SessionsService {
       messageCount: s.messageCount,
       isDraft: false,
       model: modelOverrides[s.id] ?? preferences.defaultModel,
+      // Absent key = never answered — the UI asks once per session (spec « chaque session demande »).
+      permissionMode: permissionModes[s.id] ?? null,
     }))
 
     const draftSummaries: SessionSummary[] = drafts
@@ -36,6 +38,7 @@ export class SessionsService {
         messageCount: 0,
         isDraft: true,
         model: d.model,
+        permissionMode: d.permissionMode ?? null,
       }))
 
     return [...draftSummaries, ...sdkSummaries]
@@ -61,7 +64,7 @@ export class SessionsService {
     const createdAt = new Date().toISOString()
 
     this.data.update((d) => {
-      d.drafts.push({ id, projectId, name: name ?? null, model: resolvedModel, createdAt })
+      d.drafts.push({ id, projectId, name: name ?? null, model: resolvedModel, createdAt, permissionMode: null })
     })
 
     return {
@@ -72,6 +75,7 @@ export class SessionsService {
       messageCount: 0,
       isDraft: true,
       model: resolvedModel,
+      permissionMode: null,
     }
   }
 
@@ -98,6 +102,21 @@ export class SessionsService {
     }
     this.data.update((d) => {
       d.modelOverrides[this.data.resolveSessionId(id)] = model
+    })
+  }
+
+  /** Same draft-vs-SDK-session split as setModel — the answer must survive materialization (mapDraft moves it). */
+  setPermissionMode(id: string, mode: SessionPermissionMode): void {
+    const draft = this.data.get().drafts.find((d) => d.id === id)
+    if (draft) {
+      this.data.update((d) => {
+        const entry = d.drafts.find((x) => x.id === id)
+        if (entry) entry.permissionMode = mode
+      })
+      return
+    }
+    this.data.update((d) => {
+      d.permissionModes[this.data.resolveSessionId(id)] = mode
     })
   }
 

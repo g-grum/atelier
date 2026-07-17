@@ -36,6 +36,16 @@ export type Preferences = {
 /** One recorded usage sample (REST: GET /api/usage/history). All four counters persist — the forecast's fidelity depends on cache counts; a lossy total can't be backfilled. */
 export type UsageEvent = { at: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
 
+/**
+ * Per-session permission behavior for SDK turns. 'bypassPermissions' maps to
+ * the Agent SDK's dangerously-skip-permissions mode (canUseTool is bypassed).
+ */
+export type SessionPermissionMode = 'default' | 'bypassPermissions'
+export const SESSION_PERMISSION_MODES: readonly SessionPermissionMode[] = ['default', 'bypassPermissions']
+
+/** GET /api/version — the repo's version.json read from disk at request time (update detection). */
+export type VersionInfo = { version: string; notes: string[] }
+
 export type SessionSummary = {
   id: string
   projectId: string
@@ -44,6 +54,8 @@ export type SessionSummary = {
   messageCount: number
   isDraft: boolean
   model: string
+  /** null — the user has not answered the per-session permissions question yet (UI must ask). */
+  permissionMode: SessionPermissionMode | null
 }
 
 export type ChatMessage =

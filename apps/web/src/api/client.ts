@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, SessionSummary } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -78,7 +78,7 @@ export function getMessages(sessionId: string): Promise<ChatMessage[]> {
   return request<ChatMessage[]>('GET', `/sessions/${encodeURIComponent(sessionId)}/messages`)
 }
 
-export function patchSession(sessionId: string, patch: { name?: string; model?: string }): Promise<void> {
+export function patchSession(sessionId: string, patch: { name?: string; model?: string; permissionMode?: SessionPermissionMode }): Promise<void> {
   return request<void>('PATCH', `/sessions/${encodeURIComponent(sessionId)}`, patch)
 }
 
@@ -90,6 +90,13 @@ export function deleteSession(sessionId: string): Promise<void> {
 
 export function getPreferences(): Promise<Preferences> {
   return request<Preferences>('GET', '/preferences')
+}
+
+// ── Version ──
+
+/** The repo's current version.json (read server-side from disk) — update detection. */
+export function getVersion(): Promise<VersionInfo> {
+  return request<VersionInfo>('GET', '/version')
 }
 
 export function patchPreferences(patch: Partial<Preferences>): Promise<Preferences> {

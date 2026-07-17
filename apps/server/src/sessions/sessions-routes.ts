@@ -1,3 +1,4 @@
+import { SESSION_PERMISSION_MODES, type SessionPermissionMode } from '@atelier/shared'
 import { Hono } from 'hono'
 import { readJsonObject } from '../routes/read-json'
 import type { AppData } from '../store/app-data'
@@ -42,8 +43,12 @@ export function sessionsRoutes(data: AppData, sessions: SessionsService): Hono {
     if (body.model !== undefined && typeof body.model !== 'string') {
       return c.json({ error: 'requête invalide : « model » doit être une chaîne' }, 400)
     }
+    if (body.permissionMode !== undefined && !SESSION_PERMISSION_MODES.includes(body.permissionMode as SessionPermissionMode)) {
+      return c.json({ error: 'requête invalide : « permissionMode » doit être default ou bypassPermissions' }, 400)
+    }
     if (body.name !== undefined) await sessions.rename(id, body.name)
     if (body.model !== undefined) sessions.setModel(id, body.model)
+    if (body.permissionMode !== undefined) sessions.setPermissionMode(id, body.permissionMode as SessionPermissionMode)
     return c.json({ ok: true })
   })
 

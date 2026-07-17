@@ -8,6 +8,7 @@ import {
   renameSession,
   type SDKMessage,
   type SDKRateLimitEvent,
+  type SessionMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 import type { ChatMessage } from '@atelier/shared'
 import { describeToolUse } from '../stream/describe-tool-use'
@@ -34,6 +35,8 @@ export type RunTurnParams = {
   resumeSessionId?: string
   canUseTool: CanUseTool
   signal: AbortSignal
+  /** Session-level « dangerously skip permissions » answer — maps to the SDK's bypassPermissions mode. */
+  bypassPermissions?: boolean
 }
 
 export interface SdkClient {
@@ -60,30 +63,7 @@ export class AgentSdkClient implements SdkClient {
 
   /** SDK: getSessionMessages(sessionId) → SessionMessage[] (fields: type, message) */
   async getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
-    const messages = await getSessionMessages(sessionId)
-    const result: ChatMessage[] = []
-    for (const m of messages) {
-      if (m.type === 'user') {
-        const msg = m.message as { content?: unknown }
-        const text = typeof msg?.content === 'string' ? msg.content : '[user]'
-        result.push({ role: 'user', text, at: new Date().toISOString() })
-      } else if (m.type === 'assistant') {
-        const msg = m.message as { content?: unknown }
-        if (Array.isArray(msg?.content)) {
-          for (const block of msg.content) {
-            if (block && typeof block === 'object') {
-              if ((block as { type?: string }).type === 'text') {
-                // BetaTextBlock.text
-                result.push({ role: 'assistant', text: (block as { text: string }).text, at: new Date().toISOString() })
-              } else if ((block as { type?: string }).type === 'tool_use') {
-                result.push(toChatToolMessage(block as { id: string; name: string; input: unknown }))
-              }
-            }
-          }
-        }
-      }
-    }
-    return result
+    return mapSessionMessages(await getSessionMessages(sessionId))
   }
 
   /** SDK: renameSession(sessionId, title) → Promise<void> */
@@ -237,6 +217,9 @@ export function buildQueryOptions(params: RunTurnParams, abortController: AbortC
     resume: params.resumeSessionId,
     abortController,
     includePartialMessages: true,
+    // sdk.d.ts: permissionMode 'bypassPermissions' REQUIRES allowDangerouslySkipPermissions: true
+    // (intentionality safety flag) — and short-circuits canUseTool entirely.
+    ...(params.bypassPermissions === true ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true } : {}),
     // SDK CanUseTool: (toolName, input: Record<string, unknown>, options) → PermissionResult
     canUseTool: async (toolName, input) => {
       const result = await params.canUseTool(toolName, input)
@@ -244,6 +227,52 @@ export function buildQueryOptions(params: RunTurnParams, abortController: AbortC
       return { behavior: 'deny', message: result.message }
     },
   }
+}
+
+/**
+ * Maps recorded SessionMessages to the chat history contract. Exported as the
+ * unit-testable seam for the transcript-format boundary (same rationale as
+ * buildQueryOptions): the class method is a thin SDK call around this.
+ */
+export function mapSessionMessages(messages: SessionMessage[]): ChatMessage[] {
+  const result: ChatMessage[] = []
+  for (const m of messages) {
+    if (m.type === 'user') {
+      // Transcript-format boundary (observed live in ~/.claude/projects): the
+      // CLI ≥2.x persists user prompts as content-block arrays
+      // [{type:'text',text}], older transcripts as plain strings. type='user'
+      // lines whose content is ONLY tool_result blocks are the model-side echo
+      // of tool results — no text extracted → no chat item (mirrors runTurn,
+      // where user text is never emitted and tool_results attach to the tool).
+      const text = userText((m.message as { content?: unknown })?.content)
+      if (text !== null) result.push({ role: 'user', text, at: new Date().toISOString() })
+    } else if (m.type === 'assistant') {
+      const msg = m.message as { content?: unknown }
+      if (Array.isArray(msg?.content)) {
+        for (const block of msg.content) {
+          if (block && typeof block === 'object') {
+            if ((block as { type?: string }).type === 'text') {
+              // BetaTextBlock.text
+              result.push({ role: 'assistant', text: (block as { text: string }).text, at: new Date().toISOString() })
+            } else if ((block as { type?: string }).type === 'tool_use') {
+              result.push(toChatToolMessage(block as { id: string; name: string; input: unknown }))
+            }
+          }
+        }
+      }
+    }
+  }
+  return result
+}
+
+/** Extracts the user-visible text of a recorded user message, or null when it carries none (e.g. tool_result-only lines). */
+function userText(content: unknown): string | null {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return null
+  const texts = content
+    .filter((block): block is { type: 'text'; text: string } => block != null && typeof block === 'object' && (block as { type?: string }).type === 'text')
+    .map((block) => block.text)
+  return texts.length > 0 ? texts.join('\n\n') : null
 }
 
 /** Maps a recorded tool_use block through describe-tool-use so resumed sessions render like live ones. */

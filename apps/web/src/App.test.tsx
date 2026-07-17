@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ChatMessage, ProjectSummary, SessionSummary } from '@atelier/shared'
 import type { Backend } from './api/backend'
 import App from './App'
+import currentVersion from '../../../version.json'
 
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -20,6 +21,7 @@ const session: SessionSummary = {
   messageCount: 1,
   isDraft: false,
   model: 'claude-fable-5',
+  permissionMode: 'default',
 }
 
 /** A no-op socket: these tests exercise REST failure paths, not the stream. */
@@ -41,6 +43,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     deleteSession: async () => {},
     openInIde: async () => ({ ok: true }),
     createSocket: () => idleSocket,
+    getVersion: async () => currentVersion,
     ...overrides,
   }
 }
@@ -143,6 +146,87 @@ describe('App failure surfacing', () => {
 
     const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
     expect(notice.textContent).toContain('POST /api/open-in-ide → 401')
+  })
+})
+
+describe('App per-session permissions gate', () => {
+  test('an undecided session shows the gate with the composer locked; choosing persists and unlocks', async () => {
+    let mode: SessionSummary['permissionMode'] = null
+    const patches: unknown[] = []
+    const backend = fakeBackend({
+      listSessions: async () => [{ ...session, permissionMode: mode }],
+      patchSession: async (_id, patch) => {
+        patches.push(patch)
+        if (patch.permissionMode !== undefined) mode = patch.permissionMode
+      },
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByText('Session un'))
+    await screen.findByRole('group', { name: 'Permissions de la session' })
+    const textarea = screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement
+    expect(textarea.disabled).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Permissions normales' }))
+    await waitFor(() => expect(patches).toEqual([{ permissionMode: 'default' }]))
+    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
+  })
+
+  test('the dangerous choice patches bypassPermissions', async () => {
+    let mode: SessionSummary['permissionMode'] = null
+    const patches: unknown[] = []
+    const backend = fakeBackend({
+      listSessions: async () => [{ ...session, permissionMode: mode }],
+      patchSession: async (_id, patch) => {
+        patches.push(patch)
+        if (patch.permissionMode !== undefined) mode = patch.permissionMode
+      },
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByText('Session un'))
+    fireEvent.click(await screen.findByRole('button', { name: /dangereux/i }))
+    await waitFor(() => expect(patches).toEqual([{ permissionMode: 'bypassPermissions' }]))
+  })
+
+  test('a decided session never shows the gate', async () => {
+    renderApp(fakeBackend())
+    fireEvent.click(await screen.findByText('Session un'))
+    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
+  })
+})
+
+describe('App update toast', () => {
+  test('a newer repo version raises « Une nouvelle version est disponible » with its patch notes, once', async () => {
+    const { queryClient } = renderApp(
+      fakeBackend({ getVersion: async () => ({ version: '9.9.9', notes: ['Note un', 'Note deux'] }) }),
+    )
+
+    await screen.findByText('Une nouvelle version est disponible')
+    expect(screen.getByText(/Note un/)).toBeTruthy()
+    expect(screen.getByText(/Note deux/)).toBeTruthy()
+    expect(screen.getByText(/redémarre Atelier/i)).toBeTruthy()
+
+    // A refetch of the same version must not stack a second toast.
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: ['version'] })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(screen.getAllByText('Une nouvelle version est disponible')).toHaveLength(1)
+  })
+
+  test('no update toast when the repo version matches the build', async () => {
+    renderApp(fakeBackend())
+    await screen.findByText('Session un') // app settled
+    expect(screen.queryByText('Une nouvelle version est disponible')).toBeNull()
+  })
+
+  test('a failed version fetch stays silent — no toast, no crash', async () => {
+    renderApp(fakeBackend({ getVersion: async () => Promise.reject(new Error('GET /api/version → 500')) }))
+    await screen.findByText('Session un')
+    expect(screen.queryByText('Une nouvelle version est disponible')).toBeNull()
   })
 })
 

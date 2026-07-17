@@ -17,6 +17,7 @@ const session: SessionSummary = {
   messageCount: 1,
   isDraft: false,
   model: 'claude-fable-5',
+  permissionMode: 'default',
 }
 
 function renderSelector(target: SessionSummary | null = session, overrides: Partial<ModelSelectorApi> = {}) {

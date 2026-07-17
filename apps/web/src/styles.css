@@ -118,7 +118,11 @@
   .model-chip .md { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet); }
 
   /* ── 3-zone layout ──────────────────── */
-  .app { display: grid; grid-template-columns: 262px minmax(0, 1fr) 306px; flex: 1; min-height: 0; }
+  /* grid-template-rows: minmax(0, 1fr) — the single row must fill AND be allowed
+     to shrink below content (min 0), so each column (.sidebar/.chat/.dash) becomes
+     its own scroll container. Without it the auto row grows past the viewport:
+     .messages never scrolls and the composer is pushed below body's overflow:hidden. */
+  .app { display: grid; grid-template-columns: 262px minmax(0, 1fr) 306px; grid-template-rows: minmax(0, 1fr); flex: 1; min-height: 0; }
   svg.i { width: 12px; height: 12px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
   /* ── Sidebar ────────────────────────── */
@@ -182,6 +186,9 @@
   .msg .who b { font-size: 12px; }
   .msg.user .body { background: var(--color-surface-2); border: 1px solid var(--color-line-soft); border-radius: 11px; padding: 10px 13px; }
   .msg .body { white-space: pre-wrap; overflow-wrap: break-word; }
+  /* Queued message: accepted mid-turn, waiting in the client queue for the next idle. */
+  .msg.queued { opacity: 0.55; }
+  .msg .who .queued-tag { font: 500 10px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-faint); border: 1px dashed var(--color-line); border-radius: 4px; padding: 1px 6px; }
 
   /* Row = plain div wrapping two SIBLING buttons (toggle + IDE) — a button must never nest interactive content. */
   .tool { display: flex; align-items: center; gap: 9px; margin-top: 8px; border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 8px 12px; font: 500 11.5px var(--font-mono); color: var(--color-muted); background: transparent; }
@@ -238,7 +245,8 @@
   .composer .box { display: flex; align-items: center; gap: 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; padding: 11px 14px; }
   .composer .box:focus-within { border-color: var(--color-indigo); box-shadow: 0 0 0 3px rgba(124, 134, 255, 0.12); }
   .composer .box.disabled { opacity: 0.5; }
-  .composer textarea { flex: 1; background: transparent; border: 0; outline: 0; resize: none; color: var(--color-text); font: 13px/1.5 var(--font-sans); padding: 0; }
+  .composer .box { align-items: flex-end; } /* auto-grow: the action button and kbd hug the bottom line */
+  .composer textarea { flex: 1; background: transparent; border: 0; outline: 0; resize: none; color: var(--color-text); font: 13px/1.5 var(--font-sans); padding: 0; max-height: 200px; overflow-y: auto; }
   .composer textarea::placeholder { color: var(--color-faint); }
   .composer kbd { font: 500 10px var(--font-mono); border: 1px solid var(--color-line); border-radius: 4px; padding: 1px 6px; color: var(--color-faint); }
   /* Send / Stop affordance. Stop is red — the critical color; amber stays
@@ -249,6 +257,17 @@
   .composer .action.stop { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
   .composer .action.stop:hover { border-color: var(--color-red); }
   .composer .action:disabled { cursor: default; }
+
+  /* Per-session permissions question — asked once, above the composer. The
+     dangerous choice is red (amber stays reserved for tool permissions). */
+  .perm-gate { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 28px 0; padding: 10px 14px; max-width: 48rem; border: 1px solid var(--color-line); border-left: 3px solid var(--color-indigo); border-radius: 9px; background: var(--color-surface); font-size: 12px; }
+  .perm-gate .perm-gate-text { flex: 1; min-width: 200px; color: var(--color-muted); }
+  .perm-gate .perm-gate-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .perm-gate .perm-gate-btn { font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 5px 11px; cursor: pointer; }
+  .perm-gate .perm-gate-btn:hover { border-color: var(--color-indigo); }
+  .perm-gate .perm-gate-btn.danger { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
+  .perm-gate .perm-gate-btn.danger:hover { border-color: var(--color-red); background: rgba(251, 111, 95, 0.08); }
+  .perm-gate .perm-gate-btn:disabled { opacity: 0.5; cursor: default; }
 
   /* ── Right panel ────────────────────── */
   .dash { background: rgba(18, 24, 40, 0.5); border-left: 1px solid var(--color-line); overflow-y: auto; padding: 16px 15px 20px; display: flex; flex-direction: column; gap: 20px; }

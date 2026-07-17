@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { SessionSummary } from '@atelier/shared'
+import { toast } from 'sonner'
+import currentVersion from '../../../version.json'
+import type { SessionPermissionMode, SessionSummary } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
 import { ErrorBanner } from './components/ErrorBanner'
 import { ModifiedFilesPanel } from './components/ModifiedFilesPanel'
+import { PermissionModeGate } from './components/PermissionModeGate'
 import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
 import { UsagePanel } from './components/UsagePanel'
@@ -59,6 +62,36 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     useCallback((onChange: () => void) => controller.subscribe(onChange), [controller]),
     () => controller.getState(),
   )
+
+  // Update detection: the server reads version.json from DISK per request,
+  // this bundle bakes the version it was built from — a mismatch means the
+  // repo moved on and a restart would pick it up. Polling + window focus keep
+  // long-lived windows informed; failures stay silent (never a banner).
+  const versionQuery = useQuery({
+    queryKey: ['version'],
+    queryFn: backend.getVersion,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  })
+  /** Last version already toasted — a periodic refetch must not stack duplicates. */
+  const notifiedVersion = useRef<string | null>(null)
+  useEffect(() => {
+    const latest = versionQuery.data
+    if (latest === undefined || latest.version === currentVersion.version || notifiedVersion.current === latest.version) return
+    notifiedVersion.current = latest.version
+    toast('Une nouvelle version est disponible', {
+      duration: Number.POSITIVE_INFINITY,
+      description: (
+        <>
+          {latest.notes.map((note) => (
+            <div key={note}>• {note}</div>
+          ))}
+          <div>Redémarre Atelier pour l’appliquer.</div>
+        </>
+      ),
+    })
+  }, [versionQuery.data])
 
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: backend.listProjects })
   const projects = projectsQuery.data ?? []
@@ -137,8 +170,19 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     onError: (error) => setNotice(`Échec du renommage : ${errorMessage(error)}`),
   })
 
+  const setPermissionMode = useMutation({
+    mutationFn: ({ sessionId, mode }: { sessionId: string; mode: SessionPermissionMode }) =>
+      backend.patchSession(sessionId, { permissionMode: mode }),
+    // The gate unlocks when the refetched session carries the recorded choice.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+    onError: (error) => setNotice(`Impossible d’enregistrer le choix de permissions : ${errorMessage(error)}`),
+  })
+
   const activeSession = sessions.find((session) => session.id === selected?.sessionId) ?? null
   const activeProject = projects.find((project) => project.id === (selected?.projectId ?? projectId)) ?? null
+  // Per-session permissions question (spec: chaque session demande) — an
+  // unanswered session locks the composer until the user picks a mode.
+  const needsPermissionChoice = activeSession !== null && activeSession.permissionMode === null
 
   return (
     <div className="shell">
@@ -206,8 +250,16 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
               )
             }}
           />
+          {needsPermissionChoice && (
+            <PermissionModeGate
+              pending={setPermissionMode.isPending}
+              onChoose={(mode) => {
+                if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
+              }}
+            />
+          )}
           <Composer
-            disabled={selected === null}
+            disabled={selected === null || needsPermissionChoice}
             status={stream.status}
             onSend={(text) => controller.sendMessage(text)}
             // Explicit abort — the only ClientMessage that stops a turn.

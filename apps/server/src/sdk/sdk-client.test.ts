@@ -1,8 +1,9 @@
+import type { SessionMessage } from '@anthropic-ai/claude-agent-sdk'
 import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildQueryOptions, deriveMessageCount, encodeProjectDir, type RunTurnParams } from './sdk-client'
+import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapSessionMessages, type RunTurnParams } from './sdk-client'
 
 function makeRunTurnParams(overrides: Partial<RunTurnParams> = {}): RunTurnParams {
   return {
@@ -32,6 +33,18 @@ describe('buildQueryOptions', () => {
     expect(options.model).toBe('claude-fable-5')
     expect(options.resume).toBe('ses-1')
     expect(options.abortController).toBe(abortController)
+  })
+
+  test('bypassPermissions: true maps to permissionMode bypassPermissions + allowDangerouslySkipPermissions (SDK safety flag is REQUIRED)', () => {
+    const options = buildQueryOptions(makeRunTurnParams({ bypassPermissions: true }), new AbortController())
+    expect(options.permissionMode).toBe('bypassPermissions')
+    expect(options.allowDangerouslySkipPermissions).toBe(true)
+  })
+
+  test('without bypassPermissions the options carry neither permissionMode nor the dangerous flag', () => {
+    const options = buildQueryOptions(makeRunTurnParams(), new AbortController())
+    expect(options.permissionMode).toBeUndefined()
+    expect(options.allowDangerouslySkipPermissions).toBeUndefined()
   })
 
   test('allow responses echo the original input as updatedInput — the bundled CLI Zod-REQUIRES it, a bare allow fails the whole permission request', async () => {
@@ -98,5 +111,57 @@ describe('deriveMessageCount', () => {
   test('never throws: a missing session file yields 0', () => {
     const root = mkdtempSync(join(tmpdir(), 'atelier-projects-'))
     expect(deriveMessageCount('nope', '/no/such/cwd', root)).toBe(0)
+  })
+})
+
+describe('mapSessionMessages', () => {
+  const sessionMessage = (type: 'user' | 'assistant', content: unknown): SessionMessage => ({
+    type,
+    uuid: 'uuid-1',
+    session_id: 'ses-1',
+    message: { role: type, content },
+    parent_tool_use_id: null,
+  })
+
+  test('user prompt persisted as a plain string keeps its text (pre-2.x CLI transcript format)', () => {
+    const out = mapSessionMessages([sessionMessage('user', 'hello atelier')])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ role: 'user', text: 'hello atelier' })
+  })
+
+  test('user prompt persisted as content blocks keeps its text — the CLI ≥2.x transcripts record prompts as [{type:"text",…}], observed live in ~/.claude/projects', () => {
+    const out = mapSessionMessages([sessionMessage('user', [{ type: 'text', text: 'hello atelier' }])])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ role: 'user', text: 'hello atelier' })
+  })
+
+  test('multiple text blocks in one user message join into one bubble', () => {
+    const out = mapSessionMessages([
+      sessionMessage('user', [
+        { type: 'text', text: 'first' },
+        { type: 'text', text: 'second' },
+      ]),
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ role: 'user', text: 'first\n\nsecond' })
+  })
+
+  test('tool_result-only user lines yield NO chat item — they are the model-side echo of tool results, not something the user typed', () => {
+    const out = mapSessionMessages([
+      sessionMessage('user', [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'ok' }]),
+    ])
+    expect(out).toHaveLength(0)
+  })
+
+  test('assistant text and tool_use blocks keep their mapping', () => {
+    const out = mapSessionMessages([
+      sessionMessage('assistant', [
+        { type: 'text', text: 'here is the plan' },
+        { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file_path: '/proj/a.ts' } },
+      ]),
+    ])
+    expect(out).toHaveLength(2)
+    expect(out[0]).toMatchObject({ role: 'assistant', text: 'here is the plan' })
+    expect(out[1]).toMatchObject({ role: 'tool', toolUseId: 'tu-1' })
   })
 })

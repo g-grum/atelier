@@ -14,7 +14,7 @@ import { SessionStreamRegistry } from './stream/session-stream'
 // client is served from the same origin. The token covers WS upgrades too via
 // the ?token= query param (browsers cannot set headers on WS handshakes).
 
-export function createApp({ data, sessions, sdk, token, webDist }: { data: AppData; sessions: SessionsService; sdk: SdkClient; token: string; webDist?: string }): Hono {
+export function createApp({ data, sessions, sdk, token, webDist, versionFile }: { data: AppData; sessions: SessionsService; sdk: SdkClient; token: string; webDist?: string; versionFile?: string }): Hono {
   const app = new Hono()
 
   // Token middleware scoped to /api/* so that /health and static assets stay open
@@ -34,6 +34,22 @@ export function createApp({ data, sessions, sdk, token, webDist }: { data: AppDa
   const api = new Hono()
   api.route('/', sessionsRoutes(data, sessions))
   api.route('/', settingsRoutes(data, sessions))
+
+  // Update detection: read version.json from DISK on every request — the
+  // server process was loaded at app launch, but the repo may have moved on
+  // (repo-tethered bundle). The web client compares with its build-time
+  // version and toasts « Une nouvelle version est disponible ».
+  if (versionFile !== undefined) {
+    api.get('/version', async (c) => {
+      try {
+        const parsed = JSON.parse(await Bun.file(versionFile).text()) as { version?: unknown; notes?: unknown }
+        if (typeof parsed.version !== 'string' || !Array.isArray(parsed.notes)) throw new Error('shape')
+        return c.json({ version: parsed.version, notes: parsed.notes.filter((note): note is string => typeof note === 'string') })
+      } catch {
+        return c.json({ error: 'version.json illisible' }, 500)
+      }
+    })
+  }
 
   // WS glue only — all behavior lives in SessionStream (tested socket-free).
   const streams = new SessionStreamRegistry(data, sdk)

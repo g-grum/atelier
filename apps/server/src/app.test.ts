@@ -7,11 +7,11 @@ import { MockSdkClient } from './sdk/sdk-client.mock'
 import { SessionsService } from './sessions/sessions-service'
 import { createApp } from './app'
 
-function freshApp(webDist?: string, sdk: MockSdkClient = new MockSdkClient()) {
+function freshApp(webDist?: string, sdk: MockSdkClient = new MockSdkClient(), versionFile?: string) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-app-')), 'data.json')
   const data = new AppData(filePath)
   const sessions = new SessionsService(sdk, data)
-  const app = createApp({ data, sessions, sdk, token: 'test-token', webDist })
+  const app = createApp({ data, sessions, sdk, token: 'test-token', webDist, versionFile })
   return { app, data, sessions, filePath }
 }
 
@@ -206,6 +206,64 @@ describe('createApp', () => {
     const rl = await app.request(`/api/projects/${project.id}/sessions`, { headers: auth })
     const list = await rl.json() as { name: string }[]
     expect(list[0]?.name).toBe('renamed')
+  })
+
+  // 4bis. PATCH /api/sessions/:id permissionMode
+  test('PATCH /api/sessions/:id records the permission mode; invalid values are 400', async () => {
+    const { app } = freshApp()
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    const rp = await app.request('/api/projects', {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ path: '/tmp/x' }),
+    })
+    const project = await rp.json() as { id: string }
+
+    const rs = await app.request(`/api/projects/${project.id}/sessions`, { method: 'POST', headers: auth, body: JSON.stringify({}) })
+    const draft = await rs.json() as { id: string; permissionMode: string | null }
+    expect(draft.permissionMode).toBeNull()
+
+    const bad = await app.request(`/api/sessions/${draft.id}`, {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ permissionMode: 'yolo' }),
+    })
+    expect(bad.status).toBe(400)
+
+    const ok = await app.request(`/api/sessions/${draft.id}`, {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ permissionMode: 'bypassPermissions' }),
+    })
+    expect(ok.status).toBe(200)
+
+    const rl = await app.request(`/api/projects/${project.id}/sessions`, { headers: auth })
+    const list = await rl.json() as { permissionMode: string | null }[]
+    expect(list[0]?.permissionMode).toBe('bypassPermissions')
+  })
+
+  // 4ter. GET /api/version — update detection
+  test('GET /api/version reads version.json from DISK at request time — a repo update while running is visible', async () => {
+    const versionFile = join(mkdtempSync(join(tmpdir(), 'atelier-version-')), 'version.json')
+    writeFileSync(versionFile, JSON.stringify({ version: '0.1.1', notes: ['note un'] }))
+    const { app } = freshApp(undefined, undefined, versionFile)
+    const auth = { Authorization: 'Bearer test-token' }
+
+    const r1 = await app.request('/api/version', { headers: auth })
+    expect(r1.status).toBe(200)
+    expect(await r1.json()).toEqual({ version: '0.1.1', notes: ['note un'] })
+
+    // The repo moves on while the server keeps running — the route must see it.
+    writeFileSync(versionFile, JSON.stringify({ version: '0.2.0', notes: ['note deux', 'note trois'] }))
+    const r2 = await app.request('/api/version', { headers: auth })
+    expect(await r2.json()).toEqual({ version: '0.2.0', notes: ['note deux', 'note trois'] })
+  })
+
+  test('GET /api/version with an unreadable file is a 500, never a crash', async () => {
+    const { app } = freshApp(undefined, undefined, '/no/such/version.json')
+    const res = await app.request('/api/version', { headers: { Authorization: 'Bearer test-token' } })
+    expect(res.status).toBe(500)
   })
 
   // 5. DELETE /api/sessions/:id

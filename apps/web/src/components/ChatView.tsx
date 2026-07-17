@@ -17,7 +17,7 @@ export type ChatViewProps = {
  * that produced them, so the flat ChatItem[] is folded into visual blocks.
  */
 type Block =
-  | { type: 'user'; text: string }
+  | { type: 'user'; text: string; queued: boolean }
   | { type: 'assistant'; text: string; streaming: boolean; tools: ToolChatItem[] }
   | { type: 'permission'; item: PermissionChatItem }
 
@@ -26,7 +26,7 @@ function toBlocks(items: ChatItem[]): Block[] {
   for (const item of items) {
     switch (item.kind) {
       case 'user':
-        blocks.push({ type: 'user', text: item.text })
+        blocks.push({ type: 'user', text: item.text, queued: item.queued === true })
         break
       case 'assistant':
         blocks.push({ type: 'assistant', text: item.text, streaming: item.streaming, tools: [] })
@@ -86,7 +86,7 @@ export function ChatView({ items, status, onOpenInIde, onPermissionDecision }: C
         const isLast = index === blocks.length - 1
         switch (block.type) {
           case 'user':
-            return <MessageItem key={index} role="user" text={block.text} />
+            return <MessageItem key={index} role="user" text={block.text} queued={block.queued} />
           case 'assistant':
             return (
               <MessageItem key={index} role="assistant" text={block.text}>

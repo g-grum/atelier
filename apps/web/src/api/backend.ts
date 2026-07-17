@@ -1,8 +1,9 @@
-import type { ChatMessage, ClientMessage, ProjectSummary, ServerEvent, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, ProjectSummary, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixtureProjects, fixtureSessions, fixtureTurn } from '../state/fixtures'
 import * as client from './client'
 import { SessionSocket } from './ws'
+import currentVersion from '../../../../version.json'
 
 /**
  * Everything the app needs from a data source. `VITE_USE_FIXTURES` swaps the
@@ -15,10 +16,12 @@ export type Backend = {
   listSessions: (projectId: string) => Promise<SessionSummary[]>
   createDraft: (projectId: string, init?: { name?: string; model?: string }) => Promise<SessionSummary>
   getMessages: (sessionId: string) => Promise<ChatMessage[]>
-  patchSession: (sessionId: string, patch: { name?: string; model?: string }) => Promise<void>
+  patchSession: (sessionId: string, patch: { name?: string; model?: string; permissionMode?: SessionPermissionMode }) => Promise<void>
   deleteSession: (sessionId: string) => Promise<void>
   openInIde: (args: { file: string; line?: number }) => Promise<{ ok: true } | { ok: false; reason: string }>
   createSocket: (sessionId: string, projectId: string) => ControllerSocket
+  /** Repo-current version (server reads version.json from disk) — drives the update toast. */
+  getVersion: () => Promise<VersionInfo>
 }
 
 const realBackend: Backend = {
@@ -33,6 +36,7 @@ const realBackend: Backend = {
   deleteSession: client.deleteSession,
   openInIde: client.openInIde,
   createSocket: (sessionId, projectId) => new SessionSocket(sessionId, projectId),
+  getVersion: client.getVersion,
 }
 
 // ── Fixture backend ──
@@ -67,6 +71,8 @@ function createFixtureBackend(): Backend {
         messageCount: 0,
         isDraft: true,
         model: init.model ?? sessions[0]?.model ?? 'claude-fable-5',
+        // A fresh session must ask the permissions question (spec) — demo mode included.
+        permissionMode: null,
       }
       sessions = [...sessions, draft]
       return draft
@@ -75,7 +81,12 @@ function createFixtureBackend(): Backend {
     patchSession: async (sessionId, patch) => {
       sessions = sessions.map((session) =>
         session.id === sessionId
-          ? { ...session, name: patch.name ?? session.name, model: patch.model ?? session.model }
+          ? {
+              ...session,
+              name: patch.name ?? session.name,
+              model: patch.model ?? session.model,
+              permissionMode: patch.permissionMode ?? session.permissionMode,
+            }
           : session,
       )
     },
@@ -84,6 +95,8 @@ function createFixtureBackend(): Backend {
     },
     openInIde: async () => ({ ok: true }),
     createSocket: (sessionId) => new FixtureSocket(sessionId),
+    // Demo mode is always "up to date" — the toast never fires under fixtures.
+    getVersion: async () => currentVersion,
   }
 }
 

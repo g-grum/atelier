@@ -1,0 +1,8 @@
+{
+  "version": "0.1.1",
+  "notes": [
+    "Chaque session demande son mode de permissions (normal ou skip dangereux)",
+    "Les messages envoyés pendant une réponse sont mis en file d’attente",
+    "La zone de saisie s’agrandit avec le texte et prend le focus à l’ouverture"
+  ]
+}

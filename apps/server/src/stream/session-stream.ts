@@ -83,7 +83,7 @@ export class SessionStream {
   }
 
   private async runTurn(prompt: string): Promise<void> {
-    const { projects, drafts, modelOverrides, preferences } = this.data.get()
+    const { projects, drafts, modelOverrides, permissionModes, preferences } = this.data.get()
     const project = projects.find((p) => p.id === this.projectId)
     if (!project) {
       this.state = 'error'
@@ -96,6 +96,9 @@ export class SessionStream {
     const draft = drafts.find((d) => d.id === resolvedId)
     // A draft carries its own model until materialization moves it into modelOverrides.
     const model = draft?.model ?? modelOverrides[resolvedId] ?? preferences.defaultModel
+    // Same draft-then-override resolution for the per-session permissions answer.
+    // Unanswered (null/absent) runs as 'default' — never silently dangerous.
+    const permissionMode = draft?.permissionMode ?? permissionModes[resolvedId] ?? 'default'
 
     this.state = 'streaming'
     this.partialText = ''
@@ -111,6 +114,7 @@ export class SessionStream {
         resumeSessionId: draft ? undefined : resolvedId,
         canUseTool: (toolName, input) => this.broker.request(toolName, input),
         signal: abort.signal,
+        bypassPermissions: permissionMode === 'bypassPermissions',
       })
       // Owner-only event handling (drain-gap race, event flavor): the real
       // AgentSdkClient keeps draining the SDK stream AFTER yielding turn_done,

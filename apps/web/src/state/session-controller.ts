@@ -42,6 +42,13 @@ export class SessionController {
   private buffer: ServerEvent[] = []
   /** User texts echoed locally but not yet seen in a fetched history — resync resets must not wipe them. */
   private pendingEchoes: string[] = []
+  /**
+   * Messages accepted mid-turn, waiting for the server to go idle. The server
+   * DROPS a mid-turn user_message (one turn at a time), so the client holds
+   * them here and sends exactly one per idle transition (FIFO). Their display
+   * items carry `queued: true` until they actually hit the socket.
+   */
+  private queue: string[] = []
 
   constructor(options: SessionControllerOptions = {}) {
     this.fetchMessages = options.fetchMessages ?? getMessages
@@ -80,28 +87,45 @@ export class SessionController {
   }
 
   /**
-   * Returns whether the message was accepted. Refused mid-turn (the server
-   * drops user_message while streaming — one turn at a time) and while a
-   * resync refetch is pending (the stale local status cannot vouch for the
-   * server, and the imminent reset would race the echo). The UI gates the
-   * composer on this contract. Once accepted, the local echo is guaranteed to
-   * survive resync resets — see unconfirmedEchoes.
+   * Returns whether the message was accepted. Refused only without a socket or
+   * while a resync refetch is pending (the stale local status cannot vouch for
+   * the server, and the imminent reset would race the echo). Mid-turn sends
+   * are ACCEPTED and queued: the server drops a mid-turn user_message (one
+   * turn at a time), so the queue holds them and pump() sends exactly one per
+   * idle transition.
    *
-   * An accepted send flips status to 'streaming' immediately, mirroring the
-   * server's synchronous transition on user_message (session-stream flips
-   * before the first delta). Without it, the time-to-first-token window keeps
-   * local status 'idle' and a double-send would echo a message the server
-   * drops. It also gates the composer and enables abort right away; the turn's
-   * terminal status event (idle/error) restores it.
+   * An actual send flips status to 'streaming' immediately (in pump),
+   * mirroring the server's synchronous transition on user_message
+   * (session-stream flips before the first delta). Without it, the
+   * time-to-first-token window would let a second message hit the socket and
+   * be dropped server-side, making the local echo a phantom.
    */
   sendMessage(text: string): boolean {
-    if (this.socket === null || this.resyncing || this.state.status === 'streaming') return false
-    this.socket.send({ type: 'user_message', text })
-    // The server never echoes user messages as ServerEvents — append locally
-    // (the persisted copy comes back on the next history fetch).
-    this.pendingEchoes.push(text)
-    this.setState({ ...this.state, status: 'streaming', items: [...this.state.items, { kind: 'user', text }] })
+    if (this.socket === null || this.resyncing) return false
+    this.queue.push(text)
+    this.setState({ ...this.state, items: [...this.state.items, { kind: 'user', text, queued: true }] })
+    this.pump()
     return true
+  }
+
+  /** Sends the oldest queued message iff the session is free — called on accept and on every idle settle. */
+  private pump(): void {
+    if (this.socket === null || this.resyncing || this.state.status === 'streaming') return
+    const text = this.queue.shift()
+    if (text === undefined) return
+    this.socket.send({ type: 'user_message', text })
+    // The server never echoes user messages as ServerEvents — the queued item
+    // becomes the local echo (the persisted copy comes back on the next fetch).
+    this.pendingEchoes.push(text)
+    let sent = false
+    const items = this.state.items.map((item) => {
+      if (!sent && item.kind === 'user' && item.queued === true) {
+        sent = true
+        return { kind: 'user' as const, text: item.text }
+      }
+      return item
+    })
+    this.setState({ ...this.state, status: 'streaming', items })
   }
 
   respondPermission(requestId: string, decision: PermissionDecision): void {
@@ -110,9 +134,17 @@ export class SessionController {
     this.setState(resolvePermission(this.state, requestId, decision))
   }
 
-  /** The only thing that stops a turn — a bare socket close never aborts. */
+  /**
+   * The only thing that stops a turn — a bare socket close never aborts.
+   * Stop stops EVERYTHING: the queue is dropped too, otherwise the idle
+   * settle right after the abort would auto-send the next queued message.
+   */
   abort(): void {
     this.socket?.send({ type: 'abort' })
+    if (this.queue.length > 0) {
+      this.queue = []
+      this.setState({ ...this.state, items: this.state.items.filter((item) => !(item.kind === 'user' && item.queued === true)) })
+    }
   }
 
   /** App-level close: drops the socket (the server-side turn keeps running). */
@@ -124,6 +156,7 @@ export class SessionController {
     this.resyncing = false
     this.buffer = []
     this.pendingEchoes = []
+    this.queue = []
   }
 
   private receive(event: ServerEvent): void {
@@ -140,6 +173,10 @@ export class SessionController {
       this.activeSessionId = event.mapping.sessionId
       this.onSessionRemapped?.(event.mapping)
     }
+    // The turn is over — the session is free for the next queued message.
+    // Deliberately NOT on 'error': auto-resending into a failing session would
+    // burn the queue; the user's next explicit send re-pumps it (FIFO intact).
+    if (event.type === 'status' && event.state === 'idle') this.pump()
   }
 
   private async resync(socket: ControllerSocket): Promise<void> {
@@ -168,6 +205,9 @@ export class SessionController {
       this.pendingEchoes = missing
       const next = reset(history)
       for (const text of missing) next.items.push({ kind: 'user', text })
+      // Queued messages were never sent — no history can account for them.
+      // Re-append their display after the reset; the queue itself survived.
+      for (const text of this.queue) next.items.push({ kind: 'user', text, queued: true })
       this.setState(next)
     }
     for (const event of buffered) this.apply(event)
@@ -187,7 +227,9 @@ export class SessionController {
       budget.set(text, (budget.get(text) ?? 0) + by)
     }
     for (const message of history) if (message.role === 'user') bump(message.text, 1)
-    for (const item of this.state.items) if (item.kind === 'user') bump(item.text, -1)
+    // Queued items were never sent — they cannot be "confirmed on screen" and
+    // must not consume the budget of an identical pending echo.
+    for (const item of this.state.items) if (item.kind === 'user' && item.queued !== true) bump(item.text, -1)
     for (const text of this.pendingEchoes) bump(text, 1)
     return this.pendingEchoes.filter((text) => {
       const remaining = budget.get(text) ?? 0

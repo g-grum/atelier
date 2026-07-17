@@ -51,14 +51,17 @@ describe('Composer', () => {
     expect(sent).toEqual([])
   })
 
-  test('streaming: Enter and ⌘↵ do not send — the draft is kept', () => {
+  test('streaming: Enter posts the message anyway (queued by the controller) and clears the draft', () => {
     const { sent, aborts } = renderComposer({ status: 'streaming' })
     fireEvent.change(textarea(), { target: { value: 'Encore une chose' } })
     fireEvent.keyDown(textarea(), { key: 'Enter' })
-    fireEvent.keyDown(textarea(), { key: 'Enter', metaKey: true })
-    expect(sent).toEqual([])
+    expect(sent).toEqual(['Encore une chose'])
     expect(aborts).toEqual([])
-    expect((textarea() as HTMLTextAreaElement).value).toBe('Encore une chose')
+    expect((textarea() as HTMLTextAreaElement).value).toBe('')
+
+    fireEvent.change(textarea(), { target: { value: 'Et puis ça' } })
+    fireEvent.keyDown(textarea(), { key: 'Enter', metaKey: true })
+    expect(sent).toEqual(['Encore une chose', 'Et puis ça'])
   })
 
   test('streaming: typing stays possible — the textarea is not disabled', () => {
@@ -84,10 +87,35 @@ describe('Composer', () => {
     expect(sent).toEqual([])
   })
 
-  test('a refused send (mid-turn race) keeps the draft', () => {
+  test('session becomes active: the textarea grabs focus so typing can start immediately', () => {
+    const { rerenderWith } = renderComposer({ disabled: true })
+    expect(document.activeElement).not.toBe(textarea())
+    rerenderWith({ disabled: false })
+    expect(document.activeElement).toBe(textarea())
+  })
+
+  test('mounted already active (fresh session): the textarea has focus', () => {
+    renderComposer({ disabled: false })
+    expect(document.activeElement).toBe(textarea())
+  })
+
+  test('a refused send (no socket / resync) keeps the draft', () => {
     renderComposer({ onSend: () => false })
     fireEvent.change(textarea(), { target: { value: 'Bonjour' } })
     fireEvent.click(sendButton())
     expect((textarea() as HTMLTextAreaElement).value).toBe('Bonjour')
+  })
+
+  test('the textarea grows with its content and is capped — multi-line drafts stay readable', () => {
+    renderComposer()
+    const el = textarea() as HTMLTextAreaElement
+    // happy-dom has no layout — stub the measurement the resize reads.
+    Object.defineProperty(el, 'scrollHeight', { value: 120, configurable: true })
+    fireEvent.change(el, { target: { value: 'ligne 1\nligne 2\nligne 3\nligne 4' } })
+    expect(el.style.height).toBe('120px')
+
+    Object.defineProperty(el, 'scrollHeight', { value: 999, configurable: true })
+    fireEvent.change(el, { target: { value: 'beaucoup\nde\nlignes\n'.repeat(20) } })
+    expect(el.style.height).toBe('200px') // cap — beyond it the textarea scrolls
   })
 })

@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AlwaysRule, Preferences, Project, UsageEvent } from '@atelier/shared'
+import type { AlwaysRule, Preferences, Project, SessionPermissionMode, UsageEvent } from '@atelier/shared'
 
-export type Draft = { id: string; projectId: string; name: string | null; model: string; createdAt: string }
+/** permissionMode is optional for on-disk backward compatibility — absent/undefined means "not chosen yet" (same as null). */
+export type Draft = { id: string; projectId: string; name: string | null; model: string; createdAt: string; permissionMode?: SessionPermissionMode | null }
 // UsageEvent now lives in @atelier/shared (GET /api/usage/history ships it — single contract);
 // re-exported so store-side importers keep working.
 export type { UsageEvent }
@@ -13,6 +14,8 @@ export type AppDataShape = {
   drafts: Draft[]
   draftMap: Record<string, string>
   modelOverrides: Record<string, string>
+  /** Per-session permissions answer, keyed by SDK session id. Absent key = the question is still pending. */
+  permissionModes: Record<string, SessionPermissionMode>
   rules: AlwaysRule[]
   usageEvents: UsageEvent[]
 }
@@ -30,6 +33,7 @@ const EMPTY: AppDataShape = {
   drafts: [],
   draftMap: {},
   modelOverrides: {},
+  permissionModes: {},
   rules: [],
   usageEvents: [],
 }
@@ -68,11 +72,12 @@ export class AppData {
     this.flush()
   }
 
-  /** Materialization is loss-less: the draft's model moves to the SDK id's override; the deferred name is returned so the caller can apply `renameSession`. */
+  /** Materialization is loss-less: the draft's model (and permissions answer, if given) moves to the SDK id's overrides; the deferred name is returned so the caller can apply `renameSession`. */
   mapDraft(draftId: string, sdkSessionId: string): { deferredName: string | null } {
     const draft = this.data.drafts.find((entry) => entry.id === draftId)
     this.data.draftMap[draftId] = sdkSessionId
     if (draft) this.data.modelOverrides[sdkSessionId] = draft.model
+    if (draft?.permissionMode != null) this.data.permissionModes[sdkSessionId] = draft.permissionMode
     this.data.drafts = this.data.drafts.filter((entry) => entry.id !== draftId)
     this.flush()
     return { deferredName: draft?.name ?? null }

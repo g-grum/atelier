@@ -59,6 +59,33 @@ describe('SessionStream', () => {
     expect(Object.keys(events[0]!)).not.toContain('partialText')
   })
 
+  // 1bis. Per-session permission mode → SDK bypass flag
+  test('runTurn passes bypassPermissions when the session has a recorded bypassPermissions mode', async () => {
+    const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+    data.update((d) => {
+      d.permissionModes['s1'] = 'bypassPermissions'
+    })
+    const stream = registry.get('s1', 'p1')
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    expect(runTurnParams(sdk).bypassPermissions).toBe(true)
+  })
+
+  test('runTurn on a bypass draft passes bypassPermissions; default/undecided sessions do not', async () => {
+    const draft: Draft = { id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString(), permissionMode: 'bypassPermissions' }
+    const { registry, sdk } = setup({ draft, turns: [[{ type: 'turn_done' }], [{ type: 'turn_done' }]] })
+
+    registry.get('d1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+    expect(runTurnParams(sdk).bypassPermissions).toBe(true)
+
+    registry.get('s2', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+    expect(runTurnParams(sdk, 1).bypassPermissions).toBeFalsy()
+  })
+
   // 2. Draft materialization
   test('user_message on a draft: mapping status, mapDraft + deferred rename, model kept, deltas, final idle', async () => {
     const draft: Draft = { id: 'd1', projectId: 'p1', name: 'refacto broker', model: 'claude-opus-4-8', createdAt: new Date().toISOString() }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { StreamState } from '../state/stream-reducer'
 
 export type ComposerProps = {
@@ -12,17 +12,37 @@ export type ComposerProps = {
   onAbort: () => void
 }
 
+/** Growth cap (~8 lines) — beyond it the textarea scrolls internally. */
+const MAX_TEXTAREA_HEIGHT_PX = 200
+
 export function Composer({ disabled, status, onSend, onAbort }: ComposerProps) {
   const [text, setText] = useState('')
   const streaming = status === 'streaming'
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Autofocus when a session becomes active (fresh draft or opened session):
+  // the user can start typing without clicking the textarea first. Runs only
+  // on the disabled→enabled transition, so it never steals focus mid-use.
+  useEffect(() => {
+    if (!disabled) textareaRef.current?.focus()
+  }, [disabled])
+
+  // Auto-grow: the textarea follows its content up to a cap, then scrolls.
+  // 'auto' first so a shrinking draft (deleted lines, post-send reset) can
+  // shrink back; scrollHeight 0 = no layout (tests) — leave the height alone.
+  useEffect(() => {
+    const el = textareaRef.current
+    if (el === null) return
+    el.style.height = 'auto'
+    if (el.scrollHeight > 0) el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`
+  }, [text])
 
   const trySend = () => {
-    // Mirror the controller's mid-turn refusal: while streaming, typing stays
-    // possible but Stop is the only action — Enter/⌘↵ must not send.
-    if (streaming) return
     const trimmed = text.trim()
     if (trimmed === '') return
-    // Keep the draft text when the controller refuses (mid-turn / resync).
+    // Mid-turn sends are accepted and QUEUED by the controller (sent at next
+    // idle) — the composer no longer blocks them. Keep the draft only when the
+    // controller refuses outright (no socket / resync in flight).
     if (onSend(trimmed)) setText('')
   }
 
@@ -30,6 +50,7 @@ export function Composer({ disabled, status, onSend, onAbort }: ComposerProps) {
     <div className="composer">
       <div className={`box${disabled ? ' disabled' : ''}`}>
         <textarea
+          ref={textareaRef}
           rows={1}
           value={text}
           disabled={disabled}

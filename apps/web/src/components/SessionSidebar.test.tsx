@@ -21,6 +21,7 @@ const realSession: SessionSummary = {
   messageCount: 5,
   isDraft: false,
   model: 'claude-fable-5',
+  permissionMode: 'default',
 }
 
 const draftSession: SessionSummary = {
@@ -31,6 +32,7 @@ const draftSession: SessionSummary = {
   messageCount: 0,
   isDraft: true,
   model: 'claude-fable-5',
+  permissionMode: null,
 }
 
 function renderSidebar(overrides: Partial<SessionSidebarProps> = {}) {

@@ -1,7 +1,7 @@
 import type { ChatMessage, PermissionDecision, ProposedRule, ServerEvent, ToolKind } from '@atelier/shared'
 
 export type ChatItem =
-  | { kind: 'user'; text: string }
+  | { kind: 'user'; text: string; /** true while the message waits in the client-side queue (sent at next idle). */ queued?: boolean }
   | { kind: 'assistant'; text: string; streaming: boolean }
   | {
       kind: 'tool'

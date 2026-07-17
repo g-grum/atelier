@@ -40,7 +40,10 @@ const { port, token, dataPath, webDist } = parseArgs()
 const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
 const sessions = new SessionsService(sdk, data)
-const app = createApp({ data, sessions, sdk, token, webDist })
+// Repo root — this file lives at apps/server/src/index.ts; the server runs
+// from repo sources (repo-tethered bundle), so the path holds in both modes.
+const versionFile = join(import.meta.dir, '..', '..', '..', 'version.json')
+const app = createApp({ data, sessions, sdk, token, webDist, versionFile })
 
 Bun.serve({
   hostname: '127.0.0.1',

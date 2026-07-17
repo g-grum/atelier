@@ -34,6 +34,29 @@ describe('AppData', () => {
     expect(store.get().preferences.weeklyBudgetTokens).toBe(12_000_000)
   })
 
+  test('mapDraft moves the draft permissionMode into permissionModes (loss-less, like model)', () => {
+    const store = freshStore()
+    store.update((d) => {
+      d.drafts.push({ id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString(), permissionMode: 'bypassPermissions' })
+    })
+
+    store.mapDraft('d1', 'sdk-1')
+
+    expect(store.get().permissionModes['sdk-1']).toBe('bypassPermissions')
+    expect(store.get().drafts).toHaveLength(0)
+  })
+
+  test('mapDraft of an undecided draft records no permissionMode entry — the question stays pending', () => {
+    const store = freshStore()
+    store.update((d) => {
+      d.drafts.push({ id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString() })
+    })
+
+    store.mapDraft('d1', 'sdk-1')
+
+    expect(store.get().permissionModes['sdk-1']).toBeUndefined()
+  })
+
   test('migrates a v0.1 data file: budget defaults appear without clobbering saved preferences', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
     // Exact v0.1 on-disk shape: preferences carries ONLY { ide, defaultModel }.
