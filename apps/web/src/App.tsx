@@ -8,6 +8,7 @@ import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
 import { ErrorBanner } from './components/ErrorBanner'
 import { ModifiedFilesPanel } from './components/ModifiedFilesPanel'
+import { GlobalUsagePanel } from './components/GlobalUsagePanel'
 import { PermissionModeGate } from './components/PermissionModeGate'
 import { RateLimitsPanel } from './components/RateLimitsPanel'
 import { SessionSidebar } from './components/SessionSidebar'
@@ -110,6 +111,21 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     refetchInterval: 60_000,
     retry: false,
   })
+
+  // Global usage: every recorded turn, all sessions. Poll as a baseline, and
+  // refetch when the ACTIVE session's counters move (a turn just recorded a
+  // usage event server-side) so the card follows the conversation live.
+  const usageHistoryQuery = useQuery({
+    queryKey: ['usageHistory'],
+    queryFn: backend.getUsageHistory,
+    refetchInterval: 60_000,
+    retry: false,
+  })
+  useEffect(() => {
+    if (stream.sessionTokens.input + stream.sessionTokens.output > 0) {
+      void queryClient.invalidateQueries({ queryKey: ['usageHistory'] })
+    }
+  }, [stream.sessionTokens, queryClient])
 
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: backend.listProjects })
   const projects = projectsQuery.data ?? []
@@ -287,6 +303,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         <aside className="dash" aria-label="Usage et activité">
           <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
           <UsagePanel tokens={stream.sessionTokens} />
+          <GlobalUsagePanel events={usageHistoryQuery.data ?? []} />
           <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
         </aside>
       </div>

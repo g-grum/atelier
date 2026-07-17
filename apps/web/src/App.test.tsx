@@ -45,6 +45,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     createSocket: () => idleSocket,
     getVersion: async () => currentVersion,
     getUsageLimits: async () => [],
+    getUsageHistory: async () => [],
     ...overrides,
   }
 }
@@ -210,6 +211,21 @@ describe('App plan limits panel', () => {
     )
     await screen.findByText('Session (5 h)')
     expect(screen.getByText('34 %')).toBeTruthy()
+  })
+})
+
+describe('App global usage panel', () => {
+  test('the right panel shows the aggregated global usage fetched from the backend', async () => {
+    renderApp(
+      fakeBackend({
+        getUsageHistory: async () => [
+          { at: new Date().toISOString(), inputTokens: 1500, outputTokens: 500, cacheReadTokens: 0, cacheCreationTokens: 0 },
+        ],
+      }),
+    )
+    await screen.findByText('Usage — global')
+    expect(screen.getByText('5 dernières heures')).toBeTruthy()
+    expect(screen.getAllByText('2 k').length).toBeGreaterThan(0) // 2000 tokens in both windows
   })
 })
 

@@ -1,6 +1,6 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.3",
   "notes": [
-    "Jauges « Limites du plan » en direct dans le panneau droit — les vrais chiffres de claude.ai/usage (session 5 h, semaine, par modèle), mis à jour pendant chaque tour"
+    "Carte « Usage — global » : tokens consommés par Atelier toutes sessions confondues, sur 5 h et 7 jours, avec détail entrée/sortie/cache — mise à jour à chaque fin de tour"
   ]
 }
