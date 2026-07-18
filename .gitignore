@@ -4,3 +4,6 @@ dist/
 .DS_Store
 dist-app/
 runtime.json
+
+# Local tooling artifacts
+.superpowers/
