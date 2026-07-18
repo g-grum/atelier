@@ -205,7 +205,7 @@ describe('App plan limits panel', () => {
     renderApp(
       fakeBackend({
         getUsageLimits: async () => [
-          { window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2026-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:00:00.000Z' },
+          { window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: '2099-07-17T16:00:00.000Z', recordedAt: '2026-07-17T12:00:00.000Z' },
         ],
       }),
     )

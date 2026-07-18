@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, UsageProgressTracker, type RunTurnParams } from './sdk-client'
+import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, mapUsageWindows, UsageProgressTracker, type RunTurnParams } from './sdk-client'
 
 function makeRunTurnParams(overrides: Partial<RunTurnParams> = {}): RunTurnParams {
   return {
@@ -110,6 +110,34 @@ describe('UsageProgressTracker', () => {
     const tracker = new UsageProgressTracker()
     expect(tracker.track({ type: 'content_block_delta' })).toBeNull()
     expect(tracker.track({ type: 'message_stop' })).toBeNull()
+  })
+})
+
+describe('mapUsageWindows', () => {
+  test('maps every present window to a rate_limit event — utilization is ALREADY a 0-100 percent here', () => {
+    const events = mapUsageWindows({
+      five_hour: { utilization: 12, resets_at: '2026-07-18T14:00:00.000Z' },
+      seven_day: { utilization: 61, resets_at: '2026-07-24T00:00:00.000Z' },
+      seven_day_opus: null,
+      seven_day_sonnet: { utilization: null, resets_at: null }, // no data — skipped
+    })
+    expect(events).toEqual([
+      { type: 'rate_limit', window: 'five_hour', utilization: 12, status: 'allowed', resetsAt: '2026-07-18T14:00:00.000Z' },
+      { type: 'rate_limit', window: 'seven_day', utilization: 61, status: 'allowed', resetsAt: '2026-07-24T00:00:00.000Z' },
+    ])
+  })
+
+  test('derives the status from utilization: ≥80 warns, ≥100 rejects (the endpoint has no per-window status)', () => {
+    const events = mapUsageWindows({
+      five_hour: { utilization: 85, resets_at: null },
+      seven_day: { utilization: 120, resets_at: null },
+    })
+    expect(events[0]).toMatchObject({ utilization: 85, status: 'allowed_warning' })
+    expect(events[1]).toMatchObject({ utilization: 100, status: 'rejected' }) // clamped
+  })
+
+  test('unknown windows are ignored (forward-compatible with new endpoint keys)', () => {
+    expect(mapUsageWindows({ some_future_window: { utilization: 5, resets_at: null } })).toEqual([])
   })
 })
 

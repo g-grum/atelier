@@ -8,11 +8,13 @@ import { formatReset, RateLimitsPanel } from './RateLimitsPanel'
 
 afterEach(cleanup)
 
+// resetsAt in the far future — these snapshots must read as FRESH (the
+// staleness tests below cover the expired path explicitly).
 const fiveHour: RateLimitSnapshot = {
   window: 'five_hour',
   utilization: 34,
   status: 'allowed',
-  resetsAt: '2026-07-17T16:00:00.000Z',
+  resetsAt: '2099-07-17T16:00:00.000Z',
   recordedAt: '2026-07-17T12:00:00.000Z',
 }
 
@@ -20,7 +22,7 @@ const sevenDay: RateLimitSnapshot = {
   window: 'seven_day',
   utilization: 92,
   status: 'allowed_warning',
-  resetsAt: '2026-07-24T00:00:00.000Z',
+  resetsAt: '2099-07-24T00:00:00.000Z',
   recordedAt: '2026-07-17T12:00:00.000Z',
 }
 
@@ -52,6 +54,33 @@ describe('RateLimitsPanel', () => {
     expect(screen.getByText(/Aucune donnée/)).toBeTruthy()
   })
 })
+
+describe('RateLimitsPanel staleness', () => {
+  test('a window whose reset time has passed is shown as expired — never a stale percent presented as current', () => {
+    const { container } = render(
+      <RateLimitsPanel
+        limits={[
+          { window: 'five_hour', utilization: 98, status: 'allowed_warning', resetsAt: '2020-01-01T00:00:00.000Z', recordedAt: '2020-01-01T00:00:00.000Z' },
+          fiveHourFresh,
+        ]}
+      />,
+    )
+    // The expired snapshot loses its bar/percent claim and says so.
+    expect(screen.getByText(/fenêtre réinitialisée/i)).toBeTruthy()
+    expect(screen.queryByText('98 %')).toBeNull()
+    // The fresh seven_day gauge still renders normally.
+    expect(screen.getByText('61 %')).toBeTruthy()
+    expect(container.querySelectorAll('.gauge')).toHaveLength(1)
+  })
+})
+
+const fiveHourFresh: RateLimitSnapshot = {
+  window: 'seven_day',
+  utilization: 61,
+  status: 'allowed',
+  resetsAt: '2099-01-01T00:00:00.000Z',
+  recordedAt: '2026-07-17T12:00:00.000Z',
+}
 
 describe('formatReset', () => {
   test('same day → time only; another day → weekday + time', () => {

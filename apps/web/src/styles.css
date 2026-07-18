@@ -286,6 +286,7 @@
   .gauge i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--color-indigo), var(--color-magenta)); transition: width 300ms ease; }
   .gauge.warn i { background: var(--color-red); }
   .limit-reset { font: 500 10px var(--font-mono); color: var(--color-faint); margin-top: 3px; }
+  .limit-row.stale { opacity: 0.6; }
   .limits-empty { font-size: 11.5px; color: var(--color-faint); margin: 0; }
 
   /* Usage — global : per-window totals with an in/out/cache sub-line. */

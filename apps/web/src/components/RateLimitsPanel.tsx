@@ -45,6 +45,20 @@ export function RateLimitsPanel({ limits }: RateLimitsPanelProps) {
         <p className="limits-empty">Aucune donnée de limite pour l’instant — elles arrivent avec le premier tour.</p>
       ) : (
         rows.map(({ label, limit }) => {
+          // A snapshot whose window already reset describes a FINISHED window —
+          // showing its percent as current would lie (the real number is
+          // unknown until the next turn reports fresh data).
+          const expired = limit.resetsAt !== undefined && Date.parse(limit.resetsAt) < now.getTime()
+          if (expired) {
+            return (
+              <div key={limit.window} className="limit-row stale">
+                <div className="kv">
+                  <span>{label}</span>
+                </div>
+                <div className="limit-reset">fenêtre réinitialisée — en attente du prochain tour</div>
+              </div>
+            )
+          }
           const warn = limit.status !== 'allowed' || limit.utilization >= 90
           return (
             <div key={limit.window} className="limit-row">

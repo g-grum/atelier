@@ -94,6 +94,20 @@ export class AgentSdkClient implements SdkClient {
         // SDKSystemMessage: type='system', subtype='init' carries session_id
         if (msg.type === 'system' && msg.subtype === 'init') {
           yield { type: 'session_started', sessionId: msg.session_id }
+          // Full plan picture once per turn: the get_usage control request
+          // returns EVERY window (the live rate_limit_events only carry the
+          // representative one). Experimental SDK API — silent on failure,
+          // and rate_limits_available is false on API-key/3P sessions.
+          try {
+            const usage = await q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()
+            if (usage.rate_limits_available && usage.rate_limits != null) {
+              for (const event of mapUsageWindows(usage.rate_limits as Record<string, { utilization: number | null; resets_at: string | null } | null>)) {
+                yield event
+              }
+            }
+          } catch {
+            // Never let a usage probe break the turn.
+          }
           continue
         }
 
@@ -290,6 +304,36 @@ function userText(content: unknown): string | null {
 /** Maps a recorded tool_use block through describe-tool-use so resumed sessions render like live ones. */
 function toChatToolMessage(block: { id: string; name: string; input: unknown }): ChatMessage {
   return { role: 'tool', toolUseId: block.id, ...describeToolUse(block.name, block.input), ok: true, at: new Date().toISOString() }
+}
+
+/** One window of the get_usage control response — utilization is ALREADY a 0-100 percent (unlike SDKRateLimitInfo's fraction). */
+type UsageWindowInfo = { utilization: number | null; resets_at: string | null } | null | undefined
+
+const USAGE_WINDOWS: readonly RateLimitWindow[] = ['five_hour', 'seven_day', 'seven_day_opus', 'seven_day_sonnet', 'seven_day_overage_included', 'overage']
+
+/**
+ * Maps the get_usage control response's rate_limits record to one rate_limit
+ * turn event per present window — the full claude.ai/usage picture, fetched
+ * once per turn (the live rate_limit_events only ever carry the single
+ * "representative" window, which is why a quiet window would otherwise go
+ * stale on screen). The endpoint has no per-window status: derive it from the
+ * percent (≥80 warns, ≥100 rejects — clamped). Unknown keys are skipped.
+ */
+export function mapUsageWindows(rateLimits: Record<string, UsageWindowInfo>): Extract<SdkTurnEvent, { type: 'rate_limit' }>[] {
+  const events: Extract<SdkTurnEvent, { type: 'rate_limit' }>[] = []
+  for (const window of USAGE_WINDOWS) {
+    const info = rateLimits[window]
+    if (info == null || info.utilization == null) continue
+    const utilization = Math.min(100, Math.max(0, Math.floor(info.utilization)))
+    events.push({
+      type: 'rate_limit',
+      window,
+      utilization,
+      status: utilization >= 100 ? 'rejected' : utilization >= 80 ? 'allowed_warning' : 'allowed',
+      ...(info.resets_at !== null ? { resetsAt: info.resets_at } : {}),
+    })
+  }
+  return events
 }
 
 /** The two stream-event shapes the tracker reads — structural subset of BetaRawMessageStreamEvent. */
