@@ -155,6 +155,38 @@ describe('usage', () => {
   })
 })
 
+describe('usage_progress (live in-turn counters)', () => {
+  const progress = (over: Partial<{ inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }> = {}): ServerEvent => ({
+    type: 'usage_progress',
+    sessionId: S,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    ...over,
+  })
+
+  test('each snapshot REPLACES turnTokens (turn-cumulative, not additive)', () => {
+    const state = run([progress({ inputTokens: 100, outputTokens: 10 }), progress({ inputTokens: 100, outputTokens: 250, cacheReadTokens: 3000 })])
+    expect(state.turnTokens).toEqual({ input: 100, output: 250, cacheRead: 3000, cacheCreation: 0 })
+    expect(state.sessionTokens.output).toBe(0) // never double-counted into the recorded totals
+  })
+
+  test('the final usage event folds into sessionTokens and CLEARS turnTokens', () => {
+    const state = run([
+      progress({ inputTokens: 100, outputTokens: 250 }),
+      { type: 'usage', sessionId: S, inputTokens: 120, outputTokens: 260, cacheReadTokens: 0, cacheCreationTokens: 0 },
+    ])
+    expect(state.sessionTokens).toEqual({ input: 120, output: 260, cacheRead: 0, cacheCreation: 0 })
+    expect(state.turnTokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 })
+  })
+
+  test('a terminal status (idle/error) clears any lingering turnTokens — abort mid-turn must not freeze a phantom count', () => {
+    const state = run([progress({ outputTokens: 99 }), status({ state: 'idle' })])
+    expect(state.turnTokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 })
+  })
+})
+
 describe('reset', () => {
   const history: ChatMessage[] = [
     { role: 'user', text: 'salut', at: AT },

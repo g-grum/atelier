@@ -29,19 +29,29 @@ function add(totals: UsageWindowTotals, event: UsageEvent): void {
   totals.total += event.inputTokens + event.outputTokens + event.cacheReadTokens + event.cacheCreationTokens
 }
 
+export type InFlightTokens = { input: number; output: number; cacheRead: number; cacheCreation: number }
+
 export type GlobalUsagePanelProps = {
   /** GET /api/usage/history — every turn recorded by the server, all sessions and projects (7-day retention). */
   events: UsageEvent[]
+  /** Live counters of the in-flight turn (StreamState.turnTokens) — counted in both windows since it is happening NOW. */
+  inFlight?: InFlightTokens
 }
 
 /**
  * « Usage — global » card: tokens consumed by Atelier across ALL sessions,
  * rolled into the plan's two windows (5 h / 7 days). Complements the plan
  * gauges: the gauges say how full the account is, this says what Atelier
- * itself spent. Honest-data policy — empty state until real events exist.
+ * itself spent. Live: the in-flight turn's counters ride on top of the
+ * recorded history and are replaced by the recorded event once the turn
+ * settles. Honest-data policy — empty state until real numbers exist.
  */
-export function GlobalUsagePanel({ events }: GlobalUsagePanelProps) {
+export function GlobalUsagePanel({ events, inFlight }: GlobalUsagePanelProps) {
   const { fiveHours, sevenDays } = aggregateUsage(events, new Date())
+  if (inFlight !== undefined) {
+    addInFlight(fiveHours, inFlight)
+    addInFlight(sevenDays, inFlight)
+  }
 
   return (
     <section className="card" aria-label="Usage global">
@@ -56,6 +66,13 @@ export function GlobalUsagePanel({ events }: GlobalUsagePanelProps) {
       )}
     </section>
   )
+}
+
+function addInFlight(totals: UsageWindowTotals, live: InFlightTokens): void {
+  totals.input += live.input
+  totals.output += live.output
+  totals.cache += live.cacheRead + live.cacheCreation
+  totals.total += live.input + live.output + live.cacheRead + live.cacheCreation
 }
 
 function UsageWindowRow({ label, totals }: { label: string; totals: UsageWindowTotals }) {

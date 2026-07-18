@@ -50,6 +50,22 @@ describe('GlobalUsagePanel', () => {
     expect(screen.getAllByText('1 M').length).toBeGreaterThan(0) // 1 002 000 weekly total (breakdown may repeat it)
   })
 
+  test('the in-flight turn rides on top of both windows (live view)', () => {
+    render(
+      <GlobalUsagePanel
+        events={[event(new Date(Date.now() - 60_000).toISOString(), { inputTokens: 1000 })]}
+        inFlight={{ input: 500, output: 500, cacheRead: 0, cacheCreation: 0 }}
+      />,
+    )
+    expect(screen.getAllByText('2 k')).toHaveLength(2) // 1000 recorded + 1000 in-flight, in BOTH windows
+  })
+
+  test('an in-flight turn alone lights the card up — no empty state while tokens are flowing', () => {
+    render(<GlobalUsagePanel events={[]} inFlight={{ input: 100, output: 50, cacheRead: 0, cacheCreation: 0 }} />)
+    expect(screen.queryByText(/Aucun usage enregistré/)).toBeNull()
+    expect(screen.getAllByText('150').length).toBeGreaterThan(0)
+  })
+
   test('no recorded usage → honest empty state', () => {
     render(<GlobalUsagePanel events={[]} />)
     expect(screen.getByText(/Aucun usage enregistré/)).toBeTruthy()

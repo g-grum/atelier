@@ -1,6 +1,6 @@
 {
-  "version": "0.1.3",
+  "version": "0.1.4",
   "notes": [
-    "Carte « Usage — global » : tokens consommés par Atelier toutes sessions confondues, sur 5 h et 7 jours, avec détail entrée/sortie/cache — mise à jour à chaque fin de tour"
+    "L’usage se met à jour en direct pendant les réponses : les compteurs (session et global) grimpent à chaque étape du tour, avec les vrais chiffres de l’API"
   ]
 }

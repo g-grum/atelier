@@ -96,6 +96,8 @@ export const fixtureTurn: ServerEvent[] = [
     summary: 'bun test src/auth',
   },
   { type: 'tool_result', sessionId: FIXTURE_SESSION_ID, toolUseId: 'tu-l1', ok: true, summary: '18 pass, 0 fail' },
+  // Live usage snapshot mid-turn — animates the usage cards during the replay.
+  { type: 'usage_progress', sessionId: FIXTURE_SESSION_ID, inputTokens: 1200, outputTokens: 140, cacheReadTokens: 900, cacheCreationTokens: 0 },
   {
     type: 'permission_request',
     sessionId: FIXTURE_SESSION_ID,
@@ -105,6 +107,7 @@ export const fixtureTurn: ServerEvent[] = [
     proposedRule: { toolName: 'Bash', matcher: 'git push' },
   },
   { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Tous les tests passent.' },
+  { type: 'usage_progress', sessionId: FIXTURE_SESSION_ID, inputTokens: 2413, outputTokens: 410, cacheReadTokens: 1820, cacheCreationTokens: 0 },
   { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: ' Il ne reste qu’à pousser la branche.' },
   {
     type: 'usage',

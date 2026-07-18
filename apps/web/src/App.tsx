@@ -302,8 +302,17 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         </main>
         <aside className="dash" aria-label="Usage et activité">
           <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
-          <UsagePanel tokens={stream.sessionTokens} />
-          <GlobalUsagePanel events={usageHistoryQuery.data ?? []} />
+          {/* Live view: recorded totals + the in-flight turn's counters (real
+              per-step API numbers) — the turn-final usage event settles them. */}
+          <UsagePanel
+            tokens={{
+              input: stream.sessionTokens.input + stream.turnTokens.input,
+              output: stream.sessionTokens.output + stream.turnTokens.output,
+              cacheRead: stream.sessionTokens.cacheRead + stream.turnTokens.cacheRead,
+              cacheCreation: stream.sessionTokens.cacheCreation + stream.turnTokens.cacheCreation,
+            }}
+          />
+          <GlobalUsagePanel events={usageHistoryQuery.data ?? []} inFlight={stream.turnTokens} />
           <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
         </aside>
       </div>
