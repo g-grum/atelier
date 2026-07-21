@@ -38,6 +38,10 @@ export class MockSdkClient implements SdkClient {
     this.calls.push({ method: 'renameSession', args: [sessionId, name] })
   }
 
+  async deleteSession(sessionId: string, dir: string): Promise<void> {
+    this.calls.push({ method: 'deleteSession', args: [sessionId, dir] })
+  }
+
   async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
     this.calls.push({ method: 'runTurn', args: [params] })
 

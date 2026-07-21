@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
+  deleteSession,
   getSessionMessages,
   listSessions,
   query,
@@ -44,6 +45,7 @@ export interface SdkClient {
   listSessions(cwd: string): Promise<SdkSessionInfo[]>
   getSessionMessages(sessionId: string): Promise<ChatMessage[]>
   renameSession(sessionId: string, name: string): Promise<void>
+  deleteSession(sessionId: string, dir: string): Promise<void>
   runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent>
 }
 
@@ -70,6 +72,16 @@ export class AgentSdkClient implements SdkClient {
   /** SDK: renameSession(sessionId, title) → Promise<void> */
   async renameSession(sessionId: string, name: string): Promise<void> {
     await renameSession(sessionId, name)
+  }
+
+  /**
+   * SDK: deleteSession(sessionId, { dir }) → Promise<void> — removes
+   * {sessionId}.jsonl and the {sessionId}/ subagent-transcript subdirectory;
+   * throws if the session is not found. dir pins the project directory (same
+   * semantics as listSessions({ dir })) so no cross-project search happens.
+   */
+  async deleteSession(sessionId: string, dir: string): Promise<void> {
+    await deleteSession(sessionId, { dir })
   }
 
   /** SDK: query({ prompt, options }) → Query (AsyncGenerator<SDKMessage>) */
