@@ -7,5 +7,3 @@ runtime.json
 
 # Local tooling artifacts
 .superpowers/
-# Local draft plan (not ready to publish — remove this line to version it)
-docs/plans/2026-07-17-session-delete.md
