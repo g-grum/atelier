@@ -82,6 +82,19 @@ export class SessionStream {
     this.sinks.delete(send)
   }
 
+  /**
+   * Deletion teardown (spec 2026-07-17): abort the in-flight turn — the same
+   * path the 'abort' client message takes — then drop every sink so no further
+   * event leaves this stream. Sockets are NOT closed here: the stream is
+   * socket-free by design, and the single client (one Electron window) closes
+   * its own socket; an orphaned socket is cleaned up by its onClose.
+   */
+  dispose(): void {
+    this.turnAbort?.abort()
+    this.broker.abort()
+    this.sinks.clear()
+  }
+
   private async runTurn(prompt: string): Promise<void> {
     const { projects, drafts, modelOverrides, permissionModes, preferences } = this.data.get()
     const project = projects.find((p) => p.id === this.projectId)
@@ -328,5 +341,18 @@ export class SessionStreamRegistry {
       this.streams.set(key, stream)
     }
     return stream
+  }
+
+  /**
+   * Removes a session's singleton before its on-disk deletion — without this the
+   * cached stream outlives the deleted JSONL and a reconnect would resurrect a
+   * ghost session. Idempotent; resolves draft ids like get() does.
+   */
+  dispose(id: string): void {
+    const key = this.data.resolveSessionId(id)
+    const stream = this.streams.get(key)
+    if (!stream) return
+    stream.dispose()
+    this.streams.delete(key)
   }
 }

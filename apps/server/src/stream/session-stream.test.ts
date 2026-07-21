@@ -840,4 +840,57 @@ describe('SessionStream', () => {
     const last = events.at(-1)
     expect(last).toMatchObject({ type: 'status', state: 'error' })
   })
+
+  // 8. Dispose — session deletion (spec 2026-07-17)
+  test('registry.dispose aborts the in-flight turn, drops sinks, and removes the entry', async () => {
+    const { registry, sdk } = setup({
+      turns: [[
+        { type: 'text_delta', text: 'a' },
+        // Holds the turn open (like the real SDK awaiting canUseTool) so dispose
+        // catches it genuinely mid-turn.
+        { type: 'needs_permission', toolName: 'Bash', input: { command: 'sleep 999' } },
+        { type: 'text_delta', text: 'b' },
+        { type: 'turn_done' },
+      ]],
+    })
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+    const countAtDispose = events.length
+
+    registry.dispose('s1')
+    await tick()
+
+    // the turn's signal was aborted — same path as the 'abort' client message
+    expect(runTurnParams(sdk).signal.aborted).toBe(true)
+    // sinks dropped: NOTHING further reached the sink, not even the idle settle
+    expect(events.length).toBe(countAtDispose)
+    // the entry is gone: a later get() builds a FRESH stream
+    expect(registry.get('s1', 'p1')).not.toBe(stream)
+  })
+
+  test('registry.dispose of an unknown id is a no-op', () => {
+    const { registry } = setup()
+    expect(() => registry.dispose('ghost')).not.toThrow()
+  })
+
+  test('registry.dispose accepts the draft id after materialization re-keyed the stream', async () => {
+    const draft: Draft = { id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString() }
+    const { registry } = setup({
+      draft,
+      turns: [[{ type: 'session_started', sessionId: 'sdk-1' }, { type: 'turn_done' }]],
+    })
+    const stream = registry.get('d1', 'p1')
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+    // materialized: both ids resolve to the same singleton (existing invariant)
+    expect(registry.get('sdk-1', 'p1')).toBe(stream)
+
+    registry.dispose('d1') // the draft id resolves through draftMap
+
+    expect(registry.get('sdk-1', 'p1')).not.toBe(stream)
+  })
 })
