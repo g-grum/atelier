@@ -203,17 +203,6 @@ export class SessionStream {
           cacheCreationTokens: event.cacheCreationTokens,
         })
         return
-      case 'usage_progress':
-        // Transient live counters — broadcast only; 'usage' (below) records.
-        this.broadcast({
-          type: 'usage_progress',
-          sessionId: this.sessionId(),
-          inputTokens: event.inputTokens,
-          outputTokens: event.outputTokens,
-          cacheReadTokens: event.cacheReadTokens,
-          cacheCreationTokens: event.cacheCreationTokens,
-        })
-        return
       case 'rate_limit': {
         // Plan gauges: persist the latest per window (REST snapshot for app
         // open) and broadcast live so open panels move during the turn.

@@ -8,12 +8,10 @@ import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
 import { ErrorBanner } from './components/ErrorBanner'
 import { ModifiedFilesPanel } from './components/ModifiedFilesPanel'
-import { GlobalUsagePanel } from './components/GlobalUsagePanel'
 import { PermissionModeGate } from './components/PermissionModeGate'
 import { RateLimitsPanel } from './components/RateLimitsPanel'
 import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
-import { UsagePanel } from './components/UsagePanel'
 import { Toaster } from './components/ui/sonner'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
@@ -111,21 +109,6 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     refetchInterval: 60_000,
     retry: false,
   })
-
-  // Global usage: every recorded turn, all sessions. Poll as a baseline, and
-  // refetch when the ACTIVE session's counters move (a turn just recorded a
-  // usage event server-side) so the card follows the conversation live.
-  const usageHistoryQuery = useQuery({
-    queryKey: ['usageHistory'],
-    queryFn: backend.getUsageHistory,
-    refetchInterval: 60_000,
-    retry: false,
-  })
-  useEffect(() => {
-    if (stream.sessionTokens.input + stream.sessionTokens.output > 0) {
-      void queryClient.invalidateQueries({ queryKey: ['usageHistory'] })
-    }
-  }, [stream.sessionTokens, queryClient])
 
   const projectsQuery = useQuery({ queryKey: ['projects'], queryFn: backend.listProjects })
   const projects = projectsQuery.data ?? []
@@ -301,18 +284,9 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           />
         </main>
         <aside className="dash" aria-label="Usage et activité">
+          {/* Deliberately the ONLY usage surface — the plan limits are what
+              matters (owner's call); token cards were removed in 0.1.6. */}
           <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
-          {/* Live view: recorded totals + the in-flight turn's counters (real
-              per-step API numbers) — the turn-final usage event settles them. */}
-          <UsagePanel
-            tokens={{
-              input: stream.sessionTokens.input + stream.turnTokens.input,
-              output: stream.sessionTokens.output + stream.turnTokens.output,
-              cacheRead: stream.sessionTokens.cacheRead + stream.turnTokens.cacheRead,
-              cacheCreation: stream.sessionTokens.cacheCreation + stream.turnTokens.cacheCreation,
-            }}
-          />
-          <GlobalUsagePanel events={usageHistoryQuery.data ?? []} inFlight={stream.turnTokens} />
           <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
         </aside>
       </div>

@@ -146,44 +146,10 @@ describe('status', () => {
 })
 
 describe('usage', () => {
-  test('accumulates the four counters', () => {
-    const state = run([
-      { type: 'usage', sessionId: S, inputTokens: 100, outputTokens: 20, cacheReadTokens: 400, cacheCreationTokens: 50 },
-      { type: 'usage', sessionId: S, inputTokens: 7, outputTokens: 3, cacheReadTokens: 40, cacheCreationTokens: 5 },
-    ])
-    expect(state.sessionTokens).toEqual({ input: 107, output: 23, cacheRead: 440, cacheCreation: 55 })
-  })
-})
-
-describe('usage_progress (live in-turn counters)', () => {
-  const progress = (over: Partial<{ inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }> = {}): ServerEvent => ({
-    type: 'usage_progress',
-    sessionId: S,
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheCreationTokens: 0,
-    ...over,
-  })
-
-  test('each snapshot REPLACES turnTokens (turn-cumulative, not additive)', () => {
-    const state = run([progress({ inputTokens: 100, outputTokens: 10 }), progress({ inputTokens: 100, outputTokens: 250, cacheReadTokens: 3000 })])
-    expect(state.turnTokens).toEqual({ input: 100, output: 250, cacheRead: 3000, cacheCreation: 0 })
-    expect(state.sessionTokens.output).toBe(0) // never double-counted into the recorded totals
-  })
-
-  test('the final usage event folds into sessionTokens and CLEARS turnTokens', () => {
-    const state = run([
-      progress({ inputTokens: 100, outputTokens: 250 }),
-      { type: 'usage', sessionId: S, inputTokens: 120, outputTokens: 260, cacheReadTokens: 0, cacheCreationTokens: 0 },
-    ])
-    expect(state.sessionTokens).toEqual({ input: 120, output: 260, cacheRead: 0, cacheCreation: 0 })
-    expect(state.turnTokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 })
-  })
-
-  test('a terminal status (idle/error) clears any lingering turnTokens — abort mid-turn must not freeze a phantom count', () => {
-    const state = run([progress({ outputTokens: 99 }), status({ state: 'idle' })])
-    expect(state.turnTokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 })
+  test('is a no-op for the view-model (recorded server-side; the plan gauges are the only usage surface)', () => {
+    const before = run([delta('a')])
+    const after = reduce(before, { type: 'usage', sessionId: S, inputTokens: 100, outputTokens: 20, cacheReadTokens: 400, cacheCreationTokens: 50 })
+    expect(after).toBe(before)
   })
 })
 
@@ -202,7 +168,6 @@ describe('reset', () => {
       { kind: 'tool', toolUseId: 't9', tool: 'Edit', summary: 'src/a.ts', file: '/p/src/a.ts', line: 12, diffstat: { added: 3, removed: 1 }, result: { ok: true, summary: '' } },
     ])
     expect(state.status).toBe('idle')
-    expect(state.sessionTokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 })
   })
 
   test('rebuilds modifiedFiles from Edit/Write history tools (reconnect resync keeps the files panel)', () => {

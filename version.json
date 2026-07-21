@@ -1,7 +1,6 @@
 {
-  "version": "0.1.5",
+  "version": "0.1.6",
   "notes": [
-    "Les jauges du plan se rafraîchissent TOUTES à chaque message envoyé (session 5 h comprise) — plus seulement la fenêtre la plus contraignante",
-    "Une jauge dont la fenêtre a été réinitialisée s’affiche comme telle au lieu de figer un vieux pourcentage"
+    "Le panneau droit va à l’essentiel : Limites du plan + Fichiers modifiés — les cartes de comptage de tokens (session et global) sont retirées"
   ]
 }

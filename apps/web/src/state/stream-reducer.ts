@@ -22,18 +22,10 @@ export type ChatItem =
       resolved?: PermissionDecision
     }
 
-export type TokenCounters = { input: number; output: number; cacheRead: number; cacheCreation: number }
-
-const ZERO_TOKENS: TokenCounters = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
-
 export type StreamState = {
   items: ChatItem[]
   status: 'idle' | 'streaming' | 'error'
   error?: { reason: string; resetAt?: string }
-  /** Recorded totals — fed by the turn-final 'usage' events only. */
-  sessionTokens: TokenCounters
-  /** LIVE counters of the in-flight turn (usage_progress snapshots) — cleared when the turn settles. */
-  turnTokens: TokenCounters
   modifiedFiles: Map<string, { added: number; removed: number; lastLine?: number }>
 }
 
@@ -41,8 +33,6 @@ export function initialState(): StreamState {
   return {
     items: [],
     status: 'idle',
-    sessionTokens: { ...ZERO_TOKENS },
-    turnTokens: { ...ZERO_TOKENS },
     modifiedFiles: new Map(),
   }
 }
@@ -88,29 +78,9 @@ export function reduce(state: StreamState, event: ServerEvent): StreamState {
     case 'permission_request':
       return applyPermissionRequest(state, event)
     case 'usage':
-      // The turn's recorded truth lands — fold it in and drop the live view
-      // (keeping both would double-count the turn that just finished).
-      return {
-        ...state,
-        sessionTokens: {
-          input: state.sessionTokens.input + event.inputTokens,
-          output: state.sessionTokens.output + event.outputTokens,
-          cacheRead: state.sessionTokens.cacheRead + event.cacheReadTokens,
-          cacheCreation: state.sessionTokens.cacheCreation + event.cacheCreationTokens,
-        },
-        turnTokens: { ...ZERO_TOKENS },
-      }
-    case 'usage_progress':
-      // Turn-cumulative snapshot — REPLACES the live counters, never adds.
-      return {
-        ...state,
-        turnTokens: {
-          input: event.inputTokens,
-          output: event.outputTokens,
-          cacheRead: event.cacheReadTokens,
-          cacheCreation: event.cacheCreationTokens,
-        },
-      }
+      // Recorded server-side (usage history + plan gauges cover the need) —
+      // the token cards were removed in 0.1.6, nothing displays this anymore.
+      return state
     case 'rate_limit':
       // App-global plan data — surfaced through the controller's onRateLimit
       // callback (react-query cache), never part of the per-session view-model.
@@ -191,9 +161,6 @@ function applyStatus(state: StreamState, event: Extract<ServerEvent, { type: 'st
   if (event.state === 'idle' || event.state === 'error') {
     // The turn is over — no more deltas will arrive.
     next.items = state.items.map((item) => (item.kind === 'assistant' && item.streaming ? { ...item, streaming: false } : item))
-    // Aborted/errored turns never get their final 'usage' — drop the live view
-    // rather than freeze a phantom in-flight count on screen.
-    next.turnTokens = { ...ZERO_TOKENS }
   } else if (event.partialText !== undefined && event.partialText !== '') {
     // Snapshot of the in-flight text run (sent on every connect mid-turn):
     // authoritative — it replaces the current run or seeds it right after reset.

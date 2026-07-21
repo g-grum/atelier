@@ -104,12 +104,10 @@ export type ServerEvent =
   | { type: 'tool_result'; sessionId: string; toolUseId: string; ok: boolean; summary: string }
   | (PermissionRequest & { sessionId: string })
   | { type: 'usage'; sessionId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
-  /** Live TURN-CUMULATIVE counters (each snapshot replaces the previous) — transient; the final 'usage' event is the recorded truth. */
-  | { type: 'usage_progress'; sessionId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
   | { type: 'rate_limit'; sessionId: string; limit: RateLimitSnapshot }
   | { type: 'status'; sessionId: string; state: 'idle' | 'streaming' | 'error'; error?: { reason: string; resetAt?: string }; partialText?: string; mapping?: { draftId: string; sessionId: string } }
 
-const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'usage', 'usage_progress', 'rate_limit', 'status'])
+const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'usage', 'rate_limit', 'status'])
 const CLIENT_MESSAGE_TYPES = new Set(['user_message', 'permission_response', 'abort'])
 
 export function isServerEvent(value: unknown): value is ServerEvent {

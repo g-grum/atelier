@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, UsageEvent, VersionInfo } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -90,13 +90,6 @@ export function deleteSession(sessionId: string): Promise<void> {
 
 export function getPreferences(): Promise<Preferences> {
   return request<Preferences>('GET', '/preferences')
-}
-
-// ── Usage history ──
-
-/** Raw usage events across all sessions (7-day retention) — the global usage card aggregates them. */
-export function getUsageHistory(): Promise<UsageEvent[]> {
-  return request<UsageEvent[]>('GET', '/usage/history')
 }
 
 // ── Usage limits ──

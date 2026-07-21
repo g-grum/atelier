@@ -1,4 +1,4 @@
-import type { ChatMessage, ClientMessage, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, UsageEvent, VersionInfo } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixtureProjects, fixtureSessions, fixtureTurn } from '../state/fixtures'
 import * as client from './client'
@@ -24,8 +24,6 @@ export type Backend = {
   getVersion: () => Promise<VersionInfo>
   /** Last-known plan limits (five_hour, seven_day, …) — the claude.ai/usage gauges. */
   getUsageLimits: () => Promise<RateLimitSnapshot[]>
-  /** Raw usage events, all sessions, 7-day retention — the global usage card. */
-  getUsageHistory: () => Promise<UsageEvent[]>
 }
 
 const realBackend: Backend = {
@@ -42,7 +40,6 @@ const realBackend: Backend = {
   createSocket: (sessionId, projectId) => new SessionSocket(sessionId, projectId),
   getVersion: client.getVersion,
   getUsageLimits: client.getUsageLimits,
-  getUsageHistory: client.getUsageHistory,
 }
 
 // ── Fixture backend ──
@@ -103,13 +100,6 @@ function createFixtureBackend(): Backend {
     createSocket: (sessionId) => new FixtureSocket(sessionId),
     // Demo mode is always "up to date" — the toast never fires under fixtures.
     getVersion: async () => currentVersion,
-    // Plausible demo history: a few turns today + a spread over the week.
-    getUsageHistory: async () => [
-      { at: new Date(Date.now() - 20 * 60_000).toISOString(), inputTokens: 42_000, outputTokens: 6_200, cacheReadTokens: 310_000, cacheCreationTokens: 12_000 },
-      { at: new Date(Date.now() - 3 * 3600_000).toISOString(), inputTokens: 128_000, outputTokens: 18_400, cacheReadTokens: 890_000, cacheCreationTokens: 40_000 },
-      { at: new Date(Date.now() - 26 * 3600_000).toISOString(), inputTokens: 310_000, outputTokens: 51_000, cacheReadTokens: 2_400_000, cacheCreationTokens: 120_000 },
-      { at: new Date(Date.now() - 4 * 86400_000).toISOString(), inputTokens: 540_000, outputTokens: 88_000, cacheReadTokens: 4_100_000, cacheCreationTokens: 260_000 },
-    ],
     // Plausible demo gauges — the same shape a real turn records.
     getUsageLimits: async () => [
       { window: 'five_hour', utilization: 34, status: 'allowed', resetsAt: new Date(Date.now() + 2 * 3600_000).toISOString(), recordedAt: new Date().toISOString() },

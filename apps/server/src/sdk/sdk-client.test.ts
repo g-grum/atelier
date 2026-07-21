@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, mapUsageWindows, UsageProgressTracker, type RunTurnParams } from './sdk-client'
+import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, mapUsageWindows, type RunTurnParams } from './sdk-client'
 
 function makeRunTurnParams(overrides: Partial<RunTurnParams> = {}): RunTurnParams {
   return {
@@ -73,43 +73,6 @@ describe('buildQueryOptions', () => {
     const result = await options.canUseTool!('Bash', { command: 'rm -rf /' }, sdkCanUseToolOptions)
 
     expect(result).toEqual({ behavior: 'deny', message: 'refusé par la règle' })
-  })
-})
-
-describe('UsageProgressTracker', () => {
-  test('message_start adds input+cache and starts the message output; message_delta updates the cumulative output', () => {
-    const tracker = new UsageProgressTracker()
-
-    const start = tracker.track({
-      type: 'message_start',
-      message: { usage: { input_tokens: 120, output_tokens: 1, cache_read_input_tokens: 3000, cache_creation_input_tokens: 50 } },
-    })
-    expect(start).toEqual({ type: 'usage_progress', inputTokens: 120, outputTokens: 1, cacheReadTokens: 3000, cacheCreationTokens: 50 })
-
-    const delta = tracker.track({ type: 'message_delta', usage: { output_tokens: 240 } })
-    expect(delta).toEqual({ type: 'usage_progress', inputTokens: 120, outputTokens: 240, cacheReadTokens: 3000, cacheCreationTokens: 50 })
-  })
-
-  test('a multi-step turn folds each message: totals accumulate across messages', () => {
-    const tracker = new UsageProgressTracker()
-    tracker.track({ type: 'message_start', message: { usage: { input_tokens: 100, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } })
-    tracker.track({ type: 'message_delta', usage: { output_tokens: 40 } })
-
-    // Next API step of the same turn (after a tool round-trip).
-    const start2 = tracker.track({
-      type: 'message_start',
-      message: { usage: { input_tokens: 200, output_tokens: 0, cache_read_input_tokens: 500, cache_creation_input_tokens: 0 } },
-    })
-    expect(start2).toEqual({ type: 'usage_progress', inputTokens: 300, outputTokens: 40, cacheReadTokens: 500, cacheCreationTokens: 0 })
-
-    const delta2 = tracker.track({ type: 'message_delta', usage: { output_tokens: 10 } })
-    expect(delta2?.outputTokens).toBe(50) // 40 folded + 10 current
-  })
-
-  test('irrelevant stream events yield null', () => {
-    const tracker = new UsageProgressTracker()
-    expect(tracker.track({ type: 'content_block_delta' })).toBeNull()
-    expect(tracker.track({ type: 'message_stop' })).toBeNull()
   })
 })
 

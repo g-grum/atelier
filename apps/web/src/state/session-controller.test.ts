@@ -477,8 +477,6 @@ describe('fixtures', () => {
     expect(state.status).toBe('idle')
     expect(state.items.some((item) => item.kind === 'tool' && item.tool === 'Bash' && item.result?.ok === true)).toBe(true)
     expect(state.items.some((item) => item.kind === 'permission')).toBe(true)
-    expect(state.sessionTokens.input).toBeGreaterThan(0)
-    expect(state.sessionTokens.output).toBeGreaterThan(0)
     // The turn ended — no assistant item is left streaming.
     expect(state.items.some((item) => item.kind === 'assistant' && item.streaming)).toBe(false)
   })

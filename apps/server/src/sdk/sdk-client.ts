@@ -22,8 +22,6 @@ export type SdkTurnEvent =
   | { type: 'tool_use'; toolUseId: string; toolName: string; input: unknown }
   | { type: 'tool_result'; toolUseId: string; ok: boolean; summary: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
-  /** Live turn-cumulative counters from message_start/message_delta — transient; 'usage' (the result) is authoritative. */
-  | { type: 'usage_progress'; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
   | { type: 'rate_limit'; window: RateLimitWindow; utilization: number; status: 'allowed' | 'allowed_warning' | 'rejected'; resetsAt?: string }
   | { type: 'session_started'; sessionId: string }
   | { type: 'turn_done' }
@@ -80,7 +78,6 @@ export class AgentSdkClient implements SdkClient {
     params.signal.addEventListener('abort', () => abortController.abort())
 
     let pendingResetAt: string | undefined
-    const usageTracker = new UsageProgressTracker()
 
     const q = query({
       prompt: params.prompt,
@@ -121,11 +118,6 @@ export class AgentSdkClient implements SdkClient {
           if (msg.parent_tool_use_id === null && ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
             yield { type: 'text_delta', text: (ev.delta as { type: 'text_delta'; text: string }).text }
           }
-          // Live usage: message_start/message_delta carry real per-step token
-          // counters. Subagent streams included — their spend is real spend,
-          // and the final result usage settles any difference.
-          const progress = usageTracker.track(ev as UsageBearingStreamEvent)
-          if (progress !== null) yield progress
           continue
         }
 
@@ -334,61 +326,6 @@ export function mapUsageWindows(rateLimits: Record<string, UsageWindowInfo>): Ex
     })
   }
   return events
-}
-
-/** The two stream-event shapes the tracker reads — structural subset of BetaRawMessageStreamEvent. */
-type UsageBearingStreamEvent = {
-  type: string
-  message?: { usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }
-  usage?: { output_tokens?: number }
-}
-
-/**
- * Live usage across ONE turn, fed by the raw stream events that
- * includePartialMessages exposes. Real API numbers, never an estimate:
- * - message_start carries the step's input + cache counters (and an initial
- *   output count) — a multi-step agentic turn emits one per API round-trip,
- *   so totals climb DURING the turn, not only at its end.
- * - message_delta carries the CUMULATIVE output_tokens of the current message.
- * track() returns a turn-cumulative snapshot (or null for irrelevant events);
- * the final 'usage' event from the result message remains authoritative.
- */
-export class UsageProgressTracker {
-  private input = 0
-  private cacheRead = 0
-  private cacheCreation = 0
-  /** Output of the messages already completed in this turn. */
-  private foldedOutput = 0
-  /** Cumulative output of the in-flight message (replaced by each message_delta). */
-  private currentOutput = 0
-
-  track(event: UsageBearingStreamEvent): Extract<SdkTurnEvent, { type: 'usage_progress' }> | null {
-    if (event.type === 'message_start') {
-      const usage = event.message?.usage ?? {}
-      this.input += usage.input_tokens ?? 0
-      this.cacheRead += usage.cache_read_input_tokens ?? 0
-      this.cacheCreation += usage.cache_creation_input_tokens ?? 0
-      // The previous message is over — fold its output before starting the new one.
-      this.foldedOutput += this.currentOutput
-      this.currentOutput = usage.output_tokens ?? 0
-      return this.snapshot()
-    }
-    if (event.type === 'message_delta' && event.usage?.output_tokens !== undefined) {
-      this.currentOutput = event.usage.output_tokens
-      return this.snapshot()
-    }
-    return null
-  }
-
-  private snapshot(): Extract<SdkTurnEvent, { type: 'usage_progress' }> {
-    return {
-      type: 'usage_progress',
-      inputTokens: this.input,
-      outputTokens: this.foldedOutput + this.currentOutput,
-      cacheReadTokens: this.cacheRead,
-      cacheCreationTokens: this.cacheCreation,
-    }
-  }
 }
 
 /**
