@@ -860,6 +860,22 @@ git commit -m "feat(web): DeleteSessionDialog — confirmation gate for real ses
 
 One task on purpose: renaming the sidebar prop (`onDeleteDraft` → `onDelete`) and routing real sessions through the dialog touch the same seam — splitting would leave a × that does nothing.
 
+- [ ] **Step 0: Carry-forward from Task 5's quality review — exit-animation name flash**
+
+In `DeleteSessionDialog.tsx`: when App nulls the session, Radix keeps the content mounted through the ~200ms fade-out, during which `session?.name ?? 'Nouvelle session'` briefly shows the WRONG name in a permanent-deletion warning. Cache the last non-null session (add `import { useRef } from 'react'`):
+
+```tsx
+export function DeleteSessionDialog({ session, onConfirm, onCancel }: DeleteSessionDialogProps) {
+  // Radix keeps the content mounted through the exit animation after App nulls
+  // the session — cache the last real one so the copy never flashes the fallback
+  // name mid-close. (Untestable under happy-dom: no animations there.)
+  const lastSession = useRef(session)
+  if (session !== null) lastSession.current = session
+  const shown = session ?? lastSession.current
+```
+
+and use `shown?.name ?? 'Nouvelle session'` in the description (the `open` prop and the Supprimer guard keep using `session`). No test possible under happy-dom — code + comment only; the existing 6 tests must stay green.
+
 - [ ] **Step 1: Write the failing sidebar tests**
 
 In `SessionSidebar.test.tsx`: rename the `onDeleteDraft` prop to `onDelete` in `renderSidebar`'s props (the `calls.deleted` recorder stays). Replace the test `a draft row shows the delete button, a real session does not` with:
