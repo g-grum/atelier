@@ -232,16 +232,16 @@ describe('SessionsService', () => {
 
       // dispose-before-delete: the SDK process must no longer be appending to the
       // JSONL when it is removed — observe the signal AT deleteSession time.
-      let abortedAtDelete: boolean | null = null
+      const abortedAtDelete: boolean[] = []
       const originalDelete = sdk.deleteSession.bind(sdk)
       sdk.deleteSession = async (sessionId, dir) => {
-        abortedAtDelete = params.signal.aborted
+        abortedAtDelete.push(params.signal.aborted)
         await originalDelete(sessionId, dir)
       }
 
       await service.delete('s1')
 
-      expect(abortedAtDelete).toBe(true)
+      expect(abortedAtDelete).toEqual([true])
     })
 
     test('a draft whose FIRST turn is in flight has its turn aborted too (no resurrection)', async () => {
