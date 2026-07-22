@@ -108,7 +108,7 @@ Array order = display order. Height tiers map to fixed pixel heights in CSS (ind
 | `gh` missing / not authenticated / unknown repo / timeout | 502 `{ error }` → error state inside the PR widget + retry |
 | Invalid `PUT /api/widgets` body | 400 `{ error }` → optimistic rollback + toast |
 | Layout fetch failure at startup | Fall back to rendering `DEFAULT_WIDGETS` (shared constant — server default and web fallback cannot drift); widgets render, edits keep failing visibly via the toast path |
-| GitHub rate limit | Same 502 path; 60 s cache makes it unlikely (≤ 1 call/min/repo) |
+| GitHub rate limit | Same 502 path; 60 s cache makes it unlikely (≤ 1 call/min per `repo:limit` pair) |
 
 ## Testing (TDD, house process)
 
