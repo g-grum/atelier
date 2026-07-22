@@ -64,7 +64,7 @@ Ordering note: dispose-before-delete guarantees the SDK process is no longer app
 
 ### Error handling
 
-- SDK deletion failure (locked file, vanished file) → 404 for not-found, 500 otherwise; client shows the notice banner and keeps the list.
+- SDK deletion failure (locked file, vanished file) → 404 for not-found, 500 otherwise; client shows the notice banner and keeps the list. **Amendment (Task 6 quality review):** the client treats a DELETE 404 as success — the session is already gone (double-clicked draft ×, deleted from the CLI), so surfacing an error for the requested outcome would be false; only non-404 failures show the banner.
 - Deleting the streaming session: the abort inside `dispose` follows the Stop path, so the client's stream status settles the same way Stop does before the list refreshes.
 
 ## Testing

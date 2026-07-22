@@ -926,12 +926,17 @@ describe('App session deletion', () => {
 
   test('deleting the SELECTED session deselects it and refreshes the list', async () => {
     let sessions: SessionSummary[] = [session]
+    // The refetch alone empties the sidebar/Topbar — the two closing assertions
+    // below are what actually pin setSelected(null) and controller.close()
+    // (mutation-checked: removing either from onSuccess fails this test).
+    const closes: number[] = []
     renderApp(
       fakeBackend({
         listSessions: async () => sessions,
         deleteSession: async (id) => {
           sessions = sessions.filter((s) => s.id !== id)
         },
+        createSocket: () => ({ ...idleSocket, close: () => closes.push(1) }),
       }),
     )
 
@@ -947,6 +952,10 @@ describe('App session deletion', () => {
     // — an all-gone assertion fails cleanly instead of a multiple-match timeout.
     await waitFor(() => expect(screen.queryAllByText('Session un')).toHaveLength(0))
     expect(screen.queryByRole('button', { name: /renommer la session/i })).toBeNull()
+    // dangling selection would leave the composer enabled — pin setSelected(null)
+    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+    // and the deleted session's socket must be torn down — pin controller.close()
+    expect(closes.length).toBeGreaterThan(0)
   })
 
   test('deleting a NON-selected session leaves the selection alone', async () => {
@@ -1110,6 +1119,105 @@ git commit -m "feat(web): delete any conversation from the sidebar — confirmat
 - Modify: `version.json`
 
 Project release workflow: bump `version.json` (concise French notes) + `bun run build:web` so a running app toasts « Une nouvelle version est disponible ».
+
+- [ ] **Step 0: Carry-forwards from Task 6's quality review**
+
+**(a) DELETE 404 = success (client seam).** A rapid double-× on a draft fires two DELETEs; the second 404s and raises a FALSE « Impossible de supprimer la session » banner for a delete that succeeded. The session is gone either way — treat not-found as the requested outcome, at the HTTP seam where the status is typed (`ApiError.status`, no message-sniffing). In `apps/web/src/api/client.ts`:
+
+```ts
+export async function deleteSession(sessionId: string): Promise<void> {
+  try {
+    await request<void>('DELETE', `/sessions/${encodeURIComponent(sessionId)}`)
+  } catch (err) {
+    // A 404 on DELETE means the session is already gone (double-clicked draft ×,
+    // deleted from the CLI) — that IS the requested outcome, not a failure.
+    if (err instanceof ApiError && err.status === 404) return
+    throw err
+  }
+}
+```
+
+New test file `apps/web/src/api/client.test.ts` (fetch stub — module-load of client.ts is happy-dom-safe, ws.test.ts proves the env):
+
+```ts
+import { afterEach, describe, expect, test } from 'bun:test'
+import { ApiError, deleteSession } from './client'
+
+const realFetch = globalThis.fetch
+
+afterEach(() => {
+  globalThis.fetch = realFetch
+})
+
+function stubFetch(status: number): void {
+  globalThis.fetch = (async () =>
+    new Response(status === 204 ? null : JSON.stringify({ error: 'x' }), { status })) as typeof fetch
+}
+
+describe('client.deleteSession', () => {
+  test('204 resolves', async () => {
+    stubFetch(204)
+    await expect(deleteSession('s1')).resolves.toBeUndefined()
+  })
+
+  test('404 resolves — the session is already gone, which IS the requested outcome', async () => {
+    stubFetch(404)
+    await expect(deleteSession('ghost')).resolves.toBeUndefined()
+  })
+
+  test('a 500 still rejects with ApiError', async () => {
+    stubFetch(500)
+    await expect(deleteSession('s1')).rejects.toBeInstanceOf(ApiError)
+  })
+})
+```
+
+**(b) App test — a draft × skips the dialog** (protects the instant-draft-delete branch; without it, gating ALL sessions behind the dialog would break spec behavior with no failing test). Append inside `describe('App session deletion', ...)` in `App.test.tsx`:
+
+```tsx
+  test('a draft × deletes instantly — no confirmation dialog', async () => {
+    const draft: SessionSummary = { ...session, id: 'd1', name: null, isDraft: true, messageCount: 0, permissionMode: null }
+    const deleted: string[] = []
+    renderApp(
+      fakeBackend({
+        listSessions: async () => [session, draft],
+        deleteSession: async (id) => {
+          deleted.push(id)
+        },
+      }),
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer le brouillon' }))
+
+    await waitFor(() => expect(deleted).toEqual(['d1']))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+```
+
+**(c) Failed-deletion test — assert the list survives.** In the existing `a failed deletion surfaces a dismissible notice` test, after the banner dismissal assertion, add:
+
+```tsx
+    // no optimistic removal: the row must survive a failed delete
+    expect(screen.getByText('Session un')).toBeTruthy()
+```
+
+**(d) Strengthen the selected-deletion test** (owner-adopted hardening, mutation-checked): the committed `deleting the SELECTED session…` test passes even if `onSuccess` forgets `setSelected(null)` or `controller.close()` — the refetch alone empties the UI. Bring `App.test.tsx` in line with the amended plan text of that test (Task 6, Step 2): add the `closes` recorder with `createSocket: () => ({ ...idleSocket, close: () => closes.push(1) })` in the fakeBackend override, and after the existing final assertions add:
+
+```tsx
+    // dangling selection would leave the composer enabled — pin setSelected(null)
+    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+    // and the deleted session's socket must be torn down — pin controller.close()
+    expect(closes.length).toBeGreaterThan(0)
+```
+
+(`idleSocket` is the module-level const already in App.test.tsx; the composer textarea's aria-label « Répondre à Claude » is verified in Composer.tsx l.58.)
+
+TDD where observable: (b) fails before nothing — it should PASS immediately (the branch exists); its value is regression protection, note that. (a)'s 404 test FAILS before the client change — watch it fail. (d) must pass on the current code (the behaviors exist since Task 6). Run `bun test apps/web` after: expected 350 + 3 (client) + 1 (draft dialog) = 354 pass. Commit these carry-forwards separately BEFORE the release bump:
+
+```bash
+git add apps/web/src/api/client.ts apps/web/src/api/client.test.ts apps/web/src/App.test.tsx
+git commit -m "fix(web): treat DELETE 404 as success — no false banner on an already-gone session"
+```
 
 - [ ] **Step 1: Bump version.json**
 
