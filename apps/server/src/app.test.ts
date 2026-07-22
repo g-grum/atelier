@@ -317,6 +317,28 @@ describe('createApp', () => {
     expect(list.every((s) => s.id !== draft.id)).toBe(true)
   })
 
+  test('DELETE /api/sessions/:id deletes a real session through the SDK and returns 204', async () => {
+    const sdk = new MockSdkClient({ sessions: [{ id: 's1', name: 'x', updatedAt: '2026-07-01T00:00:00.000Z', messageCount: 1 }] })
+    const { app } = freshApp(undefined, sdk)
+    const headers = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    await app.request('/api/projects', { method: 'POST', headers, body: JSON.stringify({ path: '/tmp/x' }) })
+
+    const res = await app.request('/api/sessions/s1', { method: 'DELETE', headers })
+
+    expect(res.status).toBe(204)
+    expect(sdk.calls).toContainEqual({ method: 'deleteSession', args: ['s1', '/tmp/x'] })
+  })
+
+  // Regression: this used to be a silent no-op that still answered 204.
+  test('DELETE /api/sessions/:id with an unknown id returns 404', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/sessions/ghost', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer test-token' },
+    })
+    expect(res.status).toBe(404)
+  })
+
   // 6. GET /api/sessions/:id/messages on draft → []
   test('GET /api/sessions/:id/messages on a draft returns []', async () => {
     const { app } = freshApp()

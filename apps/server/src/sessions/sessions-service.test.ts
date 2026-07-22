@@ -128,16 +128,6 @@ describe('SessionsService', () => {
     expect(hasMessagesCall).toBe(false)
   })
 
-  test('deleteDraft removes it from the list', async () => {
-    const { service } = freshSetup()
-    const draft = service.createDraft('p1', {})
-
-    service.deleteDraft(draft.id)
-    const result = await service.list('p1')
-
-    expect(result.every((s) => s.id !== draft.id)).toBe(true)
-  })
-
   describe('countSessions', () => {
     test('counts SDK sessions for the project path plus its unsent drafts', async () => {
       const sdkSessions = [
@@ -288,6 +278,33 @@ describe('SessionsService', () => {
       await service.delete('s1')
 
       expect(sdk.calls).toContainEqual({ method: 'deleteSession', args: ['s1', '/tmp/x'] })
+    })
+
+    test("an SDK 'not found' failure still cleans the session's AppData entries (definitively gone)", async () => {
+      const { service, sdk, data } = freshSetup([sdkSession])
+      data.update((d) => {
+        d.modelOverrides['s1'] = 'claude-opus-4-8'
+      })
+      sdk.deleteSession = async () => {
+        throw new Error('Session s1 not found in any project directory')
+      }
+
+      await expect(service.delete('s1')).rejects.toBeInstanceOf(SessionNotFoundError)
+      expect(data.get().modelOverrides['s1']).toBeUndefined()
+    })
+
+    test('a non-not-found SDK failure propagates unchanged and SKIPS the AppData cleanup', async () => {
+      const { service, sdk, data } = freshSetup([sdkSession])
+      data.update((d) => {
+        d.modelOverrides['s1'] = 'claude-opus-4-8'
+      })
+      sdk.deleteSession = async () => {
+        throw new Error('EBUSY: fichier verrouillé')
+      }
+
+      await expect(service.delete('s1')).rejects.toThrow('EBUSY: fichier verrouillé')
+      // the file may still exist — keep the session's AppData so it stays usable
+      expect(data.get().modelOverrides['s1']).toBe('claude-opus-4-8')
     })
   })
 })

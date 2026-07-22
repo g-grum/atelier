@@ -2,7 +2,7 @@ import { SESSION_PERMISSION_MODES, type SessionPermissionMode } from '@atelier/s
 import { Hono } from 'hono'
 import { readJsonObject } from '../routes/read-json'
 import type { AppData } from '../store/app-data'
-import type { SessionsService } from './sessions-service'
+import { SessionNotFoundError, type SessionsService } from './sessions-service'
 
 export function sessionsRoutes(data: AppData, sessions: SessionsService): Hono {
   const app = new Hono()
@@ -52,9 +52,14 @@ export function sessionsRoutes(data: AppData, sessions: SessionsService): Hono {
     return c.json({ ok: true })
   })
 
-  app.delete('/sessions/:id', (c) => {
+  app.delete('/sessions/:id', async (c) => {
     const { id } = c.req.param()
-    sessions.deleteDraft(id)
+    try {
+      await sessions.delete(id)
+    } catch (err) {
+      if (err instanceof SessionNotFoundError) return c.json({ error: 'Session introuvable' }, 404)
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
+    }
     return new Response(null, { status: 204 })
   })
 

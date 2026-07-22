@@ -136,12 +136,6 @@ export class SessionsService {
     return this.sdk.getSessionMessages(this.data.resolveSessionId(id))
   }
 
-  deleteDraft(id: string): void {
-    this.data.update((d) => {
-      d.drafts = d.drafts.filter((x) => x.id !== id)
-    })
-  }
-
   /**
    * Unified deletion — drafts and real sessions (spec 2026-07-17). Dispose runs
    * FIRST and for drafts too: a draft whose first turn is in flight must have
@@ -171,17 +165,15 @@ export class SessionsService {
     } catch (err) {
       // The SDK throws an untyped Error when the session vanished between the
       // scan and the delete — message-sniffing is the only discriminator (spec).
-      if (err instanceof Error && /not found/i.test(err.message)) throw new SessionNotFoundError(id)
+      if (err instanceof Error && /not found/i.test(err.message)) {
+        // Definitively gone: forget its AppData entries too, or they leak forever.
+        this.forgetSession(sdkId)
+        throw new SessionNotFoundError(id)
+      }
       throw err
     }
 
-    this.data.update((d) => {
-      delete d.modelOverrides[sdkId]
-      delete d.permissionModes[sdkId]
-      for (const [draftId, mapped] of Object.entries(d.draftMap)) {
-        if (mapped === sdkId) delete d.draftMap[draftId]
-      }
-    })
+    this.forgetSession(sdkId)
   }
 
   /**
@@ -199,5 +191,16 @@ export class SessionsService {
       }
     }
     return undefined
+  }
+
+  /** Drops the session-keyed AppData entries; usageEvents stay (spec). */
+  private forgetSession(sdkId: string): void {
+    this.data.update((d) => {
+      delete d.modelOverrides[sdkId]
+      delete d.permissionModes[sdkId]
+      for (const [draftId, mapped] of Object.entries(d.draftMap)) {
+        if (mapped === sdkId) delete d.draftMap[draftId]
+      }
+    })
   }
 }
