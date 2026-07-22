@@ -10,7 +10,7 @@ Let the user delete any conversation from the sidebar — real SDK sessions, not
 
 1. **Real deletion** — SDK `deleteSession`, permanent, shared with the CLI. Not Atelier-only hiding, not a delayed trash.
 2. **Streaming session** — deleting a session mid-turn aborts the turn (same path as Stop), disposes the stream, then deletes. One gesture, no 409.
-3. **Confirmation** — real sessions get a confirmation dialog (title « Supprimer la conversation ? », body « "{name}" sera définitivement supprimée. »). Drafts keep their instant, no-confirmation delete (unchanged).
+3. **Confirmation** — real sessions get a confirmation dialog (title « Supprimer la conversation ? », body: `« {name} » sera définitivement supprimée.` — guillemets, matching the Topbar's typography). Drafts keep their instant, no-confirmation delete (unchanged).
 
 ## Current state (what exists)
 
