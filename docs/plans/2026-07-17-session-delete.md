@@ -598,6 +598,69 @@ app.delete('/sessions/:id', async (c) => {
 
 Delete the `deleteDraft` method from `sessions-service.ts` (its behavior lives in `delete`). In `sessions-service.test.ts`, delete the old `deleteDraft removes it from the list` test — the `delete → a draft is removed…` test from Task 3 covers it.
 
+- [ ] **Step 4b: Carry-forwards from Task 3's quality review**
+
+In `sessions-service.ts`, extract the AppData cleanup into a private helper and ALSO run it in the SDK not-found branch (the session is definitively gone there — without this, its `modelOverrides`/`permissionModes`/`draftMap` entries leak forever, since any retry 404s at the scan and never reaches cleanup):
+
+```ts
+  /** Drops the session-keyed AppData entries; usageEvents stay (spec). */
+  private forgetSession(sdkId: string): void {
+    this.data.update((d) => {
+      delete d.modelOverrides[sdkId]
+      delete d.permissionModes[sdkId]
+      for (const [draftId, mapped] of Object.entries(d.draftMap)) {
+        if (mapped === sdkId) delete d.draftMap[draftId]
+      }
+    })
+  }
+```
+
+In `delete()`, replace the trailing `this.data.update(...)` block with `this.forgetSession(sdkId)`, and in the catch branch:
+
+```ts
+    } catch (err) {
+      // The SDK throws an untyped Error when the session vanished between the
+      // scan and the delete — message-sniffing is the only discriminator (spec).
+      if (err instanceof Error && /not found/i.test(err.message)) {
+        // Definitively gone: forget its AppData entries too, or they leak forever.
+        this.forgetSession(sdkId)
+        throw new SessionNotFoundError(id)
+      }
+      throw err
+    }
+```
+
+Two new tests in the `describe('delete', ...)` block:
+
+```ts
+  test("an SDK 'not found' failure still cleans the session's AppData entries (definitively gone)", async () => {
+    const { service, sdk, data } = freshSetup([sdkSession])
+    data.update((d) => {
+      d.modelOverrides['s1'] = 'claude-opus-4-8'
+    })
+    sdk.deleteSession = async () => {
+      throw new Error('Session s1 not found in any project directory')
+    }
+
+    await expect(service.delete('s1')).rejects.toBeInstanceOf(SessionNotFoundError)
+    expect(data.get().modelOverrides['s1']).toBeUndefined()
+  })
+
+  test('a non-not-found SDK failure propagates unchanged and SKIPS the AppData cleanup', async () => {
+    const { service, sdk, data } = freshSetup([sdkSession])
+    data.update((d) => {
+      d.modelOverrides['s1'] = 'claude-opus-4-8'
+    })
+    sdk.deleteSession = async () => {
+      throw new Error('EBUSY: fichier verrouillé')
+    }
+
+    await expect(service.delete('s1')).rejects.toThrow('EBUSY: fichier verrouillé')
+    // the file may still exist — keep the session's AppData so it stays usable
+    expect(data.get().modelOverrides['s1']).toBe('claude-opus-4-8')
+  })
+```
+
 - [ ] **Step 5: Run the full suite**
 
 Run: `bun test`
