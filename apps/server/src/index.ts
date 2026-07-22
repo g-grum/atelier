@@ -4,6 +4,7 @@ import { websocket } from 'hono/bun'
 import { AppData } from './store/app-data'
 import { AgentSdkClient } from './sdk/sdk-client'
 import { SessionsService } from './sessions/sessions-service'
+import { SessionStreamRegistry } from './stream/session-stream'
 import { createApp } from './app'
 
 function parseArgs(): { port: number; token: string; dataPath: string; webDist?: string } {
@@ -39,11 +40,12 @@ const { port, token, dataPath, webDist } = parseArgs()
 
 const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
-const sessions = new SessionsService(sdk, data)
+const streams = new SessionStreamRegistry(data, sdk)
+const sessions = new SessionsService(sdk, data, streams)
 // Repo root — this file lives at apps/server/src/index.ts; the server runs
 // from repo sources (repo-tethered bundle), so the path holds in both modes.
 const versionFile = join(import.meta.dir, '..', '..', '..', 'version.json')
-const app = createApp({ data, sessions, sdk, token, webDist, versionFile })
+const app = createApp({ data, sessions, sdk, streams, token, webDist, versionFile })
 
 Bun.serve({
   hostname: '127.0.0.1',

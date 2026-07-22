@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { AppData } from '../store/app-data'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
 import { SessionsService } from '../sessions/sessions-service'
+import { SessionStreamRegistry } from '../stream/session-stream'
 import { settingsRoutes } from '../routes/settings-routes'
 import { buildCliArgs, buildSchemeUrl, openInIde, type LaunchFn } from './open-in-ide'
 
@@ -136,7 +137,8 @@ describe('POST /open-in-ide route', () => {
     const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-ide-')), 'data.json')
     const data = new AppData(filePath)
     const { launch, calls } = fakeLaunch(launchResults)
-    const sessions = new SessionsService(new MockSdkClient(), data)
+    const sdk = new MockSdkClient()
+    const sessions = new SessionsService(sdk, data, new SessionStreamRegistry(data, sdk))
     return { app: settingsRoutes(data, sessions, launch), data, calls }
   }
 
@@ -237,7 +239,8 @@ describe('POST /open-in-ide route', () => {
     const throwing: LaunchFn = async () => {
       throw new Error('boom')
     }
-    const app = settingsRoutes(data, new SessionsService(new MockSdkClient(), data), throwing)
+    const sdk = new MockSdkClient()
+    const app = settingsRoutes(data, new SessionsService(sdk, data, new SessionStreamRegistry(data, sdk)), throwing)
     // mockRestore clears recorded calls — capture them in a local array instead.
     const loggedErrors: unknown[][] = []
     const errorLog = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {

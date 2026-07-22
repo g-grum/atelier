@@ -5,17 +5,21 @@ import { join } from 'node:path'
 import { AppData } from '../store/app-data'
 import type { SdkSessionInfo } from '../sdk/sdk-client'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
-import { SessionsService } from './sessions-service'
+import { SessionStreamRegistry } from '../stream/session-stream'
+import { SessionNotFoundError, SessionsService } from './sessions-service'
 
-function freshSetup(sessions: SdkSessionInfo[] = []) {
+type Turns = NonNullable<ConstructorParameters<typeof MockSdkClient>[0]>['turns']
+
+function freshSetup(sessions: SdkSessionInfo[] = [], turns?: Turns) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-sessions-')), 'data.json')
   const data = new AppData(filePath)
   data.update((d) => {
     d.projects.push({ id: 'p1', path: '/tmp/x', color: 'cyan' })
   })
-  const sdk = new MockSdkClient({ sessions })
-  const service = new SessionsService(sdk, data)
-  return { data, sdk, service }
+  const sdk = new MockSdkClient({ sessions, turns })
+  const registry = new SessionStreamRegistry(data, sdk)
+  const service = new SessionsService(sdk, data, registry)
+  return { data, sdk, service, registry }
 }
 
 describe('SessionsService', () => {
@@ -163,6 +167,127 @@ describe('SessionsService', () => {
       }
 
       expect(await service.countSessions('p1')).toBe(0)
+    })
+  })
+
+  describe('delete', () => {
+    const sdkSession = { id: 's1', name: 'session', updatedAt: '2025-01-01T00:00:00.000Z', messageCount: 3 }
+
+    test('a draft is removed from the list without touching the SDK', async () => {
+      const { service, sdk } = freshSetup()
+      const draft = service.createDraft('p1', {})
+
+      await service.delete(draft.id)
+
+      expect((await service.list('p1')).every((s) => s.id !== draft.id)).toBe(true)
+      expect(sdk.calls.some((c) => c.method === 'deleteSession')).toBe(false)
+    })
+
+    test('an SDK session is deleted with the resolved id and the owning project dir', async () => {
+      const { service, sdk } = freshSetup([sdkSession])
+
+      await service.delete('s1')
+
+      expect(sdk.calls).toContainEqual({ method: 'deleteSession', args: ['s1', '/tmp/x'] })
+    })
+
+    test('a materialized draft id resolves through draftMap', async () => {
+      const { service, sdk, data } = freshSetup([{ ...sdkSession, id: 'sdk-1' }])
+      data.update((d) => {
+        d.draftMap['d1'] = 'sdk-1'
+      })
+
+      await service.delete('d1')
+
+      expect(sdk.calls).toContainEqual({ method: 'deleteSession', args: ['sdk-1', '/tmp/x'] })
+    })
+
+    test('AppData cleanup: modelOverrides, permissionModes and draftMap entries go — usageEvents stay', async () => {
+      const { service, data } = freshSetup([sdkSession])
+      data.update((d) => {
+        d.draftMap['d0'] = 's1'
+        d.modelOverrides['s1'] = 'claude-opus-4-8'
+        d.permissionModes['s1'] = 'bypassPermissions'
+        d.usageEvents.push({ at: new Date().toISOString(), inputTokens: 1, outputTokens: 2, cacheReadTokens: 3, cacheCreationTokens: 4 })
+      })
+
+      await service.delete('s1')
+
+      expect(data.get().modelOverrides['s1']).toBeUndefined()
+      expect(data.get().permissionModes['s1']).toBeUndefined()
+      expect(data.get().draftMap['d0']).toBeUndefined()
+      // consumption history stays meaningful after the conversation is gone (spec)
+      expect(data.get().usageEvents).toHaveLength(1)
+    })
+
+    test('the live stream is disposed and its turn aborted BEFORE sdk.deleteSession runs', async () => {
+      const { service, sdk, registry } = freshSetup([sdkSession], [[
+        { type: 'needs_permission', toolName: 'Bash', input: { command: 'sleep 999' } },
+        { type: 'turn_done' },
+      ]])
+      const stream = registry.get('s1', 'p1')
+      stream.onMessage(JSON.stringify({ type: 'user_message', text: 'go' }))
+      await Bun.sleep(0)
+      const params = sdk.calls.find((c) => c.method === 'runTurn')!.args[0] as { signal: AbortSignal }
+
+      // dispose-before-delete: the SDK process must no longer be appending to the
+      // JSONL when it is removed — observe the signal AT deleteSession time.
+      let abortedAtDelete: boolean | null = null
+      const originalDelete = sdk.deleteSession.bind(sdk)
+      sdk.deleteSession = async (sessionId, dir) => {
+        abortedAtDelete = params.signal.aborted
+        await originalDelete(sessionId, dir)
+      }
+
+      await service.delete('s1')
+
+      expect(abortedAtDelete).toBe(true)
+    })
+
+    test('a draft whose FIRST turn is in flight has its turn aborted too (no resurrection)', async () => {
+      const { service, sdk, registry } = freshSetup([], [[
+        { type: 'needs_permission', toolName: 'Bash', input: { command: 'sleep 999' } },
+        { type: 'turn_done' },
+      ]])
+      const draft = service.createDraft('p1', {})
+      registry.get(draft.id, 'p1').onMessage(JSON.stringify({ type: 'user_message', text: 'go' }))
+      await Bun.sleep(0)
+
+      await service.delete(draft.id)
+
+      const params = sdk.calls.find((c) => c.method === 'runTurn')!.args[0] as { signal: AbortSignal }
+      expect(params.signal.aborted).toBe(true)
+      expect((await service.list('p1')).every((s) => s.id !== draft.id)).toBe(true)
+      expect(sdk.calls.some((c) => c.method === 'deleteSession')).toBe(false)
+    })
+
+    test('an unknown id throws SessionNotFoundError', async () => {
+      const { service } = freshSetup()
+      await expect(service.delete('ghost')).rejects.toBeInstanceOf(SessionNotFoundError)
+    })
+
+    test("an SDK 'not found' failure surfaces as SessionNotFoundError", async () => {
+      const { service, sdk } = freshSetup([sdkSession])
+      sdk.deleteSession = async () => {
+        throw new Error('Session s1 not found in any project directory')
+      }
+      await expect(service.delete('s1')).rejects.toBeInstanceOf(SessionNotFoundError)
+    })
+
+    test('an unreadable project folder is skipped, not fatal — the owning scan keeps going', async () => {
+      const { service, sdk, data } = freshSetup([sdkSession])
+      data.update((d) => {
+        d.projects.unshift({ id: 'p0', path: '/tmp/unreadable', color: 'magenta' })
+      })
+      const original = sdk.listSessions.bind(sdk)
+      sdk.listSessions = async (cwd) => {
+        if (cwd === '/tmp/unreadable') throw new Error('EACCES: dossier illisible')
+        return original(cwd)
+      }
+
+      await service.delete('s1')
+
+      expect(sdk.calls).toContainEqual({ method: 'deleteSession', args: ['s1', '/tmp/x'] })
     })
   })
 })

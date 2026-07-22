@@ -5,13 +5,15 @@ import { join } from 'node:path'
 import { AppData } from './store/app-data'
 import { MockSdkClient } from './sdk/sdk-client.mock'
 import { SessionsService } from './sessions/sessions-service'
+import { SessionStreamRegistry } from './stream/session-stream'
 import { createApp } from './app'
 
 function freshApp(webDist?: string, sdk: MockSdkClient = new MockSdkClient(), versionFile?: string) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-app-')), 'data.json')
   const data = new AppData(filePath)
-  const sessions = new SessionsService(sdk, data)
-  const app = createApp({ data, sessions, sdk, token: 'test-token', webDist, versionFile })
+  const streams = new SessionStreamRegistry(data, sdk)
+  const sessions = new SessionsService(sdk, data, streams)
+  const app = createApp({ data, sessions, sdk, streams, token: 'test-token', webDist, versionFile })
   return { app, data, sessions, filePath }
 }
 

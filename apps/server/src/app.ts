@@ -7,14 +7,14 @@ import type { SdkClient } from './sdk/sdk-client'
 import type { SessionsService } from './sessions/sessions-service'
 import { sessionsRoutes } from './sessions/sessions-routes'
 import { settingsRoutes } from './routes/settings-routes'
-import { SessionStreamRegistry } from './stream/session-stream'
+import type { SessionStreamRegistry } from './stream/session-stream'
 
 // Security model: same-origin serving + loopback binding + token auth.
 // No CORS headers needed — the server only listens on 127.0.0.1 and the web
 // client is served from the same origin. The token covers WS upgrades too via
 // the ?token= query param (browsers cannot set headers on WS handshakes).
 
-export function createApp({ data, sessions, sdk, token, webDist, versionFile }: { data: AppData; sessions: SessionsService; sdk: SdkClient; token: string; webDist?: string; versionFile?: string }): Hono {
+export function createApp({ data, sessions, sdk, streams, token, webDist, versionFile }: { data: AppData; sessions: SessionsService; sdk: SdkClient; streams: SessionStreamRegistry; token: string; webDist?: string; versionFile?: string }): Hono {
   const app = new Hono()
 
   // Token middleware scoped to /api/* so that /health and static assets stay open
@@ -52,7 +52,6 @@ export function createApp({ data, sessions, sdk, token, webDist, versionFile }: 
   }
 
   // WS glue only — all behavior lives in SessionStream (tested socket-free).
-  const streams = new SessionStreamRegistry(data, sdk)
   api.get(
     '/sessions/:id/stream',
     // Guard BEFORE the upgrade: the registry caches one stream per session

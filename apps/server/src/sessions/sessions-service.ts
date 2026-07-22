@@ -1,12 +1,22 @@
 import { randomUUID } from 'node:crypto'
-import type { ChatMessage, SessionPermissionMode, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, Project, SessionPermissionMode, SessionSummary } from '@atelier/shared'
 import type { AppData } from '../store/app-data'
 import type { SdkClient } from '../sdk/sdk-client'
+import type { SessionStreamRegistry } from '../stream/session-stream'
+
+/** Deletion target not found anywhere (no draft record, no SDK session in any registered project) — the route maps this to 404. */
+export class SessionNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Session introuvable : ${id}`)
+    this.name = 'SessionNotFoundError'
+  }
+}
 
 export class SessionsService {
   constructor(
     private readonly sdk: SdkClient,
     private readonly data: AppData,
+    private readonly streams: SessionStreamRegistry,
   ) {}
 
   async list(projectId: string): Promise<SessionSummary[]> {
@@ -130,5 +140,64 @@ export class SessionsService {
     this.data.update((d) => {
       d.drafts = d.drafts.filter((x) => x.id !== id)
     })
+  }
+
+  /**
+   * Unified deletion — drafts and real sessions (spec 2026-07-17). Dispose runs
+   * FIRST and for drafts too: a draft whose first turn is in flight must have
+   * its turn aborted, or the "deleted" draft would materialize into a
+   * resurrected SDK session; dispose-before-delete also guarantees the SDK
+   * process is no longer appending to the JSONL when it is removed. (Accepted
+   * narrow race: a JSONL flushed despite the abort simply reappears in the
+   * list, deletable again.)
+   */
+  async delete(id: string): Promise<void> {
+    const isDraft = this.data.get().drafts.some((d) => d.id === id)
+    this.streams.dispose(id)
+
+    if (isDraft) {
+      this.data.update((d) => {
+        d.drafts = d.drafts.filter((x) => x.id !== id)
+      })
+      return
+    }
+
+    const sdkId = this.data.resolveSessionId(id)
+    const project = await this.findOwningProject(sdkId)
+    if (project === undefined) throw new SessionNotFoundError(id)
+
+    try {
+      await this.sdk.deleteSession(sdkId, project.path)
+    } catch (err) {
+      // The SDK throws an untyped Error when the session vanished between the
+      // scan and the delete — message-sniffing is the only discriminator (spec).
+      if (err instanceof Error && /not found/i.test(err.message)) throw new SessionNotFoundError(id)
+      throw err
+    }
+
+    this.data.update((d) => {
+      delete d.modelOverrides[sdkId]
+      delete d.permissionModes[sdkId]
+      for (const [draftId, mapped] of Object.entries(d.draftMap)) {
+        if (mapped === sdkId) delete d.draftMap[draftId]
+      }
+    })
+  }
+
+  /**
+   * DELETE /sessions/:id carries no project id — scan registered projects' dirs
+   * (O(projects) local listSessions calls; fine for a personal app). Unreadable
+   * folders are skipped, same tolerance as countSessions.
+   */
+  private async findOwningProject(sdkId: string): Promise<Project | undefined> {
+    for (const project of this.data.get().projects) {
+      try {
+        const sessions = await this.sdk.listSessions(project.path)
+        if (sessions.some((s) => s.id === sdkId)) return project
+      } catch {
+        // unreadable folder — skip
+      }
+    }
+    return undefined
   }
 }
