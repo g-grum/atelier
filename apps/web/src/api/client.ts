@@ -82,8 +82,15 @@ export function patchSession(sessionId: string, patch: { name?: string; model?: 
   return request<void>('PATCH', `/sessions/${encodeURIComponent(sessionId)}`, patch)
 }
 
-export function deleteSession(sessionId: string): Promise<void> {
-  return request<void>('DELETE', `/sessions/${encodeURIComponent(sessionId)}`)
+export async function deleteSession(sessionId: string): Promise<void> {
+  try {
+    await request<void>('DELETE', `/sessions/${encodeURIComponent(sessionId)}`)
+  } catch (err) {
+    // A 404 on DELETE means the session is already gone (double-clicked draft ×,
+    // deleted from the CLI) — that IS the requested outcome, not a failure.
+    if (err instanceof ApiError && err.status === 404) return
+    throw err
+  }
 }
 
 // ── Preferences ──

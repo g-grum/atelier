@@ -414,5 +414,25 @@ describe('App session deletion', () => {
     expect(banner.textContent).toContain('Impossible de supprimer la session')
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
     expect(screen.queryByText(/Impossible de supprimer la session/)).toBeNull()
+    // no optimistic removal: the row must survive a failed delete
+    expect(screen.getByText('Session un')).toBeTruthy()
+  })
+
+  test('a draft × deletes instantly — no confirmation dialog', async () => {
+    const draft: SessionSummary = { ...session, id: 'd1', name: null, isDraft: true, messageCount: 0, permissionMode: null }
+    const deleted: string[] = []
+    renderApp(
+      fakeBackend({
+        listSessions: async () => [session, draft],
+        deleteSession: async (id) => {
+          deleted.push(id)
+        },
+      }),
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer le brouillon' }))
+
+    await waitFor(() => expect(deleted).toEqual(['d1']))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
