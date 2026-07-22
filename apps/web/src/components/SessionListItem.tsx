@@ -13,7 +13,7 @@ export type SessionListItemProps = {
   active: boolean
   state: SessionDotState
   onSelect: () => void
-  /** Present only for drafts — real sessions have no delete affordance in v0.1. */
+  /** Every session is deletable (spec 2026-07-17): drafts instantly, real sessions behind the parent's confirmation dialog. */
   onDelete?: () => void
 }
 
@@ -34,7 +34,12 @@ export function SessionListItem({ session, active, state, onSelect, onDelete }: 
         <span className="when">{relativeTime(session.updatedAt)}</span>
       </button>
       {onDelete !== undefined && (
-        <button type="button" className="del" aria-label="Supprimer le brouillon" onClick={onDelete}>
+        <button
+          type="button"
+          className="del"
+          aria-label={session.isDraft ? 'Supprimer le brouillon' : 'Supprimer la conversation'}
+          onClick={onDelete}
+        >
           ×
         </button>
       )}

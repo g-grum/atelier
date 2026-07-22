@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ChatMessage, ProjectSummary, SessionSummary } from '@atelier/shared'
 import type { Backend } from './api/backend'
 import App from './App'
@@ -301,5 +301,109 @@ describe('App projects list resilience', () => {
     expect(queryClient.getQueryState(['projects'])?.status).toBe('error') // the refetch really failed…
     expect(screen.getByText('atelier')).toBeTruthy() // …yet the cached list keeps rendering
     expect(screen.queryByText(/Impossible de charger les projets/)).toBeNull()
+  })
+})
+
+describe('App session deletion', () => {
+  test('the × on a real session opens the dialog; confirming deletes through the backend', async () => {
+    const deleted: string[] = []
+    renderApp(
+      fakeBackend({
+        deleteSession: async (id) => {
+          deleted.push(id)
+        },
+      }),
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la conversation' }))
+    // the dialog is a gate — nothing deleted yet
+    expect(deleted).toEqual([])
+    expect(screen.getByRole('dialog').textContent).toContain('« Session un » sera définitivement supprimée.')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    await waitFor(() => expect(deleted).toEqual(['s1']))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  test('deleting the SELECTED session deselects it and refreshes the list', async () => {
+    let sessions: SessionSummary[] = [session]
+    renderApp(
+      fakeBackend({
+        listSessions: async () => sessions,
+        deleteSession: async (id) => {
+          sessions = sessions.filter((s) => s.id !== id)
+        },
+      }),
+    )
+
+    // select the session — the Topbar shows its rename affordance while selected
+    fireEvent.click(await screen.findByText('Session un'))
+    await screen.findByRole('button', { name: /renommer la session/i })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer la conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    // list refetched without the session, and the deleted session was deselected.
+    // queryAllByText: while selected, 'Session un' appears TWICE (sidebar + Topbar)
+    // — an all-gone assertion fails cleanly instead of a multiple-match timeout.
+    await waitFor(() => expect(screen.queryAllByText('Session un')).toHaveLength(0))
+    expect(screen.queryByRole('button', { name: /renommer la session/i })).toBeNull()
+  })
+
+  test('deleting a NON-selected session leaves the selection alone', async () => {
+    const other: SessionSummary = { ...session, id: 's2', name: 'Session deux' }
+    let sessions: SessionSummary[] = [session, other]
+    renderApp(
+      fakeBackend({
+        listSessions: async () => sessions,
+        deleteSession: async (id) => {
+          sessions = sessions.filter((s) => s.id !== id)
+        },
+      }),
+    )
+
+    // select 'Session un', then delete 'Session deux' from ITS row (two ×
+    // buttons share the label — scope with within(row))
+    fireEvent.click(await screen.findByText('Session un'))
+    await screen.findByRole('button', { name: /renommer la session « session un »/i })
+
+    const otherRow = screen.getByText('Session deux').closest('.sess') as HTMLElement
+    fireEvent.click(within(otherRow).getByRole('button', { name: 'Supprimer la conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    // 'Session deux' leaves the list; 'Session un' stays selected — the guard
+    // branch (`if (selected?.sessionId === session.id)`) must not over-deselect
+    await waitFor(() => expect(screen.queryByText('Session deux')).toBeNull())
+    expect(screen.getByRole('button', { name: /renommer la session « session un »/i })).toBeTruthy()
+  })
+
+  test('cancelling the dialog deletes nothing', async () => {
+    const deleted: string[] = []
+    renderApp(
+      fakeBackend({
+        deleteSession: async (id) => {
+          deleted.push(id)
+        },
+      }),
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(deleted).toEqual([])
+  })
+
+  test('a failed deletion surfaces a dismissible notice', async () => {
+    renderApp(fakeBackend({ deleteSession: async () => Promise.reject(new Error('DELETE /api/sessions/s1 → 500')) }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+
+    const banner = await screen.findByRole('alert')
+    expect(banner.textContent).toContain('Impossible de supprimer la session')
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
+    expect(screen.queryByText(/Impossible de supprimer la session/)).toBeNull()
   })
 })

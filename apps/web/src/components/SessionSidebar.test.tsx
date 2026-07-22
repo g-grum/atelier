@@ -51,7 +51,7 @@ function renderSidebar(overrides: Partial<SessionSidebarProps> = {}) {
     onSelectProject: () => {},
     onSelect: (session) => calls.selected.push(session),
     onCreateDraft: () => {},
-    onDeleteDraft: (session) => calls.deleted.push(session),
+    onDelete: (session) => calls.deleted.push(session),
     onRegisterProject: (path) => calls.registered.push(path),
     onRetryProjects: () => {},
     ...overrides,
@@ -91,15 +91,16 @@ describe('SessionSidebar sessions', () => {
     expect(calls.selected).toEqual([realSession])
   })
 
-  test('a draft row shows the delete button, a real session does not', () => {
+  test('every row shows a delete button — draft vs conversation label', () => {
     const { calls } = renderSidebar()
-    const draftRow = rowOf('Nouvelle session')
-    const deleteButton = within(draftRow).getByRole('button', { name: /supprimer le brouillon/i })
-    expect(within(rowOf('Refresh token expiré')).queryByRole('button', { name: /supprimer/i })).toBeNull()
+    const draftDelete = within(rowOf('Nouvelle session')).getByRole('button', { name: 'Supprimer le brouillon' })
+    const realDelete = within(rowOf('Refresh token expiré')).getByRole('button', { name: 'Supprimer la conversation' })
 
     // Deleting must not also select the row.
-    fireEvent.click(deleteButton)
+    fireEvent.click(draftDelete)
     expect(calls.deleted).toEqual([draftSession])
+    fireEvent.click(realDelete)
+    expect(calls.deleted).toEqual([draftSession, realSession])
     expect(calls.selected).toEqual([])
   })
 

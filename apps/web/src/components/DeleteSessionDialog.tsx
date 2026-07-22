@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import type { SessionSummary } from '@atelier/shared'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
 
@@ -14,6 +15,12 @@ export type DeleteSessionDialogProps = {
  * Drafts skip this dialog; their instant delete is unchanged.
  */
 export function DeleteSessionDialog({ session, onConfirm, onCancel }: DeleteSessionDialogProps) {
+  // Radix keeps the content mounted through the exit animation after App nulls
+  // the session — cache the last real one so the copy never flashes the fallback
+  // name mid-close. (Untestable under happy-dom: no animations there.)
+  const lastSession = useRef(session)
+  if (session !== null) lastSession.current = session
+  const shown = session ?? lastSession.current
   return (
     <Dialog
       open={session !== null}
@@ -24,7 +31,7 @@ export function DeleteSessionDialog({ session, onConfirm, onCancel }: DeleteSess
       <DialogContent className="bg-surface sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle className="text-[15px]">Supprimer la conversation ?</DialogTitle>
-          <DialogDescription>« {session?.name ?? 'Nouvelle session'} » sera définitivement supprimée.</DialogDescription>
+          <DialogDescription>« {shown?.name ?? 'Nouvelle session'} » sera définitivement supprimée.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <button type="button" className="dialog-btn" onClick={onCancel}>

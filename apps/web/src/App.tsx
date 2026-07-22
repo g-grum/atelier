@@ -6,6 +6,7 @@ import type { RateLimitSnapshot, SessionPermissionMode, SessionSummary } from '@
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
+import { DeleteSessionDialog } from './components/DeleteSessionDialog'
 import { ErrorBanner } from './components/ErrorBanner'
 import { ModifiedFilesPanel } from './components/ModifiedFilesPanel'
 import { PermissionModeGate } from './components/PermissionModeGate'
@@ -38,6 +39,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   const [openFailure, setOpenFailure] = useState<{ sessionId: string; projectId: string; message: string } | null>(null)
   /** Transient failure notice from session mutations (rename / create / delete). */
   const [notice, setNotice] = useState<string | null>(null)
+  /** Real session awaiting delete confirmation — null keeps the dialog closed. */
+  const [confirmDelete, setConfirmDelete] = useState<SessionSummary | null>(null)
   /** Bumped per open attempt — a stale rejection must not overwrite a newer attempt's state. */
   const openAttempt = useRef(0)
 
@@ -166,7 +169,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     onError: (error) => setNotice(`Impossible de créer la session : ${errorMessage(error)}`),
   })
 
-  const deleteDraft = useMutation({
+  const deleteSession = useMutation({
     mutationFn: (session: SessionSummary) => backend.deleteSession(session.id),
     onSuccess: (_result, session) => {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
@@ -178,7 +181,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         setOpenFailure(null)
       }
     },
-    onError: (error) => setNotice(`Impossible de supprimer le brouillon : ${errorMessage(error)}`),
+    onError: (error) => setNotice(`Impossible de supprimer la session : ${errorMessage(error)}`),
   })
 
   const renameSession = useMutation({
@@ -226,7 +229,12 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           onCreateDraft={() => {
             if (projectId !== null) createDraft.mutate(projectId)
           }}
-          onDeleteDraft={(session) => deleteDraft.mutate(session)}
+          onDelete={(session) => {
+            // Drafts are empty — instant delete. A real session's JSONL is gone for
+            // good (CLI included), so it goes through the confirmation dialog.
+            if (session.isDraft) deleteSession.mutate(session)
+            else setConfirmDelete(session)
+          }}
           onRegisterProject={(path) => registerProject.mutate(path)}
           registerError={registerProject.error !== null ? errorMessage(registerProject.error) : null}
           registerPending={registerProject.isPending}
@@ -291,6 +299,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         </aside>
       </div>
       <Toaster />
+      <DeleteSessionDialog
+        session={confirmDelete}
+        onConfirm={(session) => {
+          setConfirmDelete(null)
+          deleteSession.mutate(session)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

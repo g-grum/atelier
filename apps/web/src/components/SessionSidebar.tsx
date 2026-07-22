@@ -24,7 +24,8 @@ export type SessionSidebarProps = {
   onSelectProject: (projectId: string) => void
   onSelect: (session: SessionSummary) => void
   onCreateDraft: () => void
-  onDeleteDraft: (session: SessionSummary) => void
+  /** Delete affordance for every row — the parent routes drafts to instant delete and real sessions to the confirmation dialog. */
+  onDelete: (session: SessionSummary) => void
   /** First-launch bootstrap: register a folder as the project (POST /api/projects). */
   onRegisterProject: (path: string) => void
   /** Message of a failed POST /api/projects (shown inside the register form). */
@@ -124,7 +125,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
   )
 }
 
-function SessionList({ sessions, activeSessionId, streamingSessionId, onSelect, onDeleteDraft }: SessionSidebarProps) {
+function SessionList({ sessions, activeSessionId, streamingSessionId, onSelect, onDelete }: SessionSidebarProps) {
   const ordered = [...sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   return (
     <>
@@ -135,7 +136,7 @@ function SessionList({ sessions, activeSessionId, streamingSessionId, onSelect, 
           active={session.id === activeSessionId}
           state={dotState(session, streamingSessionId)}
           onSelect={() => onSelect(session)}
-          onDelete={session.isDraft ? () => onDeleteDraft(session) : undefined}
+          onDelete={() => onDelete(session)}
         />
       ))}
     </>
