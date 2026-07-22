@@ -26,7 +26,7 @@
 
 Pure plumbing — the thin wrapper has no logic to unit-test on its own; Task 3's service tests exercise the mock, and the real client follows the exact `renameSession` wrapper pattern. No dedicated test here.
 
-- [ ] **Step 1: Add `deleteSession` to the `SdkClient` interface**
+- [x] **Step 1: Add `deleteSession` to the `SdkClient` interface**
 
 In `apps/server/src/sdk/sdk-client.ts`, extend the interface:
 
@@ -40,7 +40,7 @@ export interface SdkClient {
 }
 ```
 
-- [ ] **Step 2: Implement in `AgentSdkClient`**
+- [x] **Step 2: Implement in `AgentSdkClient`**
 
 Add `deleteSession` to the SDK import list at the top of the file (alongside `renameSession`):
 
@@ -71,7 +71,7 @@ async deleteSession(sessionId: string, dir: string): Promise<void> {
 }
 ```
 
-- [ ] **Step 3: Implement in `MockSdkClient`**
+- [x] **Step 3: Implement in `MockSdkClient`**
 
 In `apps/server/src/sdk/sdk-client.mock.ts`, after `renameSession`:
 
@@ -81,12 +81,12 @@ async deleteSession(sessionId: string, dir: string): Promise<void> {
 }
 ```
 
-- [ ] **Step 4: Run the full suite**
+- [x] **Step 4: Run the full suite**
 
 Run: `bun test`
 Expected: all green (no behavior changed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/sdk/sdk-client.ts apps/server/src/sdk/sdk-client.mock.ts
@@ -101,7 +101,7 @@ git commit -m "feat(server): SdkClient.deleteSession — interface, real client,
 
 **Why:** the registry caches one stream per session forever; without a removal method the in-memory singleton outlives the deleted `.jsonl` and a reconnection would resurrect a ghost session. Dispose = abort the in-flight turn (same path as the WS `abort` message) + drop sinks + remove the map entry. Server-side socket closing is deliberately NOT part of dispose (streams are socket-free by design; the single Electron window closes its own socket client-side).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to the `describe('SessionStream', ...)` block in `session-stream.test.ts` (reuse the existing `setup`, `makeSink`, `clientMessage`, `runTurnParams`, `tick` helpers and the `Draft` import):
 
@@ -160,12 +160,12 @@ test('registry.dispose accepts the draft id after materialization re-keyed the s
 })
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `bun test apps/server/src/stream/session-stream.test.ts`
 Expected: FAIL — `registry.dispose is not a function`.
 
-- [ ] **Step 3: Implement dispose**
+- [x] **Step 3: Implement dispose**
 
 In `session-stream.ts`, add to `SessionStream` (after `onClose`):
 
@@ -201,12 +201,12 @@ dispose(id: string): void {
 }
 ```
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `bun test apps/server/src/stream/session-stream.test.ts` then full `bun test`
 Expected: PASS, everything green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/stream/session-stream.ts apps/server/src/stream/session-stream.test.ts
@@ -225,7 +225,7 @@ git commit -m "feat(server): SessionStream/Registry dispose — abort turn, drop
 
 **Wiring note (from the spec):** the registry is currently constructed inside `createApp` — the service needs it, so construction moves to the composition root and is injected into both. `deleteDraft` stays in place this task (the route still calls it); Task 4 rewires the route and removes it.
 
-- [ ] **Step 1: Update `freshSetup` and write the failing tests**
+- [x] **Step 1: Update `freshSetup` and write the failing tests**
 
 In `sessions-service.test.ts`, replace `freshSetup` (registry + optional scripted turns) and add the imports — NOTE: `SessionsService` is already imported from `./sessions-service`; MERGE `SessionNotFoundError` into that existing import line (a duplicate import binding is a SyntaxError under Bun):
 
@@ -375,12 +375,12 @@ describe('delete', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `bun test apps/server/src/sessions/sessions-service.test.ts`
 Expected: FAIL — the missing `SessionNotFoundError` export fails the whole file at link time; once exported, `service.delete is not a function`. (`bun test` does not typecheck: the extra constructor argument alone would NOT fail — don't rely on it.)
 
-- [ ] **Step 3: Implement the service**
+- [x] **Step 3: Implement the service**
 
 In `sessions-service.ts` — imports gain `Project` (from `@atelier/shared`) and the registry type:
 
@@ -474,7 +474,7 @@ private async findOwningProject(sdkId: string): Promise<Project | undefined> {
 }
 ```
 
-- [ ] **Step 4: Update every construction site**
+- [x] **Step 4: Update every construction site**
 
 `apps/server/src/index.ts` — build the registry in the composition root, inject into both:
 
@@ -524,12 +524,12 @@ const sessions = new SessionsService(sdk, data, new SessionStreamRegistry(data, 
 
 (add the `SessionStreamRegistry` import; keep each test's existing structure otherwise).
 
-- [ ] **Step 5: Run to verify everything passes**
+- [x] **Step 5: Run to verify everything passes**
 
 Run: `bun test`
 Expected: all green — new delete tests pass, all construction sites updated.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/sessions/sessions-service.ts apps/server/src/sessions/sessions-service.test.ts apps/server/src/index.ts apps/server/src/app.ts apps/server/src/app.test.ts apps/server/src/ide/open-in-ide.test.ts
@@ -544,7 +544,7 @@ git commit -m "feat(server): SessionsService.delete — unified draft/real delet
 - Modify: `apps/server/src/sessions/sessions-service.test.ts` (retire the old `deleteDraft` test — `delete` covers it)
 - Test: `apps/server/src/app.test.ts`
 
-- [ ] **Step 1: Write the failing route tests**
+- [x] **Step 1: Write the failing route tests**
 
 In `app.test.ts`, after the existing `DELETE /api/sessions/:id removes the draft from the list` test (l.289), add:
 
@@ -572,12 +572,12 @@ test('DELETE /api/sessions/:id with an unknown id returns 404', async () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `bun test apps/server/src/app.test.ts`
 Expected: the real-session test FAILS (no `deleteSession` call — the old route only filters drafts) and the unknown-id test FAILS (204 instead of 404).
 
-- [ ] **Step 3: Rewire the route**
+- [x] **Step 3: Rewire the route**
 
 In `sessions-routes.ts`, import the error class (`import { SessionNotFoundError, type SessionsService } ...` — note `SessionNotFoundError` is a value import) and replace the delete handler:
 
@@ -594,11 +594,11 @@ app.delete('/sessions/:id', async (c) => {
 })
 ```
 
-- [ ] **Step 4: Remove `deleteDraft`**
+- [x] **Step 4: Remove `deleteDraft`**
 
 Delete the `deleteDraft` method from `sessions-service.ts` (its behavior lives in `delete`). In `sessions-service.test.ts`, delete the old `deleteDraft removes it from the list` test — the `delete → a draft is removed…` test from Task 3 covers it.
 
-- [ ] **Step 4b: Carry-forwards from Task 3's quality review**
+- [x] **Step 4b: Carry-forwards from Task 3's quality review**
 
 In `sessions-service.ts`, extract the AppData cleanup into a private helper and ALSO run it in the SDK not-found branch (the session is definitively gone there — without this, its `modelOverrides`/`permissionModes`/`draftMap` entries leak forever, since any retry 404s at the scan and never reaches cleanup):
 
@@ -661,12 +661,12 @@ Two new tests in the `describe('delete', ...)` block:
   })
 ```
 
-- [ ] **Step 5: Run the full suite**
+- [x] **Step 5: Run the full suite**
 
 Run: `bun test`
 Expected: all green. The pre-existing draft DELETE test (app.test.ts l.289) must still pass through the new unified path.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/sessions/sessions-routes.ts apps/server/src/sessions/sessions-service.ts apps/server/src/sessions/sessions-service.test.ts apps/server/src/app.test.ts
@@ -686,7 +686,7 @@ git commit -m "feat(server): DELETE /api/sessions/:id handles real sessions — 
 
 Controlled Radix dialog (open ⇔ `session !== null`), reusing `components/ui/dialog.tsx` (already used by `SettingsPanel`). Final copy (typographic refinement of the spec: French quotes around the name, consistent with the Topbar's « … » aria-label): title « Supprimer la conversation ? », body « Nom » sera définitivement supprimée.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `DeleteSessionDialog.test.tsx`:
 
@@ -769,12 +769,12 @@ describe('DeleteSessionDialog', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `bun test apps/web/src/components/DeleteSessionDialog.test.tsx`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the component**
+- [x] **Step 3: Implement the component**
 
 Create `DeleteSessionDialog.tsx`:
 
@@ -838,12 +838,12 @@ In `styles.css`, next to the `.perm-gate` block (same nesting level, same button
 .dialog-btn.danger:hover { border-color: var(--color-red); background: rgba(251, 111, 95, 0.08); }
 ```
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `bun test apps/web/src/components/DeleteSessionDialog.test.tsx` then full `bun test`
 Expected: PASS, everything green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/components/DeleteSessionDialog.tsx apps/web/src/components/DeleteSessionDialog.test.tsx apps/web/src/styles.css
@@ -860,7 +860,7 @@ git commit -m "feat(web): DeleteSessionDialog — confirmation gate for real ses
 
 One task on purpose: renaming the sidebar prop (`onDeleteDraft` → `onDelete`) and routing real sessions through the dialog touch the same seam — splitting would leave a × that does nothing.
 
-- [ ] **Step 0: Carry-forward from Task 5's quality review — exit-animation name flash**
+- [x] **Step 0: Carry-forward from Task 5's quality review — exit-animation name flash**
 
 In `DeleteSessionDialog.tsx`: when App nulls the session, Radix keeps the content mounted through the ~200ms fade-out, during which `session?.name ?? 'Nouvelle session'` briefly shows the WRONG name in a permanent-deletion warning. Cache the last non-null session (add `import { useRef } from 'react'`):
 
@@ -876,7 +876,7 @@ export function DeleteSessionDialog({ session, onConfirm, onCancel }: DeleteSess
 
 and use `shown?.name ?? 'Nouvelle session'` in the description (the `open` prop and the Supprimer guard keep using `session`). No test possible under happy-dom — code + comment only; the existing 6 tests must stay green.
 
-- [ ] **Step 1: Write the failing sidebar tests**
+- [x] **Step 1: Write the failing sidebar tests**
 
 In `SessionSidebar.test.tsx`: rename the `onDeleteDraft` prop to `onDelete` in `renderSidebar`'s props (the `calls.deleted` recorder stays). Replace the test `a draft row shows the delete button, a real session does not` with:
 
@@ -897,7 +897,7 @@ test('every row shows a delete button — draft vs conversation label', () => {
 
 Keep the sibling-buttons accessibility test as is (the draft row keeps its label).
 
-- [ ] **Step 2: Write the failing App tests**
+- [x] **Step 2: Write the failing App tests**
 
 Append to `App.test.tsx` — add `within` to the existing `@testing-library/react` import (the file imports `act, cleanup, fireEvent, render, screen, waitFor` today):
 
@@ -1016,12 +1016,12 @@ describe('App session deletion', () => {
 })
 ```
 
-- [ ] **Step 3: Run to verify they fail**
+- [x] **Step 3: Run to verify they fail**
 
 Run: `bun test apps/web/src/components/SessionSidebar.test.tsx apps/web/src/App.test.tsx`
 Expected: FAIL — real rows have no delete button; no dialog in App.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 `SessionListItem.tsx` — label per kind, comment updated:
 
@@ -1101,12 +1101,12 @@ onDelete={(session) => {
 />
 ```
 
-- [ ] **Step 5: Run to verify everything passes**
+- [x] **Step 5: Run to verify everything passes**
 
 Run: `bun test`
 Expected: all green — sidebar, dialog, App flows, and the untouched server suites.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/components/SessionListItem.tsx apps/web/src/components/SessionSidebar.tsx apps/web/src/App.tsx apps/web/src/components/SessionSidebar.test.tsx apps/web/src/App.test.tsx
@@ -1120,7 +1120,7 @@ git commit -m "feat(web): delete any conversation from the sidebar — confirmat
 
 Project release workflow: bump `version.json` (concise French notes) + `bun run build:web` so a running app toasts « Une nouvelle version est disponible ».
 
-- [ ] **Step 0: Carry-forwards from Task 6's quality review**
+- [x] **Step 0: Carry-forwards from Task 6's quality review**
 
 **(a) DELETE 404 = success (client seam).** A rapid double-× on a draft fires two DELETEs; the second 404s and raises a FALSE « Impossible de supprimer la session » banner for a delete that succeeded. The session is gone either way — treat not-found as the requested outcome, at the HTTP seam where the status is typed (`ApiError.status`, no message-sniffing). In `apps/web/src/api/client.ts`:
 
@@ -1219,7 +1219,7 @@ git add apps/web/src/api/client.ts apps/web/src/api/client.test.ts apps/web/src/
 git commit -m "fix(web): treat DELETE 404 as success — no false banner on an already-gone session"
 ```
 
-- [ ] **Step 1: Bump version.json**
+- [x] **Step 1: Bump version.json**
 
 ```json
 {
@@ -1232,17 +1232,17 @@ git commit -m "fix(web): treat DELETE 404 as success — no false banner on an a
 
 (Current version is 0.1.6 as of 0cfd48b. If it moved again, bump from the CURRENT value — and mirror that version in the Step 4 commit message.)
 
-- [ ] **Step 2: Build the web bundle**
+- [x] **Step 2: Build the web bundle**
 
 Run: `bun run build:web`
 Expected: vite build succeeds.
 
-- [ ] **Step 3: Full suite one last time**
+- [x] **Step 3: Full suite one last time**
 
 Run: `bun test`
 Expected: all green.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add version.json
