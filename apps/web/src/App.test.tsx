@@ -328,12 +328,15 @@ describe('App session deletion', () => {
 
   test('deleting the SELECTED session deselects it and refreshes the list', async () => {
     let sessions: SessionSummary[] = [session]
+    const closes: number[] = []
     renderApp(
       fakeBackend({
         listSessions: async () => sessions,
         deleteSession: async (id) => {
           sessions = sessions.filter((s) => s.id !== id)
         },
+        // Track socket teardown: deleting the selected session must close its stream.
+        createSocket: () => ({ ...idleSocket, close: () => closes.push(1) }),
       }),
     )
 
@@ -349,6 +352,12 @@ describe('App session deletion', () => {
     // — an all-gone assertion fails cleanly instead of a multiple-match timeout.
     await waitFor(() => expect(screen.queryAllByText('Session un')).toHaveLength(0))
     expect(screen.queryByRole('button', { name: /renommer la session/i })).toBeNull()
+    // Pin the deselection itself (`setSelected(null)`) — the two assertions
+    // above also hold from the list refetch alone. A dangling selection would
+    // leave the composer enabled against a deleted session.
+    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+    // Pin `controller.close()` — the deleted session's socket must be torn down.
+    expect(closes.length).toBeGreaterThan(0)
   })
 
   test('deleting a NON-selected session leaves the selection alone', async () => {
