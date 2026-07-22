@@ -1,6 +1,6 @@
 {
-  "version": "0.1.6",
+  "version": "0.1.7",
   "notes": [
-    "Le panneau droit va à l’essentiel : Limites du plan + Fichiers modifiés — les cartes de comptage de tokens (session et global) sont retirées"
+    "Supprimer une conversation depuis la barre latérale : croix sur chaque session, confirmation avant suppression définitive (le fichier disparaît aussi du CLI)"
   ]
 }
