@@ -126,3 +126,50 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 function isRecordWithType(value: unknown, types: Set<string>): boolean {
   return typeof value === 'object' && value !== null && 'type' in value && types.has((value as { type: string }).type)
 }
+
+// ── Widget dashboard (spec 2026-07-21) ──
+export type WidgetType = 'github-prs' | 'rate-limits' | 'modified-files'
+export type WidgetHeight = 'S' | 'M' | 'L'
+export type WidgetInstance = {
+  /** uuid, unique in the array (array order = display order) */
+  id: string
+  type: WidgetType
+  /** grid columns occupied (the dash grid has 2 columns) */
+  span: 1 | 2
+  /** fixed height tier — content scrolls internally */
+  height: WidgetHeight
+  /** github-prs: REQUIRED (repo); other types: must be absent (PUT validation enforces both) */
+  config?: { repo: string; limit?: number }
+}
+
+/** Types that may appear at most once in a layout. */
+export const SINGLETON_WIDGET_TYPES: readonly WidgetType[] = ['rate-limits', 'modified-files']
+
+/** owner/repo — shared by PUT /api/widgets, GET /api/github/prs and the config dialog. Anchored: no slashes inside segments, no query strings. */
+export const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/
+
+/**
+ * Single source for the server default AND the web fallback (spec: they must
+ * not drift). Mirrors the pre-dashboard aside. NEVER mutate — consumers clone.
+ */
+export const DEFAULT_WIDGETS: readonly WidgetInstance[] = [
+  { id: 'default-rate-limits', type: 'rate-limits', span: 2, height: 'M' },
+  { id: 'default-modified-files', type: 'modified-files', span: 2, height: 'M' },
+]
+
+// ── GitHub PRs (spec 2026-07-21) ──
+export type PrState = 'open' | 'merged' | 'closed' | 'draft'
+export type PrCi = 'passed' | 'failed' | 'pending' | null
+export type PrReview = 'approved' | 'changes_requested' | 'required' | null
+/** REST shape of GET /api/github/prs — one entry per PR, newest activity first. */
+export type PrSummary = {
+  number: number
+  title: string
+  url: string
+  author: string
+  state: PrState
+  updatedAt: string
+  branch: string
+  ci: PrCi
+  review: PrReview
+}
