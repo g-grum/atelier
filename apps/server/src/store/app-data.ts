@@ -56,15 +56,12 @@ export class AppData {
       // Deep-merge preferences: a shallow `{ ...EMPTY, ...parsed }` replaces the
       // nested object wholesale, so a v0.1 file (no budgets) would lose the new
       // defaults. Merging per-key keeps saved values AND future defaults.
-      this.data = {
-        ...EMPTY,
-        ...parsed,
-        preferences: { ...EMPTY.preferences, ...parsed.preferences },
-        // Same aliasing trap as preferences, but for an array: a legacy file
-        // without `widgets` must get a FRESH copy of the default, never a
-        // reference into EMPTY (one instance's mutation would pollute all).
-        widgets: parsed.widgets ?? structuredClone(EMPTY.widgets),
-      }
+      // Cloning EMPTY up front means a legacy file missing ANY object/array key
+      // gets a fresh copy — one instance's in-place mutation can never pollute
+      // the module-level EMPTY or future instances (the trap the widgets
+      // clone-guard test pins down).
+      const base = structuredClone(EMPTY)
+      this.data = { ...base, ...parsed, preferences: { ...base.preferences, ...parsed.preferences } }
     } else {
       this.data = structuredClone(EMPTY)
     }

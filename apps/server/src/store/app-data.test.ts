@@ -156,4 +156,10 @@ describe('AppData.widgets', () => {
     })
     expect(new AppData(file).get().widgets).toEqual(stored)
   })
+
+  test('an explicitly empty stored layout is preserved, not reset to the default', () => {
+    const file = tmpFile()
+    writeFileSync(file, JSON.stringify({ widgets: [] }))
+    expect(new AppData(file).get().widgets).toEqual([])
+  })
 })
