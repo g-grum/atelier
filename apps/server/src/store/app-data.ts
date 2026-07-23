@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AlwaysRule, Preferences, Project, RateLimitSnapshot, SessionPermissionMode, UsageEvent } from '@atelier/shared'
+import type { AlwaysRule, Preferences, Project, RateLimitSnapshot, SessionPermissionMode, UsageEvent, WidgetInstance } from '@atelier/shared'
+import { DEFAULT_WIDGETS } from '@atelier/shared'
 
 /** permissionMode is optional for on-disk backward compatibility — absent/undefined means "not chosen yet" (same as null). */
 export type Draft = { id: string; projectId: string; name: string | null; model: string; createdAt: string; permissionMode?: SessionPermissionMode | null }
@@ -20,6 +21,8 @@ export type AppDataShape = {
   usageEvents: UsageEvent[]
   /** Last-known plan limit per window (five_hour, seven_day, …) — REAL SDK data, honest-data policy. */
   rateLimits: Record<string, RateLimitSnapshot>
+  /** Dashboard layout — array order = display order. Spec 2026-07-21. */
+  widgets: WidgetInstance[]
 }
 
 const EMPTY: AppDataShape = {
@@ -39,6 +42,7 @@ const EMPTY: AppDataShape = {
   rules: [],
   usageEvents: [],
   rateLimits: {},
+  widgets: [...DEFAULT_WIDGETS],
 }
 
 const USAGE_RETENTION_MS = 7 * 86400_000
@@ -52,7 +56,15 @@ export class AppData {
       // Deep-merge preferences: a shallow `{ ...EMPTY, ...parsed }` replaces the
       // nested object wholesale, so a v0.1 file (no budgets) would lose the new
       // defaults. Merging per-key keeps saved values AND future defaults.
-      this.data = { ...EMPTY, ...parsed, preferences: { ...EMPTY.preferences, ...parsed.preferences } }
+      this.data = {
+        ...EMPTY,
+        ...parsed,
+        preferences: { ...EMPTY.preferences, ...parsed.preferences },
+        // Same aliasing trap as preferences, but for an array: a legacy file
+        // without `widgets` must get a FRESH copy of the default, never a
+        // reference into EMPTY (one instance's mutation would pollute all).
+        widgets: parsed.widgets ?? structuredClone(EMPTY.widgets),
+      }
     } else {
       this.data = structuredClone(EMPTY)
     }

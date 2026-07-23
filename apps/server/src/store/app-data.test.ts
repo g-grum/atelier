@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DEFAULT_WIDGETS, type WidgetInstance } from '@atelier/shared'
 import { AppData } from './app-data'
 
 function freshStore() {
@@ -113,5 +114,46 @@ describe('AppData', () => {
     expect(store.get().drafts).toHaveLength(0)
     const reloaded = new AppData(path)
     expect(reloaded.resolveSessionId('draft1')).toBe('sdk-42')
+  })
+})
+
+function tmpFile(): string {
+  return join(mkdtempSync(join(tmpdir(), 'atelier-appdata-')), 'data.json')
+}
+
+describe('AppData.widgets', () => {
+  test('fresh store defaults to DEFAULT_WIDGETS', () => {
+    const data = new AppData(tmpFile())
+    expect(data.get().widgets).toEqual([...DEFAULT_WIDGETS])
+  })
+
+  test('legacy file without the key gets the default (backward compat)', () => {
+    const file = tmpFile()
+    writeFileSync(file, JSON.stringify({ projects: [] }))
+    const data = new AppData(file)
+    expect(data.get().widgets).toEqual([...DEFAULT_WIDGETS])
+  })
+
+  test('legacy-file instance mutating IN PLACE never pollutes another instance (clone guard)', () => {
+    // Both instances must take the `{ ...EMPTY, ...parsed }` branch (file WITHOUT
+    // the key) and the mutation must be in-place — a replaced reference or the
+    // fresh-store branch would pass even without the clone guard.
+    const legacyA = tmpFile()
+    writeFileSync(legacyA, JSON.stringify({ projects: [] }))
+    new AppData(legacyA).update((d) => {
+      d.widgets.push({ id: 'x', type: 'github-prs', span: 1, height: 'S', config: { repo: 'o/r' } })
+    })
+    const legacyB = tmpFile()
+    writeFileSync(legacyB, JSON.stringify({ projects: [] }))
+    expect(new AppData(legacyB).get().widgets).toEqual([...DEFAULT_WIDGETS])
+  })
+
+  test('a stored layout round-trips through the file', () => {
+    const file = tmpFile()
+    const stored: WidgetInstance[] = [{ id: 'w1', type: 'github-prs', span: 1, height: 'S', config: { repo: 'o/r', limit: 5 } }]
+    new AppData(file).update((d) => {
+      d.widgets = stored
+    })
+    expect(new AppData(file).get().widgets).toEqual(stored)
   })
 })
