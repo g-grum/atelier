@@ -29,7 +29,10 @@ describe('validateWidgets', () => {
     ['github-prs without config', [pr({ config: undefined })], 'config'],
     ['github-prs bad repo', [pr({ config: { repo: 'no-slash' } })], 'repo'],
     ['github-prs bad limit', [pr({ config: { repo: 'o/r', limit: 0 } })], 'limit'],
-    ['config on a singleton', [ok({ config: { repo: 'o/r' } })], 'config'],
+    ['limit above 30', [pr({ config: { repo: 'o/r', limit: 31 } })], 'limit'],
+    ['non-integer limit', [pr({ config: { repo: 'o/r', limit: 1.5 } })], 'limit'],
+    ['span as string', [ok({ span: '2' })], 'span'],
+    ['config on a singleton', [ok({ config: { repo: 'o/r' } })], 'n’est pas accepté'],
     ['duplicate singleton', [ok(), ok({ id: 'b' })], 'une fois'],
   ] as const)('rejects %s', (_name, value, fragment) => {
     const result = validateWidgets(value)
@@ -39,6 +42,6 @@ describe('validateWidgets', () => {
 
   test('multiple github-prs instances are allowed', () => {
     const result = validateWidgets([pr({ id: 'p1' }), pr({ id: 'p2' })])
-    expect('error' in result).toBe(false)
+    if ('error' in result) throw new Error(result.error)
   })
 })

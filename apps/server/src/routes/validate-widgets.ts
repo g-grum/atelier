@@ -25,6 +25,10 @@ export function validateWidgets(value: unknown): { widgets: WidgetInstance[] } |
     if (typeof w.type !== 'string' || !TYPES.has(w.type)) return { error: `requête invalide : type inconnu « ${String(w.type)} »` }
     if (w.span !== 1 && w.span !== 2) return { error: 'requête invalide : « span » doit être 1 ou 2' }
     if (typeof w.height !== 'string' || !HEIGHTS.has(w.height)) return { error: 'requête invalide : « height » doit être S, M ou L' }
+    if (SINGLETONS.has(w.type)) {
+      if (singletons.has(w.type)) return { error: `requête invalide : « ${w.type} » ne peut apparaître qu’une fois` }
+      singletons.add(w.type)
+    }
     const clean: WidgetInstance = { id: w.id, type: w.type as WidgetType, span: w.span, height: w.height as WidgetInstance['height'] }
     if (w.type === 'github-prs') {
       if (typeof w.config !== 'object' || w.config === null || Array.isArray(w.config)) {
@@ -39,11 +43,7 @@ export function validateWidgets(value: unknown): { widgets: WidgetInstance[] } |
       }
       clean.config = { repo: config.repo, ...(config.limit !== undefined ? { limit: config.limit as number } : {}) }
     } else {
-      if (w.config !== undefined) return { error: `requête invalide : « config » n'est pas accepté pour ${w.type}` }
-      if (SINGLETONS.has(w.type)) {
-        if (singletons.has(w.type)) return { error: `requête invalide : « ${w.type} » ne peut apparaître qu'une fois` }
-        singletons.add(w.type)
-      }
+      if (w.config !== undefined) return { error: `requête invalide : « config » n’est pas accepté pour ${w.type}` }
     }
     widgets.push(clean)
   }
