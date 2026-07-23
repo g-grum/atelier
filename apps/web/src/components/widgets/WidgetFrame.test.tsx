@@ -58,6 +58,24 @@ describe('WidgetFrame', () => {
     expect(changes).toEqual([{ ...instance, span: 1 }])
   })
 
+  test('menu: span-1 widget offers Pleine largeur and patches span to 2', async () => {
+    const half: WidgetInstance = { ...instance, span: 1 }
+    const { changes } = renderFrame({ instance: half })
+    await openMenu()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Pleine largeur' }))
+    expect(changes).toEqual([{ ...half, span: 2 }])
+  })
+
+  test('menu: Configurer… shown with onConfigure and calls it; Retirer stays last', async () => {
+    const configured: number[] = []
+    renderFrame({ onConfigure: () => configured.push(1) })
+    await openMenu()
+    const items = screen.getAllByRole('menuitem')
+    expect(items.at(-1)?.textContent).toBe('Retirer')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Configurer…' }))
+    expect(configured).toHaveLength(1)
+  })
+
   test('menu: remove emits the id; configure hidden without onConfigure', async () => {
     const { removed } = renderFrame()
     await openMenu()

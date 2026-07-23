@@ -23,7 +23,7 @@ export type WidgetFrameProps = {
  * Layout classes (`span-*`, `h-*`) are consumed by .dash-grid in styles.css.
  */
 export function WidgetFrame({ instance, title, onChange, onRemove, onConfigure, dragHandleProps, children }: WidgetFrameProps) {
-  const isHalf = instance.span === 2
+  const isFull = instance.span === 2
 
   return (
     <section className={`widget span-${instance.span} h-${instance.height}`} role="group" aria-label={title}>
@@ -34,13 +34,13 @@ export function WidgetFrame({ instance, title, onChange, onRemove, onConfigure, 
         <h3>{title}</h3>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="widget-menu-trigger" aria-label="Options du widget">
+            <button type="button" className="widget-menu-btn" aria-label="Options du widget">
               ⋯
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="widget-menu">
-            <DropdownMenuItem onSelect={() => onChange({ ...instance, span: isHalf ? 1 : 2 })}>
-              {isHalf ? 'Demi-largeur' : 'Pleine largeur'}
+            <DropdownMenuItem onSelect={() => onChange({ ...instance, span: isFull ? 1 : 2 })}>
+              {isFull ? 'Demi-largeur' : 'Pleine largeur'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {HEIGHTS.filter((height) => height !== instance.height).map((height) => (
