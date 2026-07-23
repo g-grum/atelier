@@ -30,7 +30,7 @@ function renderFrame(over: Partial<Parameters<typeof WidgetFrame>[0]> = {}) {
 // (openMenu = keyDown Enter + await findByRole). fireEvent.click on the
 // trigger does NOT open the menu.
 const openMenu = async () => {
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Options du widget' }), { key: 'Enter' })
+  fireEvent.keyDown(screen.getByRole('button', { name: /Options du widget/ }), { key: 'Enter' })
   await screen.findAllByRole('menuitem')
 }
 

@@ -48,7 +48,7 @@ export function DashboardGrid({ widgets, onSave, renderWidget, onConfigure }: Da
             + Widget
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent align="start" className="widget-menu">
           {(Object.entries(WIDGET_META) as [WidgetType, WidgetMeta][]).map(([type, meta]) => {
             const disabled = !meta.multiInstance && presentTypes.has(type)
             return (
@@ -95,17 +95,17 @@ function SortableWidget({
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: instance.id })
   const meta = WIDGET_META[instance.type]
   return (
-    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, display: 'contents' }}>
-      <WidgetFrame
-        instance={instance}
-        title={meta?.title ?? instance.type}
-        onChange={onChange}
-        onRemove={onRemove}
-        onConfigure={onConfigure !== undefined && instance.type === 'github-prs' ? () => onConfigure(instance) : undefined}
-        dragHandleProps={{ ...attributes, ...listeners }}
-      >
-        {renderWidget(instance)}
-      </WidgetFrame>
-    </div>
+    <WidgetFrame
+      instance={instance}
+      title={meta?.title ?? instance.type}
+      onChange={onChange}
+      onRemove={onRemove}
+      onConfigure={onConfigure !== undefined && instance.type === 'github-prs' ? () => onConfigure(instance) : undefined}
+      dragHandleProps={{ ...attributes, ...listeners }}
+      frameRef={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      {renderWidget(instance)}
+    </WidgetFrame>
   )
 }

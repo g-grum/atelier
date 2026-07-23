@@ -40,14 +40,14 @@ describe('DashboardGrid', () => {
 
   test('remove emits the layout without the widget', async () => {
     const { saved } = renderGrid()
-    await openMenuOn(screen.getAllByRole('button', { name: 'Options du widget' })[0]!)
+    await openMenuOn(screen.getAllByRole('button', { name: /Options du widget/ })[0]!)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Retirer' }))
     expect(saved).toEqual([[layout[1]!]])
   })
 
   test('size change emits the patched layout', async () => {
     const { saved } = renderGrid()
-    await openMenuOn(screen.getAllByRole('button', { name: 'Options du widget' })[1]!)
+    await openMenuOn(screen.getAllByRole('button', { name: /Options du widget/ })[1]!)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Hauteur L' }))
     expect(saved).toEqual([[layout[0]!, { ...layout[1]!, height: 'L' }]])
   })
