@@ -61,7 +61,6 @@ export function ModifiedFilesPanel({ files, api = defaultApi, toastFailure = def
 
   return (
     <section aria-label="Fichiers modifiés">
-      <h3>Fichiers modifiés — session</h3>
       {files.size === 0 ? (
         <p className="file-empty">Aucun fichier modifié pendant cette session.</p>
       ) : (

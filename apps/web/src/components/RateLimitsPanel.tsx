@@ -40,7 +40,6 @@ export function RateLimitsPanel({ limits }: RateLimitsPanelProps) {
 
   return (
     <section className="card" aria-label="Limites du plan">
-      <h3>Limites du plan</h3>
       {rows.length === 0 ? (
         <p className="limits-empty">Aucune donnée de limite pour l’instant — elles arrivent avec le premier tour.</p>
       ) : (
