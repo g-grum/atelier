@@ -648,6 +648,47 @@ describe('createApp', () => {
     expect(await rg.json()).toEqual([])
   })
 
+  describe('widgets routes', () => {
+    const headers = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    test('GET /api/widgets returns the default layout on a fresh store', async () => {
+      const { app } = freshApp()
+      const res = await app.request('/api/widgets', { headers })
+      expect(res.status).toBe(200)
+      const widgets = (await res.json()) as { type: string }[]
+      expect(widgets.map((w) => w.type)).toEqual(['rate-limits', 'modified-files'])
+    })
+
+    test('PUT /api/widgets replaces the layout atomically (empty array allowed) and persists', async () => {
+      const { app, data } = freshApp()
+      const res = await app.request('/api/widgets', { method: 'PUT', headers, body: JSON.stringify([]) })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual([])
+      expect(data.get().widgets).toEqual([])
+    })
+
+    test('PUT /api/widgets rejects an invalid layout with a French 400 and keeps the stored one', async () => {
+      const { app, data } = freshApp()
+      const before = [...data.get().widgets] // copy — a live reference would make the assertion tautological
+      const res = await app.request('/api/widgets', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify([{ id: 'x', type: 'clock', span: 2, height: 'M' }]),
+      })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toContain('type inconnu')
+      expect(data.get().widgets).toEqual(before)
+    })
+
+    test('PUT /api/widgets survives any legal JSON body (body-guard convention)', async () => {
+      const { app } = freshApp()
+      for (const body of ['null', '"x"', '42', '{}']) {
+        const res = await app.request('/api/widgets', { method: 'PUT', headers, body })
+        expect(res.status).toBe(400)
+      }
+    })
+  })
+
   // 11. Static serving of the built web app (packaged mode, --web-dist)
   describe('static serving (webDist)', () => {
     test('GET / serves index.html with a text/html content-type', async () => {

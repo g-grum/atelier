@@ -5,6 +5,7 @@ import type { AppData } from '../store/app-data'
 import type { SessionsService } from '../sessions/sessions-service'
 import { openInIde, spawnLaunch, type LaunchFn } from '../ide/open-in-ide'
 import { readJsonObject } from './read-json'
+import { validateWidgets } from './validate-widgets'
 
 // No amber here: the design system reserves amber EXCLUSIVELY for permission prompts (spec).
 const COLOR_PALETTE = ['cyan', 'magenta', 'violet', 'mint', 'teal'] as const
@@ -150,6 +151,28 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
       d.rules = d.rules.filter((r) => r.id !== id)
     })
     return new Response(null, { status: 204 })
+  })
+
+  // Widgets — dashboard layout (spec 2026-07-21). PUT is an atomic whole-array
+  // replacement: one source of truth, no per-widget PATCH. Note: the body is
+  // an ARRAY, so readJsonObject (objects only) does not apply here.
+  app.get('/widgets', (c) => {
+    return c.json(data.get().widgets)
+  })
+
+  app.put('/widgets', async (c) => {
+    let parsed: unknown
+    try {
+      parsed = await c.req.json()
+    } catch {
+      return c.json({ error: 'requête invalide : corps JSON attendu' }, 400)
+    }
+    const result = validateWidgets(parsed)
+    if ('error' in result) return c.json({ error: result.error }, 400)
+    data.update((d) => {
+      d.widgets = result.widgets
+    })
+    return c.json(data.get().widgets)
   })
 
   return app
