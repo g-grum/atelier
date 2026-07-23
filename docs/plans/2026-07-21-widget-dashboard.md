@@ -49,7 +49,7 @@ describe('widget contracts', () => {
 })
 ```
 
-(Reuse the existing `describe/test/expect` imports of the file — check its header first.)
+(Reuse the existing `describe/test/expect` imports of the file — check its header first. Merge the new `./protocol` import into the header rather than leaving it mid-file.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -125,24 +125,19 @@ git commit -m "feat(shared): widget dashboard + PR summary contracts"
 
 **Files:**
 - Modify: `apps/server/src/store/app-data.ts`
-- Test: `apps/server/src/store/app-data.test.ts` (create — the store has no dedicated test file yet)
+- Test: `apps/server/src/store/app-data.test.ts` (**append** — the file EXISTS with ~9 tests; do NOT overwrite it)
 
 - [ ] **Step 1: Write the failing test**
 
-Create `apps/server/src/store/app-data.test.ts`:
+Append a new `describe` block to `apps/server/src/store/app-data.test.ts`. **Reuse the file's EXISTING imports** (it already imports from `bun:test`, `node:fs`, `node:os`, `node:path` — re-importing those names is a duplicate-identifier SyntaxError). Only add `DEFAULT_WIDGETS` + `type WidgetInstance` from `@atelier/shared` (add the import — the file has none today). The file's `freshStore()` helper returns an `AppData`, NOT a path — it is not the tmp-path helper; add the `tmpFile()` below (built from the already-imported `mkdtempSync`/`tmpdir`/`join`):
 
 ```ts
-import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { DEFAULT_WIDGETS } from '@atelier/shared'
-import { AppData } from './app-data'
-
 function tmpFile(): string {
   return join(mkdtempSync(join(tmpdir(), 'atelier-appdata-')), 'data.json')
 }
+```
 
+```ts
 describe('AppData.widgets', () => {
   test('fresh store defaults to DEFAULT_WIDGETS', () => {
     const data = new AppData(tmpFile())
@@ -172,19 +167,21 @@ describe('AppData.widgets', () => {
 
   test('a stored layout round-trips through the file', () => {
     const file = tmpFile()
-    const stored = [{ id: 'w1', type: 'github-prs', span: 1, height: 'S', config: { repo: 'o/r', limit: 5 } }]
+    const stored: WidgetInstance[] = [{ id: 'w1', type: 'github-prs', span: 1, height: 'S', config: { repo: 'o/r', limit: 5 } }]
     new AppData(file).update((d) => {
-      d.widgets = stored as typeof d.widgets
+      d.widgets = stored
     })
-    expect(new AppData(file).get().widgets).toEqual(stored as never)
+    expect(new AppData(file).get().widgets).toEqual(stored)
   })
 })
 ```
 
+(also import `type WidgetInstance` from `@atelier/shared` — typing `stored` at declaration avoids casts; `tmpFile()` refers to whatever tmp-path helper the file already has)
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `bun test apps/server/src/store/app-data.test.ts`
-Expected: FAIL — `widgets` missing on `AppDataShape`.
+Expected: FAIL — observed as `data.get().widgets` being `undefined` (bun runs without type-checking; the `AppDataShape` type error surfaces at the tsc gate).
 
 - [ ] **Step 3: Implement**
 
@@ -396,7 +393,7 @@ describe('widgets routes', () => {
 
   test('PUT /api/widgets rejects an invalid layout with a French 400 and keeps the stored one', async () => {
     const { app, data } = freshApp()
-    const before = data.get().widgets
+    const before = [...data.get().widgets] // copy — a live reference would make the assertion tautological
     const res = await app.request('/api/widgets', {
       method: 'PUT',
       headers,
@@ -518,7 +515,7 @@ In `apps/web/src/state/fixtures.ts`, add:
 ```ts
 import { DEFAULT_WIDGETS, type WidgetInstance } from '@atelier/shared'
 
-/** Demo layout: the default panels — the PR widget joins in chunk 2. */
+/** Demo layout: the default panels — the PR widget joins in chunk 3 (Task 13). */
 export const fixtureWidgets: WidgetInstance[] = [...DEFAULT_WIDGETS]
 ```
 
@@ -961,7 +958,7 @@ export type DashboardGridProps = {
   onSave: (next: WidgetInstance[]) => void
   /** App owns data: maps an instance to its body. Return null for types the app cannot render (defensive). */
   renderWidget: (instance: WidgetInstance) => ReactNode
-  /** Opens the config dialog for a configurable instance (chunk 2 wires it). */
+  /** Opens the config dialog for a configurable instance (chunk 3 wires it). */
   onConfigure?: (instance: WidgetInstance) => void
 }
 
@@ -1179,7 +1176,7 @@ Expected: `App.test.tsx` may assert on the old aside content — update those as
 
 - [ ] **Step 4: See it work (dev, fixtures)**
 
-Follow the parallel-jobs check first, then: `bun run dev:web` with `VITE_USE_FIXTURES=1` (check how the repo usually sets it — likely `VITE_USE_FIXTURES=1 bun run dev:web`), open http://localhost:4518.
+Follow the parallel-jobs check first, then: `bun run dev:web` with `VITE_USE_FIXTURES=1` (check how the repo usually sets it — likely `VITE_USE_FIXTURES=1 bun run dev:web`), open the URL Vite prints (the `dev` script passes `--port 4518`).
 Expected: right column shows the two framed panels; drag reorders; menu resizes; « + Widget » works; a reload keeps the fixture default (fixtures don't persist — fine).
 
 - [ ] **Step 5: Commit**
@@ -1418,7 +1415,10 @@ const TIMEOUT_MS = 10_000
  */
 export function createGhRunner(ghPath: string = Bun.which('gh') ?? '/opt/homebrew/bin/gh'): GhRun {
   return async (args, env) => {
-    let proc: ReturnType<typeof Bun.spawn>
+    // Annotation matters: ReturnType<typeof Bun.spawn> widens stdout/stderr to
+    // `number | ReadableStream | undefined` and new Response(proc.stdout) fails
+    // tsc (TS2345). The explicit generic matches the 'pipe' options below.
+    let proc: Bun.Subprocess<'ignore', 'pipe', 'pipe'>
     try {
       proc = Bun.spawn([ghPath, ...args], {
         env: { ...process.env, ...env },
@@ -1586,7 +1586,7 @@ git commit -m "feat(server): GithubService — gh runner seam, pinned token, 60s
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `apps/server/src/app.test.ts`. Extend `freshApp` with an optional `github?: GithubService` parameter (default `undefined`) forwarded to `createApp`; build fakes with the fakeRunner pattern from the service tests (import `GithubService`):
+Append to `apps/server/src/app.test.ts`. `createApp`'s `github` parameter is **required** (see Step 3); extend `freshApp` with an optional `github?: GithubService` parameter and have it build a no-op fake service (a `GithubService` over a runner returning `exitCode: 1`) when none is injected, so pre-existing tests keep passing without touching gh. Build the injected fakes with the fakeRunner pattern from the service tests (import `GithubService`):
 
 ```ts
 describe('github routes', () => {
@@ -1790,6 +1790,7 @@ describe('PrListWidget', () => {
     screen.getByText('b1')
     screen.getByText(/CI en cours/)
     screen.getByText(/review requise/i)
+    screen.getByRole('button', { name: /Ouvrir sur GitHub/ }) // second ↗ inside the expansion (spec)
     fireEvent.click(screen.getByRole('button', { name: /Open pending/ }))
     expect(screen.queryByText('#1')).toBeNull()
   })
@@ -1916,6 +1917,11 @@ export function PrListWidget({ repo, limit, api, openUrl = (url) => window.open(
               <span>#{pr.number}</span> · <span>{pr.author}</span> · <span>{pr.branch}</span> · <span>{STATE_LABEL[pr.state]}</span>
               {pr.ci !== null && <> · <span>{CI_LABEL[pr.ci]}</span></>}
               {pr.review !== null && <> · <span>{REVIEW_LABEL[pr.review]}</span></>}
+              {/* Spec: full date + a second ↗ inside the expansion (distinct accessible name — the row-level one must stay unique). */}
+              <> · <span>{new Date(pr.updatedAt).toLocaleString('fr-FR')}</span></>
+              <button type="button" className="pr-open-detail" onClick={() => openUrl(pr.url)}>
+                Ouvrir sur GitHub ↗
+              </button>
             </div>
           )}
         </li>
@@ -1942,6 +1948,7 @@ Add styles to `apps/web/src/styles.css` (Right panel section, reuse existing tok
   .pr-age { color: var(--color-faint); font: 500 10px var(--font-mono); flex: none; }
   .pr-open { background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 2px 4px; }
   .pr-details { padding: 0 0 7px 14px; color: var(--color-faint); font-size: 11px; }
+  .pr-open-detail { display: block; margin-top: 4px; background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 0; font-size: 11px; text-decoration: underline; }
   .pr-empty, .pr-error { color: var(--color-faint); font-size: 12px; display: flex; flex-direction: column; gap: 8px; }
   .pr-skeleton { height: 60px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); }
 ```
