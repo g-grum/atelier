@@ -92,6 +92,7 @@ describe('AppData', () => {
       defaultModel: 'claude-opus-4-8',
       windowBudgetTokens: 2_000_000,
       weeklyBudgetTokens: 12_000_000,
+      githubUser: 'alice-dev',
     })
   })
 

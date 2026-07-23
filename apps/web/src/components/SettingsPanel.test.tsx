@@ -9,7 +9,7 @@ import { SettingsPanel, type SettingsApi } from './SettingsPanel'
 
 afterEach(cleanup)
 
-const preferences: Preferences = { ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000 }
+const preferences: Preferences = { ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev' }
 
 const rule: AlwaysRule = { id: 'r1', projectId: 'p1', toolName: 'Bash', matcher: 'git push' }
 

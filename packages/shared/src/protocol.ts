@@ -31,6 +31,8 @@ export type Preferences = {
   windowBudgetTokens: number
   /** Calibratable weekly (trailing 7 days) token budget — same estimate policy as windowBudgetTokens. */
   weeklyBudgetTokens: number
+  /** gh CLI keyring account used by the GitHub proxy — pinned so the active-account switch (atelier release ops) never breaks the PR widget. */
+  githubUser: string
 }
 
 /** One recorded usage sample (REST: GET /api/usage/history). All four counters persist — the forecast's fidelity depends on cache counts; a lossy total can't be backfilled. */

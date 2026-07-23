@@ -67,6 +67,9 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
     if (parsed.defaultModel !== undefined && typeof parsed.defaultModel !== 'string') {
       return c.json({ error: 'requête invalide : « defaultModel » doit être une chaîne' }, 400)
     }
+    if (parsed.githubUser !== undefined && typeof parsed.githubUser !== 'string') {
+      return c.json({ error: 'requête invalide : « githubUser » doit être une chaîne' }, 400)
+    }
     // Calibratable usage budgets (estimates by design — spec « Usage & limits »):
     // optional, but when present they must be strictly positive integers.
     for (const field of ['windowBudgetTokens', 'weeklyBudgetTokens'] as const) {
@@ -77,11 +80,13 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
     }
     const ide = parsed.ide as string | undefined
     const defaultModel = parsed.defaultModel as string | undefined
+    const githubUser = parsed.githubUser as string | undefined
     const windowBudgetTokens = parsed.windowBudgetTokens as number | undefined
     const weeklyBudgetTokens = parsed.weeklyBudgetTokens as number | undefined
     data.update((d) => {
       if (ide !== undefined) d.preferences.ide = ide as typeof d.preferences.ide
       if (defaultModel !== undefined) d.preferences.defaultModel = defaultModel
+      if (githubUser !== undefined) d.preferences.githubUser = githubUser
       if (windowBudgetTokens !== undefined) d.preferences.windowBudgetTokens = windowBudgetTokens
       if (weeklyBudgetTokens !== undefined) d.preferences.weeklyBudgetTokens = weeklyBudgetTokens
     })

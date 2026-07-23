@@ -34,6 +34,7 @@ const EMPTY: AppDataShape = {
     // the user calibrates them from settings — spec « Usage & limits ».
     windowBudgetTokens: 2_000_000,
     weeklyBudgetTokens: 12_000_000,
+    githubUser: 'alice-dev',
   },
   drafts: [],
   draftMap: {},

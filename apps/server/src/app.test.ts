@@ -543,6 +543,17 @@ describe('createApp', () => {
     expect(prefs.ide).toBe('webstorm')
   })
 
+  test('githubUser: defaults to alice-dev, PATCHable, string-validated', async () => {
+    const { app } = freshApp()
+    const headers = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    const before = await (await app.request('/api/preferences', { headers })).json() as { githubUser: string }
+    expect(before.githubUser).toBe('alice-dev')
+    const patched = await app.request('/api/preferences', { method: 'PATCH', headers, body: JSON.stringify({ githubUser: 'g-grum' }) })
+    expect(((await patched.json()) as { githubUser: string }).githubUser).toBe('g-grum')
+    const bad = await app.request('/api/preferences', { method: 'PATCH', headers, body: JSON.stringify({ githubUser: 42 }) })
+    expect(bad.status).toBe(400)
+  })
+
   test("POST /api/projects/:id/sessions with raw bodies 'null' and '[]' responds 400 JSON — never a 500", async () => {
     const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
     for (const raw of ['null', '[]']) {
