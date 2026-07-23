@@ -1,4 +1,4 @@
-import { MODELS, type ChatMessage, type ProjectSummary, type ServerEvent, type SessionSummary } from '@atelier/shared'
+import { MODELS, DEFAULT_WIDGETS, type ChatMessage, type ProjectSummary, type ServerEvent, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 
 /**
  * Scripted session data — production code, not test-only.
@@ -119,16 +119,19 @@ export const fixtureTurn: ServerEvent[] = [
 
 /**
  * A turn cut short by the usage limit: the closing status carries
- * { reason, resetAt } exactly as the server's turn_error path emits it —
- * the ErrorBanner's reset-time variant (fixtureTurn already covers usage).
+ * { reason, resetAt } exactly as the server’s turn_error path emits it —
+ * the ErrorBanner’s reset-time variant (fixtureTurn already covers usage).
  */
 export const fixtureErrorTurn: ServerEvent[] = [
-  { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'streaming' },
-  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Je reprends l’analyse des tests restants.' },
+  { type: ‘status’, sessionId: FIXTURE_SESSION_ID, state: ‘streaming’ },
+  { type: ‘assistant_delta’, sessionId: FIXTURE_SESSION_ID, text: ‘Je reprends l’analyse des tests restants.’ },
   {
-    type: 'status',
+    type: ‘status’,
     sessionId: FIXTURE_SESSION_ID,
-    state: 'error',
-    error: { reason: 'usage_limit', resetAt: '2026-07-15T19:10:00.000Z' },
+    state: ‘error’,
+    error: { reason: ‘usage_limit’, resetAt: ‘2026-07-15T19:10:00.000Z’ },
   },
 ]
+
+/** Demo layout: the default panels — the PR widget joins in chunk 3 (Task 13). */
+export const fixtureWidgets: WidgetInstance[] = [...DEFAULT_WIDGETS]

@@ -1,6 +1,6 @@
-import type { ChatMessage, ClientMessage, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
-import { fixtureMessages, fixtureProjects, fixtureSessions, fixtureTurn } from '../state/fixtures'
+import { fixtureMessages, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
 import { SessionSocket } from './ws'
 import currentVersion from '../../../../version.json'
@@ -24,6 +24,10 @@ export type Backend = {
   getVersion: () => Promise<VersionInfo>
   /** Last-known plan limits (five_hour, seven_day, …) — the claude.ai/usage gauges. */
   getUsageLimits: () => Promise<RateLimitSnapshot[]>
+  /** Dashboard layout (array order = display order). */
+  getWidgets: () => Promise<WidgetInstance[]>
+  /** Atomic whole-array replacement — resolves to the stored layout. */
+  putWidgets: (widgets: WidgetInstance[]) => Promise<WidgetInstance[]>
 }
 
 const realBackend: Backend = {
@@ -40,6 +44,8 @@ const realBackend: Backend = {
   createSocket: (sessionId, projectId) => new SessionSocket(sessionId, projectId),
   getVersion: client.getVersion,
   getUsageLimits: client.getUsageLimits,
+  getWidgets: client.getWidgets,
+  putWidgets: client.putWidgets,
 }
 
 // ── Fixture backend ──
@@ -54,6 +60,7 @@ function createFixtureBackend(): Backend {
   let projects: ProjectSummary[] = fixtureProjects.map((project) => ({ ...project }))
   let sessions: SessionSummary[] = fixtureSessions.map((session) => ({ ...session }))
   const messages = new Map<string, ChatMessage[]>(Object.entries(fixtureMessages))
+  let widgets: WidgetInstance[] = fixtureWidgets.map((w) => ({ ...w }))
   let nextId = 1
 
   return {
@@ -106,6 +113,11 @@ function createFixtureBackend(): Backend {
       { window: 'seven_day', utilization: 61, status: 'allowed', resetsAt: new Date(Date.now() + 4 * 86400_000).toISOString(), recordedAt: new Date().toISOString() },
       { window: 'seven_day_opus', utilization: 12, status: 'allowed', resetsAt: new Date(Date.now() + 4 * 86400_000).toISOString(), recordedAt: new Date().toISOString() },
     ],
+    getWidgets: async () => widgets,
+    putWidgets: async (next) => {
+      widgets = next.map((w) => ({ ...w }))
+      return widgets
+    },
   }
 }
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ChatMessage, ProjectSummary, SessionSummary } from '@atelier/shared'
+import { DEFAULT_WIDGETS } from '@atelier/shared'
 import type { Backend } from './api/backend'
 import App from './App'
 import currentVersion from '../../../version.json'
@@ -45,6 +46,8 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     createSocket: () => idleSocket,
     getVersion: async () => currentVersion,
     getUsageLimits: async () => [],
+    getWidgets: async () => [...DEFAULT_WIDGETS],
+    putWidgets: async (next) => next,
     ...overrides,
   }
 }

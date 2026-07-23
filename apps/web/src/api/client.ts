@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -44,7 +44,17 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (!response.ok) throw new ApiError(response.status, `${method} /api${path} → ${response.status}`)
+  if (!response.ok) {
+    // Surface the server's French { error } message when present — the PR
+    // widget and the layout toast display it verbatim.
+    let detail: string | null = null
+    try {
+      detail = ((await response.json()) as { error?: string }).error ?? null
+    } catch {
+      // non-JSON body — keep the generic message
+    }
+    throw new ApiError(response.status, detail ?? `${method} /api${path} → ${response.status}`)
+  }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
@@ -132,4 +142,14 @@ export function deleteRule(id: string): Promise<void> {
 /** Always resolves with { ok } — the server never 500s here; `reason` feeds the toast. */
 export function openInIde(args: { file: string; line?: number }): Promise<{ ok: true } | { ok: false; reason: string }> {
   return request<{ ok: true } | { ok: false; reason: string }>('POST', '/open-in-ide', args)
+}
+
+// ── Widgets ──
+
+export function getWidgets(): Promise<WidgetInstance[]> {
+  return request<WidgetInstance[]>('GET', '/widgets')
+}
+
+export function putWidgets(widgets: WidgetInstance[]): Promise<WidgetInstance[]> {
+  return request<WidgetInstance[]>('PUT', '/widgets', widgets)
 }
