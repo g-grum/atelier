@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import currentVersion from '../../../version.json'
-import type { RateLimitSnapshot, SessionPermissionMode, SessionSummary } from '@atelier/shared'
+import { DEFAULT_WIDGETS, type RateLimitSnapshot, type SessionPermissionMode, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
@@ -14,6 +14,7 @@ import { RateLimitsPanel } from './components/RateLimitsPanel'
 import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
 import { Toaster } from './components/ui/sonner'
+import { DashboardGrid } from './components/widgets/DashboardGrid'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
 
@@ -21,6 +22,11 @@ export type AppProps = {
   /** Injectable for tests — defaults to the module backend (real REST+WS, or fixtures). */
   backend?: Backend
 }
+
+// A fetch failure must still render a usable dashboard (spec: edits keep
+// failing visibly) — a fresh spread per render would be a new array identity
+// every time, so this is hoisted once.
+const FALLBACK_WIDGETS: WidgetInstance[] = [...DEFAULT_WIDGETS]
 
 /**
  * Layout-only component: 3-zone grid (sidebar 262px / chat / right panel
@@ -198,11 +204,45 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     onError: (error) => setNotice(`Impossible d’enregistrer le choix de permissions : ${errorMessage(error)}`),
   })
 
+  // Dashboard layout — fallback to the shared default so a fetch failure
+  // still renders a usable dashboard (spec: edits keep failing visibly).
+  const widgetsQuery = useQuery({ queryKey: ['widgets'], queryFn: backend.getWidgets, retry: false })
+  const widgets = widgetsQuery.data ?? FALLBACK_WIDGETS
+
+  const saveWidgets = useMutation({
+    mutationFn: backend.putWidgets,
+    // Optimistic: drag/resize must feel instant; rollback + toast on failure.
+    onMutate: async (next: WidgetInstance[]) => {
+      await queryClient.cancelQueries({ queryKey: ['widgets'] })
+      const previous = queryClient.getQueryData<WidgetInstance[]>(['widgets'])
+      queryClient.setQueryData(['widgets'], next)
+      return { previous }
+    },
+    onError: (error, _next, context) => {
+      queryClient.setQueryData(['widgets'], context?.previous)
+      setNotice(`Impossible d’enregistrer le layout : ${errorMessage(error)}`)
+    },
+    onSuccess: (stored) => queryClient.setQueryData(['widgets'], stored),
+  })
+
   const activeSession = sessions.find((session) => session.id === selected?.sessionId) ?? null
   const activeProject = projects.find((project) => project.id === (selected?.projectId ?? projectId)) ?? null
   // Per-session permissions question (spec: chaque session demande) — an
   // unanswered session locks the composer until the user picks a mode.
   const needsPermissionChoice = activeSession !== null && activeSession.permissionMode === null
+
+  // Deliberately the ONLY usage surface — the plan limits are what matters
+  // (owner's call); token cards were removed in 0.1.6.
+  const renderWidget = (w: WidgetInstance) => {
+    switch (w.type) {
+      case 'rate-limits':
+        return <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
+      case 'modified-files':
+        return <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
+      default:
+        return null // github-prs arrives in chunk 3
+    }
+  }
 
   return (
     <div className="shell">
@@ -291,11 +331,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             onAbort={() => controller.abort()}
           />
         </main>
-        <aside className="dash" aria-label="Usage et activité">
-          {/* Deliberately the ONLY usage surface — the plan limits are what
-              matters (owner's call); token cards were removed in 0.1.6. */}
-          <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
-          <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
+        <aside className="dash" aria-label="Tableau de bord">
+          <DashboardGrid widgets={widgets} onSave={(next) => saveWidgets.mutate(next)} renderWidget={renderWidget} />
         </aside>
       </div>
       <Toaster />
