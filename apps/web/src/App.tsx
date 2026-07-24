@@ -17,6 +17,7 @@ import { Toaster } from './components/ui/sonner'
 import { DashboardGrid } from './components/widgets/DashboardGrid'
 import { PrConfigDialog } from './components/widgets/PrConfigDialog'
 import { PrListWidget } from './components/widgets/PrListWidget'
+import { clearLastSession, readLastSession, writeLastSession } from './lib/last-session'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
 
@@ -53,6 +54,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   const [configuring, setConfiguring] = useState<WidgetInstance | null>(null)
   /** Bumped per open attempt — a stale rejection must not overwrite a newer attempt's state. */
   const openAttempt = useRef(0)
+  /**
+   * Launch restore (spec 2026-07-24): reopen the last active session so the
+   * composer is typeable without a click. Read once at mount; the one-shot
+   * refs make the restore lose to ANY manual navigation during load.
+   */
+  const [remembered] = useState(readLastSession)
+  const restoreDone = useRef(false)
+  const projectRestored = useRef(false)
 
   const controller = useMemo(
     () =>
@@ -64,6 +73,10 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           setSelected((current) =>
             current !== null && current.sessionId === mapping.draftId ? { ...current, sessionId: mapping.sessionId } : current,
           )
+          // The launch-restore entry must follow too — a restart right after a
+          // draft materializes should reopen the real session, not a dead draft id.
+          const stored = readLastSession()
+          if (stored !== null && stored.sessionId === mapping.draftId) writeLastSession({ ...stored, sessionId: mapping.sessionId })
           void queryClient.invalidateQueries({ queryKey: ['sessions'] })
         },
         // Live plan gauges: each rate_limit event replaces its window in the
@@ -159,10 +172,40 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     (session: SessionSummary) => {
       if (selected?.sessionId === session.id) return
       setSelected({ sessionId: session.id, projectId: session.projectId })
+      writeLastSession({ sessionId: session.id, projectId: session.projectId })
       openSession(session.id, session.projectId)
     },
     [openSession, selected],
   )
+
+  // Launch restore, step 1 — the project: the sessions query is keyed on the
+  // open project, so the remembered session can only be found once its project
+  // is the open one. Unknown remembered project → keep the projects[0] fallback.
+  useEffect(() => {
+    if (projectRestored.current || restoreDone.current) return
+    if (projects.length === 0) return
+    projectRestored.current = true
+    if (remembered !== null && projects.some((project) => project.id === remembered.projectId)) setOpenProjectId(remembered.projectId)
+  }, [projects, remembered])
+
+  // Launch restore, step 2 — the session: once the open project's list is in
+  // and nothing was selected manually, open the remembered session, else the
+  // most recent one (the list is drafts-first, NOT recency-sorted). One-shot:
+  // any manual selection or project click during load wins over the restore.
+  useEffect(() => {
+    if (restoreDone.current) return
+    if (selected !== null) {
+      restoreDone.current = true
+      return
+    }
+    const list = sessionsQuery.data
+    if (list === undefined) return
+    restoreDone.current = true
+    const target =
+      (remembered !== null ? list.find((session) => session.id === remembered.sessionId) : undefined) ??
+      list.reduce<SessionSummary | undefined>((latest, session) => (latest === undefined || session.updatedAt > latest.updatedAt ? session : latest), undefined)
+    if (target !== undefined) selectSession(target)
+  }, [sessionsQuery.data, selected, selectSession, remembered])
 
   const registerProject = useMutation({
     mutationFn: backend.registerProject,
@@ -189,6 +232,9 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         controller.close()
         setSelected(null)
         setOpenFailure(null)
+        // The stored entry points at the dead id — clearing beats restoring a
+        // fallback the user never chose at the next launch.
+        clearLastSession()
       }
     },
     onError: (error) => setNotice(`Impossible de supprimer la session : ${errorMessage(error)}`),
@@ -275,7 +321,12 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           openProjectId={projectId}
           activeSessionId={selected?.sessionId ?? null}
           streamingSessionId={stream.status === 'streaming' ? (selected?.sessionId ?? null) : null}
-          onSelectProject={setOpenProjectId}
+          onSelectProject={(id) => {
+            // A deliberate navigation — the pending launch restore must not
+            // auto-open a session behind the user's back in this project.
+            restoreDone.current = true
+            setOpenProjectId(id)
+          }}
           onSelect={selectSession}
           onCreateDraft={() => {
             if (projectId !== null) createDraft.mutate(projectId)

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { ChatMessage, ProjectSummary, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, ProjectSummary, ServerEvent, SessionSummary } from '@atelier/shared'
 import { DEFAULT_WIDGETS } from '@atelier/shared'
 import type { Backend } from './api/backend'
 import App from './App'
@@ -10,7 +10,12 @@ import currentVersion from '../../../version.json'
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  // Launch-restore persists the last session — a leak between tests would make
+  // one test's selection another test's restored session.
+  localStorage.clear()
+})
 
 const project: ProjectSummary = { id: 'p1', path: '/Users/demo/workspace/atelier', color: 'cyan', sessionCount: 1 }
 
@@ -83,7 +88,7 @@ describe('App failure surfacing', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByText('Session un'))
+    // the launch restore opens s1 on its own — the failure surfaces unclicked
     const banner = await screen.findByRole('alert')
     expect(banner.textContent).toContain('GET /api/sessions/s1/messages → 500')
 
@@ -99,7 +104,7 @@ describe('App failure surfacing', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByText('Session un'))
+    // s1 is auto-opened by the launch restore
     fireEvent.click(await screen.findByRole('button', { name: /renommer la session/i }))
     const input = screen.getByLabelText('Renommer la session')
     fireEvent.change(input, { target: { value: 'Nouveau nom' } })
@@ -130,7 +135,7 @@ describe('App failure surfacing', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByText('Session un'))
+    // s1 is auto-opened by the launch restore — its history renders the IDE button
     fireEvent.click(await screen.findByRole('button', { name: /ouvrir dans l/i }))
 
     const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
@@ -146,7 +151,6 @@ describe('App failure surfacing', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByText('Session un'))
     fireEvent.click(await screen.findByRole('button', { name: /ouvrir dans l/i }))
 
     const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
@@ -167,7 +171,7 @@ describe('App per-session permissions gate', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByText('Session un'))
+    // the launch restore auto-opens the (undecided) session — the gate shows
     await screen.findByRole('group', { name: 'Permissions de la session' })
     const textarea = screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement
     expect(textarea.disabled).toBe(true)
@@ -190,14 +194,12 @@ describe('App per-session permissions gate', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByText('Session un'))
     fireEvent.click(await screen.findByRole('button', { name: /dangereux/i }))
     await waitFor(() => expect(patches).toEqual([{ permissionMode: 'bypassPermissions' }]))
   })
 
   test('a decided session never shows the gate', async () => {
     renderApp(fakeBackend())
-    fireEvent.click(await screen.findByText('Session un'))
     await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
     expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
   })
@@ -238,13 +240,13 @@ describe('App update toast', () => {
 
   test('no update toast when the repo version matches the build', async () => {
     renderApp(fakeBackend())
-    await screen.findByText('Session un') // app settled
+    await screen.findAllByText('Session un') // app settled (sidebar, then topbar once restored)
     expect(screen.queryByText('Une nouvelle version est disponible')).toBeNull()
   })
 
   test('a failed version fetch stays silent — no toast, no crash', async () => {
     renderApp(fakeBackend({ getVersion: async () => Promise.reject(new Error('GET /api/version → 500')) }))
-    await screen.findByText('Session un')
+    await screen.findAllByText('Session un')
     expect(screen.queryByText('Une nouvelle version est disponible')).toBeNull()
   })
 })
@@ -359,8 +361,7 @@ describe('App session deletion', () => {
       }),
     )
 
-    // select the session — the Topbar shows its rename affordance while selected
-    fireEvent.click(await screen.findByText('Session un'))
+    // the launch restore selects the session — the Topbar shows its rename affordance
     await screen.findByRole('button', { name: /renommer la session/i })
 
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer la conversation' }))
@@ -393,9 +394,9 @@ describe('App session deletion', () => {
         }),
       )
 
-      // select 'Session un', then delete 'Session deux' from ITS row (two ×
-      // buttons share the label — scope with within(row))
-      fireEvent.click(await screen.findByText('Session un'))
+      // the restore selects 'Session un' (first of the tie on updatedAt), then
+      // delete 'Session deux' from ITS row (two × buttons share the label —
+      // scope with within(row))
       await screen.findByRole('button', { name: /renommer la session « session un »/i })
 
       const otherRow = screen.getByText('Session deux').closest('.sess') as HTMLElement
@@ -441,8 +442,9 @@ describe('App session deletion', () => {
     expect(banner.textContent).toContain('Impossible de supprimer la session')
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
     expect(screen.queryByText(/Impossible de supprimer la session/)).toBeNull()
-    // no optimistic removal: the row must survive a failed delete
-    expect(screen.getByText('Session un')).toBeTruthy()
+    // no optimistic removal: the SIDEBAR row must survive a failed delete
+    // (getAll: the auto-selected session's name also shows in the Topbar)
+    expect(screen.getAllByText('Session un').some((el) => el.closest('.sess') !== null)).toBe(true)
   })
 
   test('a draft × deletes instantly — no confirmation dialog', async () => {
@@ -461,5 +463,151 @@ describe('App session deletion', () => {
 
     await waitFor(() => expect(deleted).toEqual(['d1']))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('App launch restore (spec 2026-07-24)', () => {
+  // Two real sessions: s2 is the most recent — the fallback target.
+  const sessionTwo: SessionSummary = { ...session, id: 's2', name: 'Session deux', updatedAt: '2026-07-16T10:00:00.000Z' }
+  const twoSessions = async () => [session, sessionTwo]
+  const storageKey = 'atelier:lastSession'
+  const stored = () => {
+    const raw = localStorage.getItem(storageKey)
+    return raw === null ? null : (JSON.parse(raw) as unknown)
+  }
+
+  test('the remembered session reopens at launch — composer typeable without a click', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({ sessionId: 's1', projectId: 'p1' }))
+    renderApp(fakeBackend({ listSessions: twoSessions }))
+
+    // s1 is remembered → it wins over the more recent s2
+    await screen.findByRole('button', { name: /renommer la session « session un »/i })
+    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false)
+  })
+
+  test('a vanished remembered session falls back to the most recent one', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({ sessionId: 's-dead', projectId: 'p1' }))
+    renderApp(fakeBackend({ listSessions: twoSessions }))
+    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+  })
+
+  test('a vanished remembered project falls back to the first project', async () => {
+    localStorage.setItem(storageKey, JSON.stringify({ sessionId: 's1', projectId: 'p-dead' }))
+    renderApp(fakeBackend({ listSessions: twoSessions }))
+    await screen.findByRole('button', { name: /renommer la session « session un »/i })
+  })
+
+  test('the remembered PROJECT reopens too — its session list is where the id lives', async () => {
+    const blog: ProjectSummary = { id: 'p2', path: '/Users/demo/workspace/blog', color: 'magenta', sessionCount: 1 }
+    const blogSession: SessionSummary = { ...session, id: 's9', projectId: 'p2', name: 'Article' }
+    localStorage.setItem(storageKey, JSON.stringify({ sessionId: 's9', projectId: 'p2' }))
+    renderApp(
+      fakeBackend({
+        listProjects: async () => [project, blog],
+        listSessions: async (projectId) => (projectId === 'p2' ? [blogSession] : [session]),
+      }),
+    )
+
+    await screen.findByRole('button', { name: /renommer la session « article »/i })
+    expect(screen.getByText('blog').className).toContain('open')
+  })
+
+  test('nothing stored → the most recent session still opens (typeable cold start)', async () => {
+    renderApp(fakeBackend({ listSessions: twoSessions }))
+    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+  })
+
+  test('corrupt storage behaves as nothing stored — fallback, no crash', async () => {
+    localStorage.setItem(storageKey, '{oops')
+    renderApp(fakeBackend({ listSessions: twoSessions }))
+    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+  })
+
+  test('no session at all → empty state unchanged, composer disabled', async () => {
+    renderApp(fakeBackend({ listSessions: async () => [] }))
+    await screen.findByText('atelier') // sidebar settled
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+  })
+
+  test('selecting a session records it for the next launch', async () => {
+    renderApp(fakeBackend({ listSessions: twoSessions }))
+    // the restore auto-opens s2 (most recent) — then the user picks s1 manually
+    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+    const row = screen.getAllByText('Session un').find((el) => el.closest('.sess') !== null)!
+    fireEvent.click(row)
+    await waitFor(() => expect(stored()).toEqual({ sessionId: 's1', projectId: 'p1' }))
+  })
+
+  test('a manual project click before the restore fires cancels it — no unchosen session opens', async () => {
+    const blog: ProjectSummary = { id: 'p2', path: '/Users/demo/workspace/blog', color: 'magenta', sessionCount: 1 }
+    // Sessions stay pending until released — the click happens inside the window.
+    let release: (() => void) | null = null
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    renderApp(
+      fakeBackend({
+        listProjects: async () => [project, blog],
+        listSessions: async (projectId) => {
+          await gate
+          return [{ ...session, projectId }]
+        },
+      }),
+    )
+
+    fireEvent.click(await screen.findByText('blog'))
+    release!()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await waitFor(() => expect(screen.getByText('blog').className).toContain('open'))
+    // the user navigated deliberately — nothing auto-opens behind their back
+    expect(screen.queryByRole('button', { name: /renommer la session/i })).toBeNull()
+    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+  })
+
+  test('the draft→session remap rewrites the stored id for the next launch', async () => {
+    let emit: ((event: ServerEvent) => void) | null = null
+    renderApp(
+      fakeBackend({
+        createSocket: () => ({
+          ...idleSocket,
+          on: (handler: (event: ServerEvent) => void) => {
+            emit = handler
+            return () => {}
+          },
+        }),
+      }),
+    )
+
+    await screen.findByRole('button', { name: /renommer la session/i }) // restore settled on s1
+    fireEvent.click(screen.getByRole('button', { name: '+ Session' }))
+    await waitFor(() => expect(stored()).toEqual({ sessionId: 'd1', projectId: 'p1' }))
+
+    // the server materializes the draft mid-first-turn → status carries the mapping
+    await waitFor(() => expect(emit).not.toBeNull())
+    act(() => emit!({ type: 'status', sessionId: 'sdk-1', state: 'idle', mapping: { draftId: 'd1', sessionId: 'sdk-1' } }))
+    await waitFor(() => expect(stored()).toEqual({ sessionId: 'sdk-1', projectId: 'p1' }))
+  })
+
+  test('deleting the selected session clears the stored entry', async () => {
+    let sessions: SessionSummary[] = [session]
+    renderApp(
+      fakeBackend({
+        listSessions: async () => sessions,
+        deleteSession: async (id) => {
+          sessions = sessions.filter((s) => s.id !== id)
+        },
+      }),
+    )
+
+    await screen.findByRole('button', { name: /renommer la session « session un »/i }) // restored → stored
+    expect(stored()).toEqual({ sessionId: 's1', projectId: 'p1' })
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer la conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    await waitFor(() => expect(stored()).toBeNull())
   })
 })
