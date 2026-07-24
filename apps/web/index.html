@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Atelier</title>
+    <script>
+      // Anti-flash : pose le dernier thème connu AVANT le premier paint.
+      // Source de vérité = préférence serveur (resynchronisée après mount) ; ceci n'est qu'un cache.
+      try {
+        if (localStorage.getItem('atelier:theme') === 'light') {
+          document.documentElement.setAttribute('data-theme', 'light')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
