@@ -40,9 +40,18 @@ The whole session/stream/chat machinery already resolves a `projectId` to a
 `project.path` and passes it as the Agent SDK `cwd` (`session-stream.ts:124`,
 `sessions-service.ts:24-27`). A worktree is nothing more than a different
 `cwd`. So instead of a new parallel concept, a worktree is exposed as a
-**workspace id** that the same machinery accepts — making the change almost
-entirely additive (one shared resolver + one discovery endpoint + sidebar
-nesting), with the session/draft/WS/modified-files paths untouched.
+**workspace id** that the same machinery accepts.
+
+The change is *additive in spirit* but not free: a `projectId` is resolved to a
+path (or guarded against the persisted projects list) in **six** places, not
+two. Three of them are 400/404 guards that sit **upstream** of the two obvious
+resolvers, so they must be widened first or a worktree turn is rejected before
+any resolver runs. And one — the permission broker's `projectDir` — is resolved
+**synchronously in a constructor**, while validating a `wt:` id needs an async
+`git` call. The design below inventories all six and resolves the sync/async
+mismatch by resolving the path once at the async entry points and **threading
+the already-validated path** into the synchronous stream/broker constructor, so
+no `git` call ever happens in a constructor.
 
 ## Current state (what exists)
 
@@ -50,12 +59,38 @@ nesting), with the session/draft/WS/modified-files paths untouched.
   `ProjectSummary = Project & { sessionCount }` is the REST shape
   (`protocol.ts:26`). Projects are stored in `app-data.json`; worktrees are not
   a concept yet.
-- Two places resolve a project id → path and would need to also resolve a
-  worktree id: `SessionStream.runTurn` (`session-stream.ts:100`, then
-  `cwd: project.path` at `:124`) and `SessionsService.list`
-  (`sessions-service.ts:24-27`). `findOwningProject` (`:184`) scans only
-  persisted projects — a session that lives in a worktree dir would not be
-  found for deletion.
+- **Six** sites turn a workspace id into a path (or gate it against the
+  persisted projects list). All six must handle a `wt:` id or a worktree turn
+  breaks:
+  1. **WS guard** — `app.ts:66`: `data.get().projects.some(p => p.id ===
+     projectId)` → **400** for any non-persisted id, *before* the stream is
+     constructed. The web client builds the WS URL with the workspace id
+     (`api/ws.ts`), so a `wt:` turn is dead on arrival unless this is widened.
+  2. **GET sessions route** — `sessions-routes.ts:11-12`
+     (`GET /projects/:id/sessions`): its own `projects.find(...)` → **404**
+     before `SessionsService.list` runs. This is the endpoint
+     `backend.listSessions` / the `['sessions', id]` query hits.
+  3. **POST createDraft route** — `sessions-routes.ts:19-20`
+     (`POST /projects/:id/sessions`): same `projects.find(...)` → **404**
+     before `createDraft` runs. A draft in a worktree needs this widened.
+  4. **`SessionStream.runTurn`** — `session-stream.ts:100`, then
+     `cwd: project.path` at `:124`.
+  5. **`SessionsService.list`** — `sessions-service.ts:24-27` (and thus
+     `countSessions`).
+  6. **`findOwningProject`** — `sessions-service.ts:184`: scans only persisted
+     projects, so a session living in a worktree dir is not found for deletion.
+- **Permission broker `projectDir`** — `session-stream.ts:48` resolves it
+  synchronously in the `SessionStream` constructor:
+  `projects.find(p => p.id === projectId)?.path ?? ''`. For a `wt:` id this is
+  `''`, and `deriveProposedRule` (`derive-matcher.ts`) then builds the
+  Edit/Write glob `` `${''}/**` `` = **`/**`** — an « always allow Edit »
+  answered in a worktree would grant writes to the whole filesystem. This is a
+  correctness *and* security-scoping bug, and it defeats Decision 4. The
+  constructor is synchronous, so it cannot `await` a git-validating resolver —
+  the path must arrive already resolved.
+- `getSessionMessages(sessionId)` and `renameSession(sessionId, name)`
+  (`sdk-client.ts`) take **no** dir — they resolve a session globally across
+  `~/.claude/projects`. Session ids are unique, so these need no change.
 - `AgentSdkClient.listSessions(cwd)` and `deleteSession(sessionId, dir)` take a
   dir; `encodeProjectDir` (`sdk-client.ts:379`) maps a cwd to its
   `~/.claude/projects/<encoded>` folder. Worktree session histories already
@@ -82,30 +117,73 @@ A worktree's id is **`wt:` + base64url(absolute path)** — deterministic,
 reversible, self-describing, and disjoint from the UUIDs used for persisted
 projects. `wt:` is the discriminator.
 
-A single shared helper resolves any workspace id to a filesystem path:
+A single shared **async** helper resolves any workspace id to a filesystem
+path. It is async because validating a `wt:` id requires a `git` call
+(read through the `WorktreeService` cache, below):
 
 ```
 resolveWorkspacePath(id): Promise<string | null>
   - id matches a persisted project      → project.path
-  - id starts with 'wt:'                 → decode to a path, then VALIDATE it
-                                           is a linked worktree of some
-                                           registered project (its path appears
-                                           in `git worktree list` of a parent);
+  - id starts with 'wt:'                 → decode (base64url) to a path, then
+                                           VALIDATE membership: the path is a
+                                           linked worktree of SOME registered
+                                           project (appears in that project's
+                                           cached `git worktree list`);
                                            valid → the path, else → null
+  - a 'wt:' id decoding to a registered project's own root
+                                        → null (use the project id for the root;
+                                           the id space stays 1:1)
   - otherwise                            → null
 ```
 
-Callers already handle `null`: `SessionStream.runTurn` sets the `unknown
-project` error state; `SessionsService.list` throws → `countSessions` maps to
-0. The two `projects.find(...)` lookups and `findOwningProject`'s scan are
-rewritten in terms of this helper (the scan iterates persisted project paths
-**plus** each project's discovered worktree paths, so deleting a session that
-lives in a worktree finds its owning dir).
+Validation-before-use is the security boundary: the decoded base64 path is
+never trusted on its own — it must belong to a **registered** project's `git
+worktree list`. Registration is the trust anchor (Decision 5); this closes
+path-traversal / arbitrary-`cwd` escalation via a forged `wt:` id.
 
-Validation-before-use is the security boundary: the base64 path is never
-trusted on its own — it must belong to a registered project's `git worktree
-list`. This closes path traversal / arbitrary-cwd escalation via a forged
-`wt:` id.
+### How each of the six sites is handled
+
+The three **guards** (sites 1–3) are in async handlers/middleware, so they
+`await resolveWorkspacePath(id)` and return their existing 400/404 when it is
+`null` — widening the check from "is a persisted project" to "is a resolvable
+workspace":
+
+- Site 1 (`app.ts:66` WS guard): `await`; on success stash the resolved path
+  via `c.set('workspacePath', path)` and pass it into
+  `streams.get(id, projectId, path)` (see threading below).
+- Sites 2 & 3 (`sessions-routes.ts`): replace `data.get().projects.find(...)`
+  with `(await resolveWorkspacePath(id)) === null → 404`.
+
+The two **resolvers** (sites 4–5) stop doing `projects.find(...)`:
+
+- Site 5, `SessionsService.list(id)`: `const path = await
+  resolveWorkspacePath(id); if (!path) throw` — so `countSessions` still maps
+  the throw to 0, and the discovery route's per-worktree counts reuse the
+  cached git result (no N+1 re-shelling).
+- Site 4, `SessionStream.runTurn`: no longer looks the path up — it uses the
+  path threaded into the stream at construction (below). Its `unknown project`
+  error path is now unreachable in practice (the WS guard rejected the id
+  first) but is kept as defense-in-depth.
+
+Site 6, `findOwningProject` (delete), scans persisted project paths **plus**
+each project's cached worktree paths, so a session that lives in a worktree dir
+finds its owning `cwd`. (Accepted cost: one cached `git worktree list` per
+registered project per delete — negligible for a personal app.)
+
+### Threading the validated path into the sync constructor
+
+The `SessionStream` constructor (and the `PermissionBroker` it builds) is
+synchronous and cannot `await` the resolver. So the **already-validated path**
+is passed in:
+
+- `SessionStreamRegistry.get(id, projectId, workspacePath)` gains the path
+  param; the WS guard (the only caller that constructs streams) resolved it.
+- `SessionStreamParams` carries `workspacePath`; the constructor passes it
+  straight to `new PermissionBroker(data, projectId, workspacePath, …)` —
+  fixing the `/**` glob bug — and `runTurn` uses it as the SDK `cwd`.
+- The registry caches one stream per session on first connect, so the path is
+  captured then; for a `wt:` id the path is stable (derived from the id), so
+  caching is safe (documented).
 
 ### Discovery (server)
 
@@ -152,12 +230,17 @@ worktree is never persisted, so the stored shapes gain nothing.
   Selecting a worktree calls the existing `onSelectProject(worktreeId)`.
 - `App.tsx`: the set of valid workspace ids becomes persisted project ids
   **plus** the worktree ids currently loaded in the sidebar's expanded rows.
-  The stale-guard (`:144`) and the last-session restore (`:188`) check
-  membership against that combined set, so opening a worktree — and restoring
-  one on launch — is not bounced back to `projects[0]`. Everything downstream
+  The stale-guard (`:152`, `… ? openProjectId : projects[0]?.id ?? null`) and
+  the last-session restore effect (`:192-197`) check membership against that
+  combined set, so opening a worktree — and restoring one on launch — is not
+  bounced back to `projects[0]`. Everything downstream past the guards
   (`['sessions', workspaceId]`, `controller.open(sessionId, workspaceId)`,
-  draft creation, modified-files, model/permission gates) is unchanged: a `wt:`
-  id is a valid workspace id end to end.
+  draft creation, modified-files, model/permission gates) is unchanged once the
+  six server sites accept the `wt:` id.
+- **URL round-trip.** `wt:` ids travel in route params and query strings.
+  base64url is `[A-Za-z0-9_-]` and the `:` is escaped by `encodeURIComponent`
+  (→ `%3A`) and decoded by Hono, so the id survives every route that carries
+  it — no extra encoding needed.
 - `api/client.ts` + `api/backend.ts`: add `listWorktrees(projectId):
   Promise<Worktree[]>` to the client and the `Backend` interface; the fixtures
   backend returns a small realistic set (a couple of worktrees on named
@@ -193,18 +276,30 @@ server/web/desktop; French UI copy.
 - **`resolveWorkspacePath`.** Persisted project id → its path; a valid `wt:` id
   (path present in a registered project's `git worktree list`, git mocked) →
   the path; a `wt:` id whose decoded path is NOT a worktree of any registered
-  project → null; a `wt:` id decoding to a registered project's own path →
-  handled deterministically (null or the project path — pick one and test it);
+  project → null; a `wt:` id decoding to a registered project's own root path →
+  null (the root is addressed by its project id — the id space stays 1:1);
   an unknown plain id → null.
 - **Route (`app.test.ts`, git mocked).** `GET /api/projects/:id/worktrees`
   returns `Worktree[]` with ids, branches, and counts; unknown project → `[]`;
   a project whose `git worktree list` errors → `[]`, never 500; token guard
   enforced.
-- **Session/stream integration.** A turn opened on a `wt:` id runs with
-  `cwd` = the worktree path (assert via the mock SDK's recorded cwd);
-  `list(wtId)` returns that worktree's sessions; deleting a session that lives
-  in a worktree resolves its owning dir through the extended
-  `findOwningProject`.
+- **Guards accept `wt:` ids (sites 1–3).** `app.test.ts`: the WS guard
+  (`app.ts:66`) returns 101/allows upgrade for a valid `wt:` id and still 400s
+  for an unknown/forged one; `GET /projects/:wtId/sessions` returns the
+  worktree's sessions (not 404); `POST /projects/:wtId/sessions` creates a
+  draft carrying the `wt:` id.
+- **Session/stream integration (sites 4–5).** A turn opened on a `wt:` id runs
+  with `cwd` = the worktree path (assert via the mock SDK's recorded cwd) using
+  the path threaded through `streams.get(id, projectId, workspacePath)`;
+  `list(wtId)` returns that worktree's sessions.
+- **Broker glob scoping (the security test).** An « always allow Edit » answered
+  on a stream constructed for a `wt:` id derives the matcher
+  `<worktreePath>/**`, **never `/**`** — asserts Decision 4 and the fix for the
+  `?? ''` bug. A matching test for a persisted-project stream guards against
+  regression.
+- **Delete (site 6).** Deleting a session that lives in a worktree resolves its
+  owning dir through the extended `findOwningProject` (worktree paths included
+  in the scan); a session in no known workspace → `SessionNotFoundError` → 404.
 - **Sidebar RTL (`SessionSidebar.test.tsx`).** Expanding a project fetches and
   renders its worktree children (branch + count) via the injected backend;
   collapsing hides them; selecting a worktree calls `onSelectProject` with the
