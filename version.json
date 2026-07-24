@@ -1,6 +1,7 @@
 {
-  "version": "0.1.8",
+  "version": "0.1.9",
   "notes": [
-    "Au lancement, la dernière session s'ouvre automatiquement et le champ de saisie est actif — tu peux écrire directement"
+    "La colonne de droite devient un tableau de bord : réorganise, redimensionne, ajoute ou retire les widgets à ta guise (le layout est mémorisé)",
+    "Nouveau widget Pull Requests : l'activité récente de tes repos GitHub, détails CI/review au clic, ouverture dans le navigateur — multi-repos via « + Widget »"
   ]
 }
