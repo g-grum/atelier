@@ -29,7 +29,7 @@ apps/server/src/sessions/sessions-service.ts  # inject resolver; list + findOwni
 apps/server/src/sessions/sessions-routes.ts   # widen GET/POST /projects/:id/sessions guards
 apps/server/src/app.ts                    # createApp gains resolver+worktrees; WS guard resolves+threads; mount route
 apps/server/src/index.ts                  # construct WorktreeService + resolver; wire
-apps/server/src/ide/open-in-ide.test.ts   # sessionsRoutes call-site update (signature gains resolver)
+apps/server/src/ide/open-in-ide.test.ts   # new SessionsService(...) call-sites (:141, :243) gain resolver + worktrees args
 apps/web/src/api/client.ts                # + listWorktrees
 apps/web/src/api/backend.ts               # Backend interface + fixtures gain listWorktrees
 apps/web/src/components/SessionSidebar.tsx    # expand/collapse chevron + worktree children (+ test)
@@ -508,7 +508,7 @@ async (c, next) => {
 - Test: `apps/server/src/app.test.ts`
 
 - [ ] **Step 1: Failing tests** in `app.test.ts` (inject a fake-git WorktreeService via `createApp`):
-  - `GET /api/projects/:id/worktrees` for a registered project returns `Worktree[]` (`{ id: wt:…, path, branch, sessionCount }`), token-guarded.
+  - `GET /api/projects/:id/worktrees` for a registered project returns `Worktree[]` (`{ id: wt:…, path, branch, sessionCount }`), token-guarded. **Assert `sessionCount` is a number** (it is 0 here: `countSessions` only becomes wt-aware in Task 4.2, and its try/catch swallows the "unknown workspace" throw until then). Real per-worktree counts are validated in Chunk 6.
   - An unknown project id → `[]` (not 500).
   - A project whose git errors → `[]`.
 
@@ -552,9 +552,11 @@ import { createWorkspaceResolver } from './worktrees/resolve-workspace'
 // …
 const worktrees = new WorktreeService(createGitRunner())
 const resolveWorkspace = createWorkspaceResolver(data, worktrees)
-const sessions = new SessionsService(sdk, data, streams, resolveWorkspace)   // 4th param added in Task 4.2
+const sessions = new SessionsService(sdk, data, streams, resolveWorkspace, worktrees)   // 4th+5th params added in Task 4.2
 const app = createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github, worktrees, resolveWorkspace })
 ```
+
+**Ordering note:** this `index.ts` wiring is the final shape. `SessionsService` gains its two new params in Task 4.2; if you land Task 4.1's `index.ts` edit first, add the params now (the compiler will force the test call-sites in 4.2 anyway) — do NOT construct `SessionsService` with the old 3-arg form and then re-edit.
 
 - [ ] **Step 4: Run — PASS.** tsc server clean.
 
@@ -576,7 +578,7 @@ const app = createApp({ data, sessions, sdk, streams, token, webDist, versionFil
 - [ ] **Step 2: Run — FAIL.**
 
 - [ ] **Step 3: Implement.**
-  - `SessionsService` constructor: add `private readonly resolveWorkspace: WorkspaceResolver` as the 4th param.
+  - `SessionsService` constructor: add TWO params — `private readonly resolveWorkspace: WorkspaceResolver` (4th) **and** `private readonly worktrees: WorktreeService` (5th). Both are needed: the resolver maps a known id→path (for `list`), but only the `WorktreeService` can **enumerate** a project's worktree paths (for `findOwningDir`). New signature: `constructor(sdk, data, streams, resolveWorkspace, worktrees)`.
   - `list(id)`: replace `const project = projects.find((p) => p.id === projectId); if (!project) throw …` and `sdk.listSessions(project.path)` with:
 
 ```ts
@@ -586,7 +588,7 @@ const sdkSessions = await this.sdk.listSessions(path)
 ```
 
   (`countSessions` already wraps `list` in try/catch → 0.)
-  - `findOwningProject(sdkId)` → rename to `findOwningDir(sdkId): Promise<string | undefined>`, scanning persisted project paths **plus** each project's worktree paths (via the injected `WorktreeService` — add it, or resolve through the resolver by encoding worktree ids). Simplest: inject `WorktreeService` too and iterate `[project.path, ...(await worktrees.list(project.path)).map(w => w.path)]`. Update `delete` to use the returned dir path directly in `sdk.deleteSession(sdkId, dir)`.
+  - `findOwningProject(sdkId)` → rename to `findOwningDir(sdkId): Promise<string | undefined>`, returning the owning **dir path** (not a `Project`), scanning persisted project paths **plus** each project's worktree paths via the injected `this.worktrees`: for each project iterate `[project.path, ...(await this.worktrees.list(project.path)).map((w) => w.path)]`, run `sdk.listSessions(dir)`, and return the first `dir` whose sessions include `sdkId`. Update `delete` to call `sdk.deleteSession(sdkId, dir)` with the returned path (the `project === undefined` → `SessionNotFoundError` branch becomes `dir === undefined`).
   - `sessions-routes.ts`: `sessionsRoutes(data, sessions, resolveWorkspace)`; in GET and POST replace `data.get().projects.find(...)` / 404 with:
 
 ```ts
@@ -594,7 +596,7 @@ if ((await resolveWorkspace(id)) === null) return c.json({ error: 'Not found' },
 ```
 
   - `app.ts`: `api.route('/', sessionsRoutes(data, sessions, resolveWorkspace))`.
-  - Fix compiler-flagged call-sites in `open-in-ide.test.ts` and any test constructing `SessionsService`/`sessionsRoutes` (add the resolver; build one from a fake-git `WorktreeService` + the test `AppData`).
+  - Fix the compiler-flagged `new SessionsService(...)` call-sites — add BOTH the resolver and a (fake-git) `WorktreeService`, built from the test `AppData`. Known sites: `apps/server/src/index.ts` (already final-shape in Task 4.1), `apps/server/src/app.test.ts` (~:23), `apps/server/src/sessions/sessions-service.test.ts` (~:21), and `apps/server/src/ide/open-in-ide.test.ts` (**both** ~:141 and ~:243). Also add the resolver arg to any `sessionsRoutes(...)` call-site. (Verify line numbers by grep — the tree has drifted; don't trust the numbers blindly.)
 
 - [ ] **Step 4: Run — PASS** (whole `bun test apps/server`). tsc server clean.
 
@@ -642,11 +644,11 @@ if ((await resolveWorkspace(id)) === null) return c.json({ error: 'Not found' },
 - Modify: `apps/web/src/App.tsx`
 - Test: `apps/web/src/App.test.tsx`
 
-- [ ] **Step 1: Failing tests** in `App.test.tsx`. (a) Selecting a worktree (calling `onSelectProject` with a `wt:` id that is among the loaded worktrees) keys the sessions query on that `wt:` id and is NOT bounced to `projects[0]` by the stale-guard (`App.tsx:159`); (b) restoring a remembered `wt:` id on launch opens it once its worktree row is known (the restore membership check, `App.tsx:199-204`, accepts it). Provide the loaded worktrees to the test via the backend seam.
+- [ ] **Step 1: Failing tests** in `App.test.tsx`. (a) Selecting a worktree (calling `onSelectProject` with a `wt:` id that is among the loaded worktrees) keys the sessions query on that `wt:` id and is NOT bounced to `projects[0]` by the stale-guard (the `projects.some((p) => p.id === openProjectId) ? … : projects[0]?.id` line, ~`App.tsx:159`); (b) restoring a remembered `wt:` id on launch opens it once its worktree row is known (the restore membership check `remembered !== null && projects.some((p) => p.id === remembered.projectId)`, inside the restore `useEffect` — **grep for that predicate rather than trusting a line number**; the working tree has drifted, it is around `:208-213`). Provide the loaded worktrees to the test via the backend seam.
 
 - [ ] **Step 2: Run — FAIL.**
 
-- [ ] **Step 3: Implement.** Maintain the set of valid workspace ids = persisted project ids **plus** the worktree ids currently loaded in expanded sidebar rows (App already owns the projects query; add the loaded-worktree ids — e.g. lift the sidebar's worktree query results, or track selected/expanded worktree ids in App state). Change the stale-guard (`:159`) and the restore membership check (`:203`) to test membership against that combined set instead of `projects.some(...)`. Everything downstream (`['sessions', workspaceId]`, `controller.open`, draft creation) already takes the id verbatim — no further change.
+- [ ] **Step 3: Implement.** Maintain the set of valid workspace ids = persisted project ids **plus** the worktree ids currently loaded in expanded sidebar rows (App already owns the projects query; add the loaded-worktree ids — e.g. lift the sidebar's worktree query results, or track selected/expanded worktree ids in App state). Change the stale-guard (the `? openProjectId : projects[0]?.id` line, ~`:159`) and the restore membership check (the `remembered !== null && projects.some(...)` predicate, ~`:208-213` — grep for it) to test membership against that combined set instead of `projects.some(...)`. Everything downstream (`['sessions', workspaceId]`, `controller.open`, draft creation) already takes the id verbatim — no further change.
 
 - [ ] **Step 4: Run — PASS** (whole `bun test`), tsc ×3 clean, `bun run build:web`.
 
