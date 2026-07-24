@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import { parsePort, resolveRuntime } from './resolve-runtime'
 
 // Thin shell (spec: the desktop unit carries no business logic): generate a
@@ -111,6 +111,15 @@ function createWindow(): void {
     height: 820,
     backgroundColor: '#0c101c', // app ground token — no white flash on load
     webPreferences: { contextIsolation: true, nodeIntegration: false },
+  })
+  // External links (PR widget ↗, target="_blank"): open in the system browser,
+  // NEVER in a child BrowserWindow. Local (loopback) URLs are denied outright —
+  // the app is single-window by design.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url) && !url.includes('127.0.0.1') && !url.includes('localhost')) {
+      void shell.openExternal(url)
+    }
+    return { action: 'deny' }
   })
   win.on('closed', () => {
     win = null
