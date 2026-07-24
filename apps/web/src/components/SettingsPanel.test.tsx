@@ -8,6 +8,7 @@ import { SettingsPanel, type SettingsApi } from './SettingsPanel'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(cleanup)
+afterEach(() => document.documentElement.removeAttribute('data-theme'))
 
 const preferences: Preferences = { ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev' }
 
@@ -56,6 +57,29 @@ describe('SettingsPanel', () => {
     expect(modelSelect.value).toBe('claude-fable-5')
     fireEvent.change(modelSelect, { target: { value: 'claude-opus-4-8' } })
     await waitFor(() => expect(calls.patches).toEqual([{ ide: 'cursor' }, { defaultModel: 'claude-opus-4-8' }]))
+  })
+
+  test('the « Thème » select reflects prefs.theme, defaulting to « dark » when absent', async () => {
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    const themeSelect = (await screen.findByLabelText('Thème')) as HTMLSelectElement
+    expect(themeSelect.value).toBe('dark') // preferences has no `theme` → prefs.theme ?? 'dark'
+
+    cleanup()
+    renderPanel({ getPreferences: async () => ({ ...preferences, theme: 'light' }) })
+    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    const lightSelect = (await screen.findByLabelText('Thème')) as HTMLSelectElement
+    expect(lightSelect.value).toBe('light')
+  })
+
+  test('changing the « Thème » select PATCHes the preference AND re-themes the DOM', async () => {
+    const calls = renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    const themeSelect = (await screen.findByLabelText('Thème')) as HTMLSelectElement
+
+    fireEvent.change(themeSelect, { target: { value: 'light' } })
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    await waitFor(() => expect(calls.patches).toEqual([{ theme: 'light' }]))
   })
 
   test('a rule row shows « toolName : matcher »; deleting it refreshes to the empty state', async () => {

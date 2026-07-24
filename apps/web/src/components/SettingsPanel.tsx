@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings } from 'lucide-react'
 import { useState } from 'react'
-import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary } from '@atelier/shared'
+import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary, type Theme } from '@atelier/shared'
 import * as client from '../api/client'
 import { modelLabel } from '../lib/models'
+import { applyTheme } from '../lib/theme'
 import { basename, errorMessage } from '../lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 
@@ -192,6 +193,31 @@ function SettingsBody({ api }: { api: SettingsApi }) {
           </select>
         )}
         <p className={HINT_CLASS}>Appliqué aux nouvelles sessions.</p>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <label className={LABEL_CLASS} htmlFor="settings-theme">
+          Thème
+        </label>
+        {prefsQuery.isPending ? (
+          <p className={HINT_CLASS}>Chargement…</p>
+        ) : prefs === undefined ? null : (
+          <select
+            id="settings-theme"
+            className={SELECT_CLASS}
+            value={prefs.theme ?? 'dark'}
+            disabled={patchPrefs.isPending}
+            onChange={(event) => {
+              const theme = event.target.value as Theme
+              applyTheme(theme) // change le thème DOM immédiatement (le toggle topbar suit via son MutationObserver)
+              patchPrefs.mutate({ theme }) // persiste (optimiste, comme les autres rangées)
+            }}
+          >
+            <option value="dark">Sombre</option>
+            <option value="light">Clair</option>
+          </select>
+        )}
+        <p className={HINT_CLASS}>Bascule aussi via l’icône ☀︎/☾ de la barre du haut.</p>
       </section>
 
       <section className="flex flex-col gap-2">
