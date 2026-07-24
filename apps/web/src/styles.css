@@ -2,41 +2,111 @@
 @import 'tw-animate-css';
 
 /*
- * Design tokens transcribed from docs/mockups/v4.2.html :root.
+ * Design tokens transcribed from docs/mockups/v5.0.html — the visual source of truth.
+ * Charte v5 « sombre apaisé » + mode clair (commuté par [data-theme] sur <html>).
  * Semantic mapping (from the mockup):
- *  - project identities cycle cyan / magenta / violet / mint / teal
- *  - tool kinds: Bash = cyan, Edit/Write = violet, Read/Other = muted
- *  - states: mint = running/open, violet = merged, red = critical only
- *  - AMBER IS RESERVED EXCLUSIVELY FOR PERMISSION PROMPTS
- *  - usage bar gradient: cyan -> indigo -> magenta
+ *  - ONE accent only (kept under its historical token name « indigo »); functional
+ *    colors are desaturated.
+ *  - project identities cycle cyan / magenta / violet / mint / teal — names kept,
+ *    values muted (no disk migration).
+ *  - tool kinds: Bash = accent, Edit/Write = mauve, Read/Other = muted.
+ *  - states: success = running/open, mauve = merged, red = critical / error.
+ *  - AMBER IS RESERVED EXCLUSIVELY FOR PERMISSION PROMPTS.
+ *  - usage bar: solid accent fill + red threshold marker (no amber, no gradient).
+ *
+ * Tailwind v4: a static @theme can't switch at runtime, so the palette lives on
+ * switchable --t-* custom properties (:root = dark default, [data-theme='light'] =
+ * light) and `@theme inline` maps the stable --color-* names onto them — this keeps
+ * every existing token NAME and Tailwind utility working while the value follows the
+ * theme. `color-scheme` follows suit.
  */
-@theme {
-  --color-ground: #0c101c;
-  --color-surface: #121828;
-  --color-surface-2: #182034;
-  --color-line: #232d45;
-  --color-line-soft: #1c2438;
-  --color-text: #e8ecf6;
-  --color-muted: #93a0bd;
-  --color-faint: #5b6784;
-  --color-indigo: #7c86ff;
-  --color-cyan: #4dd8e6;
-  --color-magenta: #f06bd9;
-  --color-mint: #4ade80;
-  --color-amber: #fbbf24;
-  --color-red: #fb6f5f;
-  --color-violet: #b18aff;
-  --color-blue: #60a5fa;
-  --color-teal: #2dd4bf;
+:root {
+  color-scheme: dark;
+
+  --t-ground: #101014;
+  --t-surface: #16161c;
+  --t-surface-2: #1e1e26;
+  --t-line: #2e2e36;
+  --t-line-soft: #26262c;
+  --t-text: #f2f2f6;
+  --t-muted: #a0a0aa;
+  --t-faint: #6e6e78;
+
+  /* accent unique — exposé sous le nom historique « indigo » (utilisé par le TSX) */
+  --t-indigo: #7a9fff;
+  /* sémantiques d'état — couleur fonctionnelle sourde */
+  --t-success: #57c98a;
+  --t-red: #f0705f; /* = error (nom « red » conservé pour bg-red/text-red du TSX) */
+  --t-amber: #d9a03f; /* PERMISSIONS UNIQUEMENT */
+  --t-mauve: #b09cd9; /* verbe Edit/Write, état merged */
+
+  /* slots identité projet — noms conservés, valeurs sourdes */
+  --t-cyan: #7c93b8; /* bleu-gris */
+  --t-magenta: #c88a6a; /* terracotta */
+  --t-violet: #9a8cc0; /* mauve sourd */
+  --t-mint: #8aa888; /* sauge */
+  --t-teal: #c2b280; /* sable */
+
+  /* nom historique conservé (plus référencé après v5) — aliasé sur l'accent */
+  --t-blue: #7a9fff;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --t-ground: #fafafa;
+  --t-surface: #ffffff;
+  --t-surface-2: #f1f1f3;
+  --t-line: #e4e4e7;
+  --t-line-soft: #ececef;
+  --t-text: #18181b;
+  --t-muted: #71717a;
+  --t-faint: #a1a1aa;
+
+  --t-indigo: #3b63e0;
+  --t-success: #16a34a;
+  --t-red: #dc2626;
+  --t-amber: #b45309;
+  --t-mauve: #7c5cbf;
+
+  --t-cyan: #5a7aa8;
+  --t-magenta: #b56a47;
+  --t-violet: #7c5cbf;
+  --t-mint: #5f8a5c;
+  --t-teal: #a8925a;
+
+  --t-blue: #3b63e0;
+}
+
+@theme inline {
+  --color-ground: var(--t-ground);
+  --color-surface: var(--t-surface);
+  --color-surface-2: var(--t-surface-2);
+  --color-line: var(--t-line);
+  --color-line-soft: var(--t-line-soft);
+  --color-text: var(--t-text);
+  --color-muted: var(--t-muted);
+  --color-faint: var(--t-faint);
+  --color-indigo: var(--t-indigo);
+  --color-success: var(--t-success);
+  --color-red: var(--t-red);
+  --color-amber: var(--t-amber);
+  --color-mauve: var(--t-mauve);
+  --color-cyan: var(--t-cyan);
+  --color-magenta: var(--t-magenta);
+  --color-violet: var(--t-violet);
+  --color-mint: var(--t-mint);
+  --color-teal: var(--t-teal);
+  --color-blue: var(--t-blue);
 
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
   --font-sans: -apple-system, 'SF Pro Text', 'Segoe UI', sans-serif;
 
   /*
-   * shadcn/ui semantic variables, hand-wired to the v4.2 tokens above.
-   * Dark theme only — there is no light theme in Atelier v0.1.
-   * Note: --color-muted keeps the mockup meaning (a TEXT color, #93a0bd);
-   * shadcn's "muted background" role is covered by surface-2 instead.
+   * shadcn/ui semantic variables, re-wired to the v5 tokens above (they follow the
+   * theme through the --color-* / --t-* chain).
+   * Note: --color-muted keeps the mockup meaning (a TEXT color); shadcn's "muted
+   * background" role is covered by surface-2 instead.
    */
   --color-background: var(--color-ground);
   --color-foreground: var(--color-text);
@@ -55,14 +125,10 @@
   --color-destructive-foreground: var(--color-ground);
   --color-border: var(--color-line);
   --color-input: var(--color-line);
-  --color-ring: var(--color-cyan);
+  --color-ring: var(--color-indigo);
 }
 
 @layer base {
-  :root {
-    color-scheme: dark;
-  }
-
   *,
   ::before,
   ::after {
@@ -78,23 +144,20 @@
   body {
     margin: 0;
     color: var(--color-text);
-    font: 13px/1.5 var(--font-sans);
+    font: 13.5px/1.6 var(--font-sans);
     overflow: hidden;
-    background:
-      radial-gradient(900px 420px at 70% -12%, rgba(124, 134, 255, 0.13), transparent 60%),
-      radial-gradient(700px 380px at -8% 108%, rgba(77, 216, 230, 0.08), transparent 55%),
-      var(--color-ground);
+    background: var(--color-ground);
   }
 
   button:focus-visible,
   [tabindex]:focus-visible {
-    outline: 2px solid var(--color-cyan);
+    outline: 2px solid var(--color-indigo);
     outline-offset: 2px;
   }
 }
 
 /*
- * Class recipes transcribed from docs/mockups/v4.2.html — the visual source of
+ * Class recipes transcribed from docs/mockups/v5.0.html — the visual source of
  * truth. Kept as component classes (not utility soup) so the TSX mirrors the
  * mockup structure one-to-one.
  */
@@ -102,7 +165,7 @@
   .shell { display: flex; flex-direction: column; height: 100%; }
 
   /* ── Topbar ─────────────────────────── */
-  .topbar { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: 48px; flex-shrink: 0; background: rgba(18, 24, 40, 0.8); border-bottom: 1px solid var(--color-line); backdrop-filter: blur(8px); }
+  .topbar { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: 48px; flex-shrink: 0; background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
   .brand { display: flex; align-items: center; gap: 9px; font: 700 13.5px var(--font-sans); }
   /* The mark (gradient squircle + diamond) now lives in the SVG asset itself. */
   .brand .logo { width: 22px; height: 22px; display: block; }
@@ -112,10 +175,10 @@
   .session-title:hover { border-color: var(--color-line); background: var(--color-surface-2); }
   .session-title .pen { color: var(--color-faint); font-size: 11px; }
   .session-title input { background: transparent; border: 0; outline: 0; color: var(--color-text); font: 600 13px var(--font-sans); width: 220px; padding: 0; }
-  .streaming-chip { display: flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); color: var(--color-mint); background: rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.3); border-radius: 999px; padding: 4px 11px; }
-  .streaming-chip .d { width: 6px; height: 6px; border-radius: 999px; background: var(--color-mint); }
-  .model-chip { display: flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); color: var(--color-violet); padding: 4px 11px; border: 1px solid rgba(177, 138, 255, 0.35); background: rgba(177, 138, 255, 0.08); border-radius: 999px; cursor: pointer; }
-  .model-chip .md { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet); }
+  .streaming-chip { display: flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); color: var(--color-success); background: color-mix(in srgb, var(--color-success) 12%, transparent); border: 1px solid color-mix(in srgb, var(--color-success) 34%, transparent); border-radius: 999px; padding: 4px 11px; }
+  .streaming-chip .d { width: 6px; height: 6px; border-radius: 999px; background: var(--color-success); }
+  .model-chip { display: flex; align-items: center; gap: 7px; font: 600 11px var(--font-mono); color: var(--color-muted); padding: 4px 11px; border: 1px solid var(--color-line); background: var(--color-surface-2); border-radius: 999px; cursor: pointer; }
+  .model-chip .md { width: 7px; height: 7px; border-radius: 999px; background: var(--color-indigo); }
 
   /* ── 3-zone layout ──────────────────── */
   /* grid-template-rows: minmax(0, 1fr) — the single row must fill AND be allowed
@@ -126,10 +189,10 @@
   svg.i { width: 12px; height: 12px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
   /* ── Sidebar ────────────────────────── */
-  .sidebar { background: rgba(18, 24, 40, 0.5); border-right: 1px solid var(--color-line); display: flex; flex-direction: column; overflow-y: auto; }
+  .sidebar { background: var(--color-surface); border-right: 1px solid var(--color-line); display: flex; flex-direction: column; overflow-y: auto; }
   .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 9px; }
   .sidebar-head .label { font: 700 10px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-faint); }
-  .new-btn { font: 700 11px var(--font-sans); color: #0b0e18; background: linear-gradient(135deg, var(--color-indigo), var(--color-cyan)); border: 0; border-radius: 7px; padding: 5px 12px; cursor: pointer; }
+  .new-btn { font: 700 11px var(--font-sans); color: var(--color-ground); background: var(--color-indigo); border: 0; border-radius: 7px; padding: 5px 12px; cursor: pointer; }
   .project { padding: 2px 8px 10px; }
   .project-name { display: flex; align-items: center; gap: 9px; padding: 7px 8px; font: 600 12px var(--font-sans); cursor: pointer; border-radius: 7px; color: var(--color-muted); }
   .project-name:hover { background: var(--color-surface-2); }
@@ -139,10 +202,10 @@
   /* Row = plain div wrapping two SIBLING buttons (select + delete) — a button must never nest interactive content. */
   .sess { display: flex; align-items: center; gap: 8px; margin: 1px 0 1px 12px; padding: 7px 10px; border-radius: 7px; color: var(--color-muted); border-left: 2px solid transparent; }
   .sess:hover { background: var(--color-surface-2); }
-  .sess.active { background: linear-gradient(90deg, rgba(77, 216, 230, 0.1), transparent 70%); color: var(--color-text); border-left-color: var(--color-cyan); }
+  .sess.active { background: var(--color-surface-2); color: var(--color-text); border-left-color: var(--color-indigo); }
   .sess-btn { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; background: transparent; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   .dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }
-  .dot[data-state='run'] { background: var(--color-mint); box-shadow: 0 0 7px rgba(74, 222, 128, 0.6); }
+  .dot[data-state='run'] { background: var(--color-success); }
   .dot[data-state='idle'] { background: var(--color-faint); }
   .dot[data-state='done'] { background: transparent; border: 1.5px solid var(--color-faint); }
   .sess .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; font-size: 12px; }
@@ -154,7 +217,7 @@
      deletable by keyboard. */
   .sess:hover .del,
   .sess:focus-within .del { display: inline-flex; }
-  .sess .del:hover { color: var(--color-red); background: rgba(251, 111, 95, 0.12); }
+  .sess .del:hover { color: var(--color-red); background: color-mix(in srgb, var(--color-red) 12%, transparent); }
 
   /* Sidebar footer (v0.2): permanent, discreet « + Projet » affordance below the project list. */
   .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; }
@@ -165,13 +228,13 @@
   .register { display: flex; flex-direction: column; gap: 9px; margin: 4px 14px; padding: 13px 14px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface); }
   .register p { margin: 0; font-size: 12px; color: var(--color-muted); }
   .register input { background: var(--color-ground); border: 1px solid var(--color-line); border-radius: 7px; padding: 7px 10px; color: var(--color-text); font: 12px var(--font-mono); outline: 0; }
-  .register input:focus { border-color: var(--color-indigo); box-shadow: 0 0 0 3px rgba(124, 134, 255, 0.12); }
+  .register input:focus { border-color: var(--color-indigo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-indigo) 18%, transparent); }
   .register .new-btn:disabled { opacity: 0.6; cursor: default; }
   .register .form-error { color: var(--color-red); font-size: 11.5px; overflow-wrap: anywhere; }
 
   /* Projects query pending / failed (the register form is gated on success). */
   .side-note { margin: 4px 14px; padding: 6px 2px; font-size: 12px; color: var(--color-faint); }
-  .side-error { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; margin: 4px 14px; padding: 13px 14px; border: 1px solid rgba(251, 111, 95, 0.4); border-left: 3px solid var(--color-red); border-radius: 12px; background: var(--color-surface); }
+  .side-error { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; margin: 4px 14px; padding: 13px 14px; border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent); border-left: 3px solid var(--color-red); border-radius: 12px; background: var(--color-surface); }
   .side-error p { margin: 0; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }
 
   /* ── Chat ───────────────────────────── */
@@ -179,40 +242,40 @@
   .messages { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
   .msg { display: flex; gap: 12px; max-width: 48rem; }
   .avatar { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; font: 700 11px var(--font-sans); }
-  .msg.user .avatar { background: rgba(96, 165, 250, 0.18); border: 1px solid rgba(96, 165, 250, 0.4); color: var(--color-blue); }
-  .msg.assistant .avatar { background: linear-gradient(135deg, var(--color-indigo), var(--color-magenta)); color: #0b0e18; }
+  .msg.user .avatar { background: var(--color-surface-2); border: 1px solid var(--color-line); color: var(--color-muted); }
+  .msg.assistant .avatar { background: var(--color-indigo); color: var(--color-ground); }
   .msg .col { flex: 1; min-width: 0; }
   .msg .who { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
   .msg .who b { font-size: 12px; }
-  .msg.user .body { background: var(--color-surface-2); border: 1px solid var(--color-line-soft); border-radius: 11px; padding: 10px 13px; }
-  .msg .body { white-space: pre-wrap; overflow-wrap: break-word; }
+  .msg.user .body { background: var(--color-surface-2); border: 1px solid var(--color-line-soft); border-radius: 11px; padding: 10px 13px; font-size: 14px; }
+  .msg .body { white-space: pre-wrap; overflow-wrap: break-word; font-size: 15px; line-height: 1.6; }
   /* Queued message: accepted mid-turn, waiting in the client queue for the next idle. */
   .msg.queued { opacity: 0.55; }
   .msg .who .queued-tag { font: 500 10px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-faint); border: 1px dashed var(--color-line); border-radius: 4px; padding: 1px 6px; }
 
   /* Row = plain div wrapping two SIBLING buttons (toggle + IDE) — a button must never nest interactive content. */
-  .tool { display: flex; align-items: center; gap: 9px; margin-top: 8px; border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 8px 12px; font: 500 11.5px var(--font-mono); color: var(--color-muted); background: transparent; }
-  .tool:hover { background: var(--color-surface); }
+  .tool { display: flex; align-items: center; gap: 9px; margin-top: 8px; border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 8px 12px; font: 500 11.5px var(--font-mono); color: var(--color-muted); background: var(--color-surface); }
+  .tool:hover { border-color: var(--color-line); }
   .tool-toggle { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; background: transparent; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-  .tool.bash { border-left: 3px solid var(--color-cyan); }
-  .tool.edit { border-left: 3px solid var(--color-violet); }
+  .tool.bash { border-left: 3px solid var(--color-indigo); }
+  .tool.edit { border-left: 3px solid var(--color-mauve); }
   .tool.other { border-left: 3px solid var(--color-muted); }
   .tool .kind { font-weight: 700; }
-  .tool.bash .kind { color: var(--color-cyan); }
-  .tool.edit .kind { color: var(--color-violet); }
+  .tool.bash .kind { color: var(--color-indigo); }
+  .tool.edit .kind { color: var(--color-mauve); }
   .tool.other .kind { color: var(--color-muted); }
   .tool .chev { color: var(--color-faint); font-size: 9px; }
   .tool .status { margin-left: auto; color: var(--color-faint); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-  .tool .status .okt { color: var(--color-mint); }
+  .tool .status .okt { color: var(--color-success); }
   .tool .status .failt { color: var(--color-red); }
-  .tool .status .add { color: var(--color-mint); font-weight: 700; }
+  .tool .status .add { color: var(--color-success); font-weight: 700; }
   .tool .status .del { color: var(--color-red); font-weight: 700; }
   .tool .lnum { color: var(--color-faint); }
   .tool-detail { margin-top: 4px; border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 8px 12px; font: 12px var(--font-mono); color: var(--color-muted); background: var(--color-ground); white-space: pre-wrap; overflow-wrap: break-word; }
   /* Revealed on hover AND :focus-within: tabbing onto the toggle shows the
      button, so the next Tab can reach it (display:none drops it from the tab
      order only while nothing in the row has focus). */
-  .ide-btn { display: none; align-items: center; gap: 5px; font: 700 10px var(--font-mono); color: var(--color-cyan); background: rgba(77, 216, 230, 0.1); border: 1px solid rgba(77, 216, 230, 0.35); border-radius: 6px; padding: 3px 8px; cursor: pointer; margin-left: 8px; flex-shrink: 0; }
+  .ide-btn { display: none; align-items: center; gap: 5px; font: 700 10px var(--font-mono); color: var(--color-indigo); background: color-mix(in srgb, var(--color-indigo) 10%, transparent); border: 1px solid color-mix(in srgb, var(--color-indigo) 32%, transparent); border-radius: 6px; padding: 3px 8px; cursor: pointer; margin-left: 8px; flex-shrink: 0; }
   .tool:hover .ide-btn,
   .tool:focus-within .ide-btn { display: inline-flex; }
 
@@ -220,22 +283,22 @@
   .typing i { width: 5px; height: 5px; border-radius: 99px; background: var(--color-indigo); opacity: 0.4; }
 
   /* Permission prompt — AMBER IS RESERVED EXCLUSIVELY FOR PERMISSIONS: the only amber element in the app. */
-  .permission { border: 1px solid rgba(251, 191, 36, 0.45); border-left: 3px solid var(--color-amber); border-radius: 11px; background: linear-gradient(180deg, rgba(251, 191, 36, 0.08), transparent 70%), var(--color-surface); padding: 14px 17px; max-width: 48rem; margin-left: 40px; }
+  .permission { border: 1px solid color-mix(in srgb, var(--color-amber) 45%, transparent); border-left: 3px solid var(--color-amber); border-radius: 11px; background: var(--color-surface); padding: 14px 17px; max-width: 48rem; margin-left: 40px; }
   .permission .p-head { display: flex; gap: 9px; align-items: center; font-weight: 600; font-size: 12.5px; margin-bottom: 8px; }
   .permission .p-head .k { color: var(--color-amber); font: 700 10px var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; }
-  .permission code.cmd { display: block; font: 12px var(--font-mono); color: #ffe9b3; background: var(--color-ground); border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 9px 12px; margin: 8px 0 12px; overflow-x: auto; white-space: pre; }
+  .permission code.cmd { display: block; font: 12px var(--font-mono); color: var(--color-text); background: var(--color-ground); border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 9px 12px; margin: 8px 0 12px; overflow-x: auto; white-space: pre; }
   .permission .p-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   /* min-width:0 + overflow-wrap:anywhere: a pathological unbreakable matcher in the
      « Toujours » label wraps inside the button instead of overflowing the card. */
   .permission .p-actions button { font: 600 12px var(--font-sans); border-radius: 8px; padding: 7px 14px; cursor: pointer; border: 1px solid var(--color-line); background: var(--color-surface-2); color: var(--color-text); min-width: 0; overflow-wrap: anywhere; }
-  .permission .p-actions .deny { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
-  .permission .p-actions .allow { background: linear-gradient(135deg, var(--color-amber), #f59e0b); border-color: transparent; color: #1a1204; }
+  .permission .p-actions .deny { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
+  .permission .p-actions .allow { background: var(--color-amber); border-color: transparent; color: #1a1204; }
   .permission .p-actions button:disabled { opacity: 0.55; cursor: default; }
   .permission .p-outcome { margin-top: 10px; font: 600 11px var(--font-mono); color: var(--color-muted); }
 
   /* Failure banners: mutation notices + failed session open (with retry).
      Red is the critical color — amber stays reserved for permissions. */
-  .banner { display: flex; align-items: center; gap: 10px; margin: 12px 28px 0; padding: 9px 13px; max-width: 48rem; border: 1px solid rgba(251, 111, 95, 0.4); border-left: 3px solid var(--color-red); border-radius: 9px; background: linear-gradient(180deg, rgba(251, 111, 95, 0.07), transparent 80%), var(--color-surface); font-size: 12px; }
+  .banner { display: flex; align-items: center; gap: 10px; margin: 12px 28px 0; padding: 9px 13px; max-width: 48rem; border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent); border-left: 3px solid var(--color-red); border-radius: 9px; background: var(--color-surface); font-size: 12px; }
   .banner .banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .banner .banner-btn { flex-shrink: 0; font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
   .banner .banner-btn:hover { border-color: var(--color-red); color: var(--color-red); }
@@ -243,10 +306,10 @@
   /* ── Composer ───────────────────────── */
   .composer { flex-shrink: 0; padding: 14px 28px 18px; border-top: 1px solid var(--color-line); }
   .composer .box { display: flex; align-items: center; gap: 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; padding: 11px 14px; }
-  .composer .box:focus-within { border-color: var(--color-indigo); box-shadow: 0 0 0 3px rgba(124, 134, 255, 0.12); }
+  .composer .box:focus-within { border-color: var(--color-indigo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-indigo) 18%, transparent); }
   .composer .box.disabled { opacity: 0.5; }
   .composer .box { align-items: flex-end; } /* auto-grow: the action button and kbd hug the bottom line */
-  .composer textarea { flex: 1; background: transparent; border: 0; outline: 0; resize: none; color: var(--color-text); font: 13px/1.5 var(--font-sans); padding: 0; max-height: 200px; overflow-y: auto; }
+  .composer textarea { flex: 1; background: transparent; border: 0; outline: 0; resize: none; color: var(--color-text); font: 13.5px/1.6 var(--font-sans); padding: 0; max-height: 200px; overflow-y: auto; }
   .composer textarea::placeholder { color: var(--color-faint); }
   .composer kbd { font: 500 10px var(--font-mono); border: 1px solid var(--color-line); border-radius: 4px; padding: 1px 6px; color: var(--color-faint); }
   /* Send / Stop affordance. Stop is red — the critical color; amber stays
@@ -254,7 +317,7 @@
   .composer .action { flex-shrink: 0; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border-radius: 7px; background: var(--color-surface-2); border: 1px solid var(--color-line); color: var(--color-muted); cursor: pointer; }
   .composer .action svg { width: 14px; height: 14px; }
   .composer .action:hover { color: var(--color-text); border-color: var(--color-indigo); }
-  .composer .action.stop { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
+  .composer .action.stop { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
   .composer .action.stop:hover { border-color: var(--color-red); }
   .composer .action:disabled { cursor: default; }
 
@@ -265,26 +328,26 @@
   .perm-gate .perm-gate-actions { display: flex; gap: 8px; flex-shrink: 0; }
   .perm-gate .perm-gate-btn { font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 5px 11px; cursor: pointer; }
   .perm-gate .perm-gate-btn:hover { border-color: var(--color-indigo); }
-  .perm-gate .perm-gate-btn.danger { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
-  .perm-gate .perm-gate-btn.danger:hover { border-color: var(--color-red); background: rgba(251, 111, 95, 0.08); }
+  .perm-gate .perm-gate-btn.danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
+  .perm-gate .perm-gate-btn.danger:hover { border-color: var(--color-red); background: color-mix(in srgb, var(--color-red) 8%, transparent); }
   .perm-gate .perm-gate-btn:disabled { opacity: 0.5; cursor: default; }
 
   /* Confirmation dialog actions (delete session) — perm-gate button grammar:
      neutral surface button, red for the destructive choice. */
   .dialog-btn { font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 5px 11px; cursor: pointer; }
   .dialog-btn:hover { border-color: var(--color-indigo); }
-  .dialog-btn.danger { color: var(--color-red); border-color: rgba(251, 111, 95, 0.4); }
-  .dialog-btn.danger:hover { border-color: var(--color-red); background: rgba(251, 111, 95, 0.08); }
+  .dialog-btn.danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
+  .dialog-btn.danger:hover { border-color: var(--color-red); background: color-mix(in srgb, var(--color-red) 8%, transparent); }
 
   /* ── Right panel ────────────────────── */
-  .dash { background: rgba(18, 24, 40, 0.5); border-left: 1px solid var(--color-line); overflow-y: auto; padding: 16px 15px 20px; display: flex; flex-direction: column; gap: 20px; }
+  .dash { background: var(--color-surface); border-left: 1px solid var(--color-line); overflow-y: auto; padding: 16px 15px 20px; display: flex; flex-direction: column; gap: 20px; }
   .dash h3 { font: 700 10px var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-faint); margin: 0 0 10px; }
 
   /* Dashboard grid — widget chrome (drag/resize/remove via WidgetFrame). */
   .dash-widgets { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
   .add-widget { align-self: flex-end; padding: 4px 9px; font: 600 11px var(--font-mono); color: var(--color-faint); background: transparent; border: 1px dashed var(--color-line); border-radius: 7px; cursor: pointer; }
   .dash-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 10px; }
-  .widget { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--color-line); border-radius: 10px; background: rgba(18, 24, 40, 0.6); }
+  .widget { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-surface); }
   .widget.span-2 { grid-column: span 2; }
   .widget.h-S .widget-body { height: 96px; }
   .widget.h-M .widget-body { height: 200px; }
@@ -294,21 +357,23 @@
   .widget-head h3 { flex: 1; margin: 0; }
   .widget-drag { cursor: grab; background: none; border: none; color: var(--color-faint); padding: 0 2px; }
   .widget-menu-btn { background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 0 2px; }
-  .widget-menu { background: #141a2c; border: 1px solid var(--color-line); border-radius: 8px; padding: 4px; font: 500 12px var(--font-sans); color: inherit; }
-  .widget-menu [data-highlighted] { background: rgba(255, 255, 255, 0.06); border-radius: 5px; }
+  .widget-menu { background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 8px; padding: 4px; font: 500 12px var(--font-sans); color: inherit; }
+  .widget-menu [data-highlighted] { background: color-mix(in srgb, var(--color-text) 6%, transparent); border-radius: 5px; }
   .widget-menu [data-disabled] { opacity: 0.4; }
 
   /* Usage — session (mockup .card / .kv recipes; the total kv mirrors the
      mockup's margin-top:8px inline style). */
-  .card { border: 1px solid var(--color-line); border-radius: 12px; padding: 13px 14px; background: var(--color-surface); }
+  .card { border: 1px solid var(--color-line); border-radius: 12px; padding: 13px 14px; background: var(--color-surface-2); }
   .kv { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--color-muted); padding: 3px 0; }
   .kv b { color: var(--color-text); font: 700 12px var(--font-mono); font-variant-numeric: tabular-nums; }
+  .kv b.warn { color: var(--color-red); }
   .kv.total { margin-top: 8px; }
 
-  /* Limites du plan — the claude.ai/usage gauges. Warn is red (amber = permissions only). */
+  /* Limites du plan — the claude.ai/usage gauges. Solid accent fill; warn is red
+     (amber = permissions only). */
   .limit-row { padding: 3px 0; }
   .gauge { height: 5px; border-radius: 3px; background: var(--color-surface-2); overflow: hidden; margin-top: 2px; }
-  .gauge i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--color-indigo), var(--color-magenta)); transition: width 300ms ease; }
+  .gauge i { display: block; height: 100%; border-radius: 3px; background: var(--color-indigo); transition: width 300ms ease; }
   .gauge.warn i { background: var(--color-red); }
   .limit-reset { font: 500 10px var(--font-mono); color: var(--color-faint); margin-top: 3px; }
   .limit-row.stale { opacity: 0.6; }
@@ -320,12 +385,12 @@
   .file-row .f { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-row .diff { white-space: nowrap; }
   .file-row .diff b { font-weight: 700; font-size: 10px; }
-  .file-row .diff .add { color: var(--color-mint); }
+  .file-row .diff .add { color: var(--color-success); }
   .file-row .diff .del { color: var(--color-red); }
   .file-row .open-ide { display: inline-flex; color: var(--color-faint); }
-  .file-row:hover .open-ide { color: var(--color-cyan); }
+  .file-row:hover .open-ide { color: var(--color-indigo); }
   .file-cap { display: flex; align-items: center; gap: 6px; font: 500 10px var(--font-mono); color: var(--color-faint); padding: 6px 8px 0; }
-  .file-cap .open-all { border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; color: var(--color-cyan); }
+  .file-cap .open-all { border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; color: var(--color-indigo); }
   .file-cap .open-all:hover { text-decoration: underline; }
   .file-empty { margin: 0; padding: 2px 8px; font-size: 12px; color: var(--color-faint); }
 
@@ -336,10 +401,10 @@
   .pr-row { display: flex; align-items: center; gap: 4px; }
   .pr-line { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 0; background: none; border: none; color: inherit; cursor: pointer; text-align: left; font: inherit; }
   .pr-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-  .pr-dot.open { background: #3fb950; }
-  .pr-dot.merged { background: #a371f7; }
-  .pr-dot.closed { background: #f85149; }
-  .pr-dot.draft { background: #8b949e; }
+  .pr-dot.open { background: var(--color-success); }
+  .pr-dot.merged { background: var(--color-mauve); }
+  .pr-dot.closed { background: var(--color-red); }
+  .pr-dot.draft { background: var(--color-faint); }
   .pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .pr-age { color: var(--color-faint); font: 500 10px var(--font-mono); flex: none; }
   .pr-open { background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 2px 4px; }
@@ -349,7 +414,7 @@
   /* Same chrome as .banner .banner-btn — the retry button lives outside a .banner. */
   .pr-error .banner-btn { align-self: flex-start; font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
   .pr-error .banner-btn:hover { border-color: var(--color-red); color: var(--color-red); }
-  .pr-skeleton { height: 60px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); }
+  .pr-skeleton { height: 60px; border-radius: 6px; background: var(--color-surface-2); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
