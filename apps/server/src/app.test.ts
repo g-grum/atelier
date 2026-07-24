@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { WidgetInstance } from '@atelier/shared'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,14 +7,21 @@ import { AppData } from './store/app-data'
 import { MockSdkClient } from './sdk/sdk-client.mock'
 import { SessionsService } from './sessions/sessions-service'
 import { SessionStreamRegistry } from './stream/session-stream'
+import { GithubService } from './github/github-service'
 import { createApp } from './app'
 
-function freshApp(webDist?: string, sdk: MockSdkClient = new MockSdkClient(), versionFile?: string) {
+// No-op fake: an unreachable `gh` (exitCode: 1 on every call) — pre-existing
+// tests never touch GitHub, so this just needs to exist and never be hit.
+function noopGithubService(): GithubService {
+  return new GithubService(async () => ({ stdout: '', stderr: 'unused in this test', exitCode: 1 }))
+}
+
+function freshApp(webDist?: string, sdk: MockSdkClient = new MockSdkClient(), versionFile?: string, github: GithubService = noopGithubService()) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-app-')), 'data.json')
   const data = new AppData(filePath)
   const streams = new SessionStreamRegistry(data, sdk)
   const sessions = new SessionsService(sdk, data, streams)
-  const app = createApp({ data, sessions, sdk, streams, token: 'test-token', webDist, versionFile })
+  const app = createApp({ data, sessions, sdk, streams, token: 'test-token', webDist, versionFile, github })
   return { app, data, sessions, filePath }
 }
 
@@ -693,10 +701,20 @@ describe('createApp', () => {
 
     test('PUT /api/widgets survives any legal JSON body (body-guard convention)', async () => {
       const { app } = freshApp()
-      for (const body of ['null', '"x"', '42', '{}']) {
+      for (const body of ['null', '"x"', '42', '{}', '{']) {
         const res = await app.request('/api/widgets', { method: 'PUT', headers, body })
         expect(res.status).toBe(400)
       }
+    })
+
+    test('PUT /api/widgets round-trips a non-empty layout, stripping unknown keys', async () => {
+      const { app, data } = freshApp()
+      const submitted = [{ id: 'w1', type: 'github-prs', span: 1, height: 'S', config: { repo: 'o/r' }, rogue: true }]
+      const clean: WidgetInstance[] = [{ id: 'w1', type: 'github-prs', span: 1, height: 'S', config: { repo: 'o/r' } }]
+      const res = await app.request('/api/widgets', { method: 'PUT', headers, body: JSON.stringify(submitted) })
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual(clean)
+      expect(data.get().widgets).toEqual(clean)
     })
   })
 
@@ -759,5 +777,39 @@ describe('createApp', () => {
       const res = await app.request('/')
       expect(res.status).toBe(404)
     })
+  })
+})
+
+describe('github routes', () => {
+  const headers = { Authorization: 'Bearer test-token' }
+  const service = (responses: Record<string, { stdout?: string; stderr?: string; exitCode?: number }>) =>
+    new GithubService(async (args) => {
+      const r = responses[args[0] === 'auth' ? 'auth' : 'list'] ?? {}
+      return { stdout: r.stdout ?? '', stderr: r.stderr ?? '', exitCode: r.exitCode ?? 0 }
+    })
+
+  test('GET /api/github/prs returns mapped PRs', async () => {
+    const github = service({ auth: { stdout: 't' }, list: { stdout: JSON.stringify([{ number: 1, title: 'T', url: 'u', author: { login: 'a' }, state: 'OPEN', updatedAt: 'now' }]) } })
+    const { app } = freshApp(undefined, undefined, undefined, github)
+    const res = await app.request('/api/github/prs?repo=o/r', { headers })
+    expect(res.status).toBe(200)
+    const prs = (await res.json()) as { number: number; state: string }[]
+    expect(prs).toEqual([expect.objectContaining({ number: 1, state: 'open' })])
+  })
+
+  test('400 on bad repo or bad limit', async () => {
+    const { app } = freshApp(undefined, undefined, undefined, service({}))
+    expect((await app.request('/api/github/prs?repo=no-slash', { headers })).status).toBe(400)
+    expect((await app.request('/api/github/prs?repo=o/r&limit=0', { headers })).status).toBe(400)
+    expect((await app.request('/api/github/prs?repo=o/r&limit=abc', { headers })).status).toBe(400)
+    expect((await app.request('/api/github/prs?repo=o/r&limit=31', { headers })).status).toBe(400)
+  })
+
+  test('502 with the French message on gh failure', async () => {
+    const github = service({ auth: { exitCode: 1, stderr: 'nope' } })
+    const { app } = freshApp(undefined, undefined, undefined, github)
+    const res = await app.request('/api/github/prs?repo=o/r', { headers })
+    expect(res.status).toBe(502)
+    expect(((await res.json()) as { error: string }).error).toContain('authentifié')
   })
 })
