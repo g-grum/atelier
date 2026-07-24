@@ -100,8 +100,9 @@ no `git` call ever happens in a constructor.
   (today always a project id). A stable worktree id makes them work unchanged.
 - `App.tsx` validates the open workspace against the persisted projects list:
   `projects.some(p => p.id === openProjectId) ? openProjectId : projects[0]?.id`
-  (`App.tsx:152`), and the last-session restore effect checks the same list
-  (`App.tsx:192-197`). A worktree id is not in that list, so both must learn to
+  (`App.tsx:159`), and the last-session restore effect checks the same list
+  (`App.tsx:199-204`, membership check at `:203`). A worktree id is not in that
+  list, so both must learn to
   accept a currently-known worktree id.
 - `SessionSidebar` renders projects with color dots, per-project counts, and a
   `+ Projet` affordance. No expand/nesting yet.
@@ -160,10 +161,13 @@ The two **resolvers** (sites 4–5) stop doing `projects.find(...)`:
   resolveWorkspacePath(id); if (!path) throw` — so `countSessions` still maps
   the throw to 0, and the discovery route's per-worktree counts reuse the
   cached git result (no N+1 re-shelling).
-- Site 4, `SessionStream.runTurn`: no longer looks the path up — it uses the
-  path threaded into the stream at construction (below). Its `unknown project`
-  error path is now unreachable in practice (the WS guard rejected the id
-  first) but is kept as defense-in-depth.
+- Site 4, `SessionStream.runTurn` (`:100-106`): the `projects.find(p => p.id
+  === this.projectId)` lookup and its `unknown project` throw are **removed** —
+  they would reject every `wt:` turn (a `wt:` id is not in the persisted list).
+  `cwd` becomes `this.workspacePath` (threaded at construction, below). A
+  defense-in-depth guard is kept but **re-based on the threaded path** (throw
+  when `workspacePath` is falsy), not on `projects.find`. In practice it is
+  unreachable — the WS guard already rejected an unresolvable id.
 
 Site 6, `findOwningProject` (delete), scans persisted project paths **plus**
 each project's cached worktree paths, so a session that lives in a worktree dir
@@ -204,6 +208,16 @@ structure:
   (mirror the github service's cache), invalidatable so a manual refresh is
   live.
 
+**Wiring (DI).** `WorktreeService` is constructed once in the composition root
+(`app.ts`/`index.ts`) alongside the existing services. `resolveWorkspacePath`
+needs `AppData` + `WorktreeService`; it is created there too and injected
+where the six sites live: into `sessionsRoutes(data, sessions, resolve)` (sites
+2, 3), the WS guard closure in `createApp` (site 1), and `SessionsService`
+(sites 5, 6 — its constructor gains the resolver/service so `list` and
+`findOwningProject` can call it). `SessionStream`/`PermissionBroker` receive
+only the already-resolved `workspacePath` string, so they need no `git`
+dependency.
+
 New route `GET /api/projects/:id/worktrees` (token-guarded like every `/api`
 route): resolves the project, lists worktrees, and returns each enriched to
 `Worktree` — `{ id: 'wt:'+b64(path), path, branch, sessionCount }`, the count
@@ -230,8 +244,8 @@ worktree is never persisted, so the stored shapes gain nothing.
   Selecting a worktree calls the existing `onSelectProject(worktreeId)`.
 - `App.tsx`: the set of valid workspace ids becomes persisted project ids
   **plus** the worktree ids currently loaded in the sidebar's expanded rows.
-  The stale-guard (`:152`, `… ? openProjectId : projects[0]?.id ?? null`) and
-  the last-session restore effect (`:192-197`) check membership against that
+  The stale-guard (`:159`, `… ? openProjectId : projects[0]?.id ?? null`) and
+  the last-session restore effect (`:199-204`) check membership against that
   combined set, so opening a worktree — and restoring one on launch — is not
   bounced back to `projects[0]`. Everything downstream past the guards
   (`['sessions', workspaceId]`, `controller.open(sessionId, workspaceId)`,
