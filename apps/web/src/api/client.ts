@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -158,4 +158,9 @@ export function putWidgets(widgets: WidgetInstance[]): Promise<WidgetInstance[]>
 
 export function getGithubPrs(repo: string, limit: number): Promise<PrSummary[]> {
   return request<PrSummary[]>('GET', `/github/prs?repo=${encodeURIComponent(repo)}&limit=${limit}`)
+}
+
+/** The GitHub account the given project pushes as (derived server-side from its origin remote). */
+export function getProjectGithubAccount(projectId: string): Promise<ProjectGithubAccount> {
+  return request<ProjectGithubAccount>('GET', `/projects/${encodeURIComponent(projectId)}/github-account`)
 }

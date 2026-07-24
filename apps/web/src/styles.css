@@ -171,6 +171,8 @@
   .brand .logo { width: 22px; height: 22px; display: block; }
   .crumb { display: flex; align-items: center; gap: 6px; color: var(--color-muted); font-size: 12px; }
   .crumb .pj { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .gh-account { display: inline-flex; align-items: center; gap: 6px; font: 600 11px var(--font-mono); color: var(--color-muted); padding: 4px 10px; border: 1px solid var(--color-line); background: var(--color-surface-2); border-radius: 999px; margin-left: -6px; }
+  .gh-account .gh-mark { flex-shrink: 0; opacity: 0.8; }
   .session-title { display: flex; align-items: center; gap: 8px; padding: 4px 11px; border-radius: 7px; border: 1px solid transparent; cursor: text; font-weight: 600; }
   .session-title:hover { border-color: var(--color-line); background: var(--color-surface-2); }
   .session-title .pen { color: var(--color-faint); font-size: 11px; }

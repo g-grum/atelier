@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import type { Project, SessionSummary, Theme } from '@atelier/shared'
+import type { Project, ProjectGithubAccount, SessionSummary, Theme } from '@atelier/shared'
 import { basename } from '../lib/utils'
 import type { StreamState } from '../state/stream-reducer'
+import { GithubAccountChip } from './GithubAccountChip'
 import { ModelSelector } from './ModelSelector'
 import { SettingsPanel } from './SettingsPanel'
 import { ThemeToggle } from './ThemeToggle'
@@ -10,11 +11,13 @@ export type TopbarProps = {
   project: Project | null
   session: SessionSummary | null
   status: StreamState['status']
+  /** GitHub account the open project pushes as — null while loading or when the project has no GitHub remote. */
+  githubAccount: ProjectGithubAccount | null
   onRename: (name: string) => void
   patchPreferences: (patch: { theme: Theme }) => Promise<unknown>
 }
 
-export function Topbar({ project, session, status, onRename, patchPreferences }: TopbarProps) {
+export function Topbar({ project, session, status, githubAccount, onRename, patchPreferences }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -27,6 +30,7 @@ export function Topbar({ project, session, status, onRename, patchPreferences }:
           {basename(project.path)} ›
         </div>
       )}
+      {project !== null && <GithubAccountChip account={githubAccount} />}
       {session !== null && <SessionTitle key={session.id} session={session} onRename={onRename} />}
       <div className="flex-1" />
       {status === 'streaming' && (

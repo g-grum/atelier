@@ -54,6 +54,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     getWidgets: async () => [...DEFAULT_WIDGETS],
     putWidgets: async (next) => next,
     getGithubPrs: async () => [],
+    getProjectGithubAccount: async () => ({ account: null, repo: null }),
     // No `theme` key → the boot resync applies dark (spec: clé absente = dark).
     getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),

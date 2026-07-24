@@ -2,12 +2,23 @@ import { Hono } from 'hono'
 import { REPO_PATTERN } from '@atelier/shared'
 import type { AppData } from '../store/app-data'
 import { GithubError, GithubService } from './github-service'
+import { createGitRunner, type GitRun, projectGithubAccount } from './git-remote'
 
 const DEFAULT_LIMIT = 10
 const MAX_LIMIT = 30
 
-export function githubRoutes(github: GithubService, data: AppData): Hono {
+export function githubRoutes(github: GithubService, data: AppData, gitRun: GitRun = createGitRunner()): Hono {
   const app = new Hono()
+
+  // Which GitHub account a project pushes as, derived from its `origin` remote.
+  // Read-only and never fatal: an absent/foreign/unreadable remote is a normal
+  // state → { account: null } (the topbar chip simply hides), not an error.
+  app.get('/projects/:id/github-account', async (c) => {
+    const project = data.get().projects.find((p) => p.id === c.req.param('id'))
+    if (project === undefined) return c.json({ error: 'Not found' }, 404)
+    const remote = await projectGithubAccount(gitRun, project.path)
+    return c.json(remote ?? { account: null, repo: null })
+  })
 
   // Read-only proxy: all failures land as 400 (caller bug) or 502 (gh/GitHub
   // unavailable) with a French, widget-displayable { error } — never a 500.

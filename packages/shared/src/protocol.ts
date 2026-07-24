@@ -22,6 +22,8 @@ export type ProposedRule = Pick<AlwaysRule, 'toolName' | 'matcher'>
 export const MODELS = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6'] as const
 
 export type Project = { id: string; path: string; color: string }
+/** GET /api/projects/:id/github-account — the GitHub account a project pushes as (derived from its `origin` remote), with its owner/repo. Both null when the project has no GitHub origin. */
+export type ProjectGithubAccount = { account: string | null; repo: string | null }
 /** REST shape of GET/POST /api/projects. The persisted Project stays count-free — a derived count goes stale instantly, so the routes enrich through SessionsService.countSessions at response time; never persist it. */
 export type ProjectSummary = Project & { sessionCount: number }
 export type Theme = 'dark' | 'light'

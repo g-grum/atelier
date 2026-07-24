@@ -170,6 +170,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   })
   const sessions = sessionsQuery.data ?? []
 
+  // Which GitHub account the open project pushes as — feeds the topbar chip.
+  // Silent on failure (retry: false): the chip simply stays hidden.
+  const githubAccountQuery = useQuery({
+    queryKey: ['githubAccount', projectId],
+    queryFn: () => backend.getProjectGithubAccount(projectId ?? ''),
+    enabled: projectId !== null,
+    retry: false,
+  })
+
   const openSession = useCallback(
     (sessionId: string, projectId: string) => {
       const attempt = ++openAttempt.current
@@ -322,6 +331,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         project={activeProject}
         session={activeSession}
         status={stream.status}
+        githubAccount={githubAccountQuery.data ?? null}
         onRename={(name) => {
           if (selected !== null) renameSession.mutate({ sessionId: selected.sessionId, name })
         }}

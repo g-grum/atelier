@@ -1,4 +1,4 @@
-import type { ChatMessage, ClientMessage, Preferences, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
@@ -30,6 +30,8 @@ export type Backend = {
   putWidgets: (widgets: WidgetInstance[]) => Promise<WidgetInstance[]>
   /** Latest PRs of a repo through the server's gh proxy. */
   getGithubPrs: (repo: string, limit: number) => Promise<PrSummary[]>
+  /** GitHub account the given project pushes as (derived from its origin remote) — feeds the topbar chip. */
+  getProjectGithubAccount: (projectId: string) => Promise<ProjectGithubAccount>
   /** Persisted user preferences (theme, IDE, budgets…) — the boot theme resync reads this. */
   getPreferences: () => Promise<Preferences>
   /** Partial update of the preferences store — resolves to the merged result. */
@@ -53,6 +55,7 @@ const realBackend: Backend = {
   getWidgets: client.getWidgets,
   putWidgets: client.putWidgets,
   getGithubPrs: client.getGithubPrs,
+  getProjectGithubAccount: client.getProjectGithubAccount,
   getPreferences: client.getPreferences,
   patchPreferences: client.patchPreferences,
 }
@@ -131,6 +134,8 @@ function createFixtureBackend(): Backend {
       return widgets
     },
     getGithubPrs: async (_repo, limit) => fixturePrs.slice(0, limit),
+    // Demo mode: a plausible account so the topbar chip renders in fixtures.
+    getProjectGithubAccount: async () => ({ account: 'alice-dev', repo: 'atelier/demo' }),
     // No `theme` key → demo mode defaults to dark (spec: clé absente = dark).
     getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
