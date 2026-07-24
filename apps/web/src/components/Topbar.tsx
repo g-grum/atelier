@@ -1,18 +1,20 @@
 import { useState } from 'react'
-import type { Project, SessionSummary } from '@atelier/shared'
+import type { Project, SessionSummary, Theme } from '@atelier/shared'
 import { basename } from '../lib/utils'
 import type { StreamState } from '../state/stream-reducer'
 import { ModelSelector } from './ModelSelector'
 import { SettingsPanel } from './SettingsPanel'
+import { ThemeToggle } from './ThemeToggle'
 
 export type TopbarProps = {
   project: Project | null
   session: SessionSummary | null
   status: StreamState['status']
   onRename: (name: string) => void
+  patchPreferences: (patch: { theme: Theme }) => Promise<unknown>
 }
 
-export function Topbar({ project, session, status, onRename }: TopbarProps) {
+export function Topbar({ project, session, status, onRename, patchPreferences }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -33,6 +35,7 @@ export function Topbar({ project, session, status, onRename }: TopbarProps) {
         </div>
       )}
       <ModelSelector session={session} />
+      <ThemeToggle patchPreferences={patchPreferences} />
       <SettingsPanel />
     </header>
   )

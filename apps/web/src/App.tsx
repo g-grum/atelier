@@ -18,6 +18,7 @@ import { DashboardGrid } from './components/widgets/DashboardGrid'
 import { PrConfigDialog } from './components/widgets/PrConfigDialog'
 import { PrListWidget } from './components/widgets/PrListWidget'
 import { clearLastSession, readLastSession, writeLastSession } from './lib/last-session'
+import { applyTheme } from './lib/theme'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
 
@@ -91,6 +92,13 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     [backend, queryClient],
   )
   useEffect(() => () => controller.close(), [controller])
+
+  // Resync du thème depuis le serveur (source de vérité) au montage. Un flip
+  // visible juste après le boot, quand le cache anti-flash diverge du disque,
+  // est ATTENDU (spec charte v5) — ce n'est pas un bug.
+  useEffect(() => {
+    backend.getPreferences().then((p) => applyTheme(p.theme ?? 'dark')).catch(() => {})
+  }, [backend])
 
   const stream = useSyncExternalStore(
     useCallback((onChange: () => void) => controller.subscribe(onChange), [controller]),
@@ -310,6 +318,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         onRename={(name) => {
           if (selected !== null) renameSession.mutate({ sessionId: selected.sessionId, name })
         }}
+        patchPreferences={backend.patchPreferences}
       />
       <div className="app">
         <SessionSidebar

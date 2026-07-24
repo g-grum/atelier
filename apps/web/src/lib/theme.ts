@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import type { Theme } from '@atelier/shared'
 
 /** Clé du cache anti-flash — lue aussi par le script inline de index.html (garder les deux synchrones). */
@@ -24,4 +25,20 @@ export function cachedTheme(): Theme {
 
 export function toggleValue(theme: Theme): Theme {
   return theme === 'light' ? 'dark' : 'light'
+}
+
+function subscribe(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  return () => observer.disconnect()
+}
+
+/** Thème appliqué (source de vérité = l'attribut data-theme sur <html>). Absent = dark. */
+export function currentTheme(): Theme {
+  return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
+}
+
+/** Thème courant, réactif — suit data-theme quel que soit l'endroit qui l'a posé (toggle, settings, resync). */
+export function useThemeValue(): Theme {
+  return useSyncExternalStore(subscribe, currentTheme)
 }

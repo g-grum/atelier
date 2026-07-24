@@ -54,6 +54,9 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     getWidgets: async () => [...DEFAULT_WIDGETS],
     putWidgets: async (next) => next,
     getGithubPrs: async () => [],
+    // No `theme` key → the boot resync applies dark (spec: clé absente = dark).
+    getPreferences: async () => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev' }),
+    patchPreferences: async (patch) => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev', ...patch }),
     ...overrides,
   }
 }

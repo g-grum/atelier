@@ -15,7 +15,7 @@ describe('Topbar', () => {
     })
     render(
       <QueryClientProvider client={queryClient}>
-        <Topbar project={null} session={null} status="idle" onRename={() => {}} />
+        <Topbar project={null} session={null} status="idle" onRename={() => {}} patchPreferences={async () => ({})} />
       </QueryClientProvider>,
     )
     const logo = screen.getByAltText('Logo Atelier')

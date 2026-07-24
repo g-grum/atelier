@@ -1,4 +1,4 @@
-import type { ChatMessage, ClientMessage, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, Preferences, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
@@ -30,6 +30,10 @@ export type Backend = {
   putWidgets: (widgets: WidgetInstance[]) => Promise<WidgetInstance[]>
   /** Latest PRs of a repo through the server's gh proxy. */
   getGithubPrs: (repo: string, limit: number) => Promise<PrSummary[]>
+  /** Persisted user preferences (theme, IDE, budgets…) — the boot theme resync reads this. */
+  getPreferences: () => Promise<Preferences>
+  /** Partial update of the preferences store — resolves to the merged result. */
+  patchPreferences: (patch: Partial<Preferences>) => Promise<Preferences>
 }
 
 const realBackend: Backend = {
@@ -49,6 +53,8 @@ const realBackend: Backend = {
   getWidgets: client.getWidgets,
   putWidgets: client.putWidgets,
   getGithubPrs: client.getGithubPrs,
+  getPreferences: client.getPreferences,
+  patchPreferences: client.patchPreferences,
 }
 
 // ── Fixture backend ──
@@ -122,6 +128,9 @@ function createFixtureBackend(): Backend {
       return widgets
     },
     getGithubPrs: async (_repo, limit) => fixturePrs.slice(0, limit),
+    // No `theme` key → demo mode defaults to dark (spec: clé absente = dark).
+    getPreferences: async () => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev' }),
+    patchPreferences: async (patch) => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev', ...patch }),
   }
 }
 
