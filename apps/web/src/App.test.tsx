@@ -48,6 +48,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     getUsageLimits: async () => [],
     getWidgets: async () => [...DEFAULT_WIDGETS],
     putWidgets: async (next) => next,
+    getGithubPrs: async () => [],
     ...overrides,
   }
 }

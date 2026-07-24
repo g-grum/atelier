@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -152,4 +152,10 @@ export function getWidgets(): Promise<WidgetInstance[]> {
 
 export function putWidgets(widgets: WidgetInstance[]): Promise<WidgetInstance[]> {
   return request<WidgetInstance[]>('PUT', '/widgets', widgets)
+}
+
+// ── GitHub ──
+
+export function getGithubPrs(repo: string, limit: number): Promise<PrSummary[]> {
+  return request<PrSummary[]>('GET', `/github/prs?repo=${encodeURIComponent(repo)}&limit=${limit}`)
 }

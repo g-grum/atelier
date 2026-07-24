@@ -1,6 +1,6 @@
-import type { ChatMessage, ClientMessage, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
-import { fixtureMessages, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
+import { fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
 import { SessionSocket } from './ws'
 import currentVersion from '../../../../version.json'
@@ -28,6 +28,8 @@ export type Backend = {
   getWidgets: () => Promise<WidgetInstance[]>
   /** Atomic whole-array replacement — resolves to the stored layout. */
   putWidgets: (widgets: WidgetInstance[]) => Promise<WidgetInstance[]>
+  /** Latest PRs of a repo through the server's gh proxy. */
+  getGithubPrs: (repo: string, limit: number) => Promise<PrSummary[]>
 }
 
 const realBackend: Backend = {
@@ -46,6 +48,7 @@ const realBackend: Backend = {
   getUsageLimits: client.getUsageLimits,
   getWidgets: client.getWidgets,
   putWidgets: client.putWidgets,
+  getGithubPrs: client.getGithubPrs,
 }
 
 // ── Fixture backend ──
@@ -118,6 +121,7 @@ function createFixtureBackend(): Backend {
       widgets = next.map((w) => ({ ...w }))
       return widgets
     },
+    getGithubPrs: async (_repo, limit) => fixturePrs.slice(0, limit),
   }
 }
 

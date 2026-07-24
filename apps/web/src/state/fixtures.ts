@@ -1,4 +1,4 @@
-import { DEFAULT_WIDGETS, MODELS, type ChatMessage, type ProjectSummary, type ServerEvent, type SessionSummary, type WidgetInstance } from '@atelier/shared'
+import { DEFAULT_WIDGETS, MODELS, type ChatMessage, type ProjectSummary, type PrSummary, type ServerEvent, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 
 /**
  * Scripted session data — production code, not test-only.
@@ -133,5 +133,14 @@ export const fixtureErrorTurn: ServerEvent[] = [
   },
 ]
 
+/** Demo PRs — one of each visual state so the widget is fully exercisable offline. */
+export const fixturePrs: PrSummary[] = [
+  { number: 1281, title: 'PRO-2044 - Nouveau système de filtres', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1281', author: 'alice-dev', state: 'open', updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), branch: 'feat/pro-2044', ci: 'pending', review: 'required' },
+  { number: 1280, title: 'Fix - Workspace switcher crash', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1280', author: 'carol-dev', state: 'open', updatedAt: new Date(Date.now() - 5 * 3600_000).toISOString(), branch: 'fix/switcher', ci: 'failed', review: 'changes_requested' },
+  { number: 1279, title: 'Draft - Exploration virtualisation', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1279', author: 'bob-dev', state: 'draft', updatedAt: new Date(Date.now() - 8 * 3600_000).toISOString(), branch: 'spike/virtualization', ci: null, review: null },
+  { number: 1276, title: 'SUP-90 - Fix frozen page after closing clause modal', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1276', author: 'alice-dev', state: 'merged', updatedAt: new Date(Date.now() - 26 * 3600_000).toISOString(), branch: 'fix/sup-90', ci: 'passed', review: 'approved' },
+  { number: 1274, title: 'Chore - Update @jsfns', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1274', author: 'bob-dev', state: 'closed', updatedAt: new Date(Date.now() - 30 * 3600_000).toISOString(), branch: 'chore/jsfns', ci: 'passed', review: null },
+]
+
 /** Demo layout: the default panels — the PR widget joins in chunk 3 (Task 13). */
-export const fixtureWidgets: WidgetInstance[] = [...DEFAULT_WIDGETS]
+export const fixtureWidgets: WidgetInstance[] = [...DEFAULT_WIDGETS, { id: 'fixture-github-prs', type: 'github-prs', span: 2, height: 'M', config: { repo: 'acme-corp/demoapp-frontend', limit: 10 } }]
