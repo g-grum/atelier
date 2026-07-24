@@ -9,7 +9,6 @@ export type WidgetMeta = {
   create: () => WidgetInstance
 }
 
-/** Chunk 2 registry — github-prs joins in chunk 3 (Task 15). */
 export const WIDGET_META: Partial<Record<WidgetType, WidgetMeta>> = {
   'rate-limits': {
     title: 'Limites du plan',
@@ -20,5 +19,16 @@ export const WIDGET_META: Partial<Record<WidgetType, WidgetMeta>> = {
     title: 'Fichiers modifiés — session',
     multiInstance: false,
     create: () => ({ id: crypto.randomUUID(), type: 'modified-files', span: 2, height: 'M' }),
+  },
+  'github-prs': {
+    title: 'Pull Requests',
+    multiInstance: true,
+    create: () => ({
+      id: crypto.randomUUID(),
+      type: 'github-prs',
+      span: 2,
+      height: 'M',
+      config: { repo: 'acme-corp/demoapp-frontend', limit: 10 },
+    }),
   },
 }

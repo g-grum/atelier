@@ -15,6 +15,8 @@ import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
 import { Toaster } from './components/ui/sonner'
 import { DashboardGrid } from './components/widgets/DashboardGrid'
+import { PrConfigDialog } from './components/widgets/PrConfigDialog'
+import { PrListWidget } from './components/widgets/PrListWidget'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
 
@@ -47,6 +49,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   const [notice, setNotice] = useState<string | null>(null)
   /** Real session awaiting delete confirmation — null keeps the dialog closed. */
   const [confirmDelete, setConfirmDelete] = useState<SessionSummary | null>(null)
+  /** github-prs instance awaiting configuration — null keeps the dialog closed. */
+  const [configuring, setConfiguring] = useState<WidgetInstance | null>(null)
   /** Bumped per open attempt — a stale rejection must not overwrite a newer attempt's state. */
   const openAttempt = useRef(0)
 
@@ -244,8 +248,10 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         return <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
       case 'modified-files':
         return <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
+      case 'github-prs':
+        return <PrListWidget repo={w.config?.repo ?? ''} limit={w.config?.limit ?? 10} api={{ getGithubPrs: backend.getGithubPrs }} />
       default:
-        return null // github-prs arrives in chunk 3
+        return null
     }
   }
 
@@ -337,7 +343,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           />
         </main>
         <aside className="dash" aria-label="Tableau de bord">
-          <DashboardGrid widgets={widgets} onSave={(next) => saveWidgets.mutate(next)} renderWidget={renderWidget} />
+          <DashboardGrid widgets={widgets} onSave={(next) => saveWidgets.mutate(next)} renderWidget={renderWidget} onConfigure={setConfiguring} />
         </aside>
       </div>
       <Toaster />
@@ -349,6 +355,13 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         }}
         onCancel={() => setConfirmDelete(null)}
       />
+      {configuring !== null && (
+        <PrConfigDialog
+          instance={configuring}
+          onSave={(next) => saveWidgets.mutate(widgets.map((w) => (w.id === next.id ? next : w)))}
+          onClose={() => setConfiguring(null)}
+        />
+      )}
     </div>
   )
 }
