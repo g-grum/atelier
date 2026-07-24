@@ -1,6 +1,6 @@
 {
-  "version": "0.1.7",
+  "version": "0.1.8",
   "notes": [
-    "Supprimer une conversation depuis la barre latérale : croix sur chaque session, confirmation avant suppression définitive (le fichier disparaît aussi du CLI)"
+    "Au lancement, la dernière session s'ouvre automatiquement et le champ de saisie est actif — tu peux écrire directement"
   ]
 }
