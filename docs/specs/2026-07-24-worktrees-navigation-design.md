@@ -100,9 +100,9 @@ no `git` call ever happens in a constructor.
   (today always a project id). A stable worktree id makes them work unchanged.
 - `App.tsx` validates the open workspace against the persisted projects list:
   `projects.some(p => p.id === openProjectId) ? openProjectId : projects[0]?.id`
-  (`:144`), and last-session restore checks the same list (`:188`). A worktree
-  id is not in that list, so both must learn to accept a currently-known
-  worktree id.
+  (`App.tsx:152`), and the last-session restore effect checks the same list
+  (`App.tsx:192-197`). A worktree id is not in that list, so both must learn to
+  accept a currently-known worktree id.
 - `SessionSidebar` renders projects with color dots, per-project counts, and a
   `+ Projet` affordance. No expand/nesting yet.
 - A GitHub proxy under `apps/server/src/github/` (a `gh`-CLI service + routes +
