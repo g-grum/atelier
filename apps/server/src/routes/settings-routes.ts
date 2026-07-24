@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
-import type { ProjectSummary } from '@atelier/shared'
+import { THEMES, type ProjectSummary, type Theme } from '@atelier/shared'
 import type { AppData } from '../store/app-data'
 import type { SessionsService } from '../sessions/sessions-service'
 import { openInIde, spawnLaunch, type LaunchFn } from '../ide/open-in-ide'
@@ -70,6 +70,9 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
     if (parsed.githubUser !== undefined && typeof parsed.githubUser !== 'string') {
       return c.json({ error: 'requête invalide : « githubUser » doit être une chaîne' }, 400)
     }
+    if (parsed.theme !== undefined && !THEMES.includes(parsed.theme as Theme)) {
+      return c.json({ error: 'requête invalide : « theme » doit être « dark » ou « light »' }, 400)
+    }
     // Calibratable usage budgets (estimates by design — spec « Usage & limits »):
     // optional, but when present they must be strictly positive integers.
     for (const field of ['windowBudgetTokens', 'weeklyBudgetTokens'] as const) {
@@ -89,6 +92,7 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
       if (githubUser !== undefined) d.preferences.githubUser = githubUser
       if (windowBudgetTokens !== undefined) d.preferences.windowBudgetTokens = windowBudgetTokens
       if (weeklyBudgetTokens !== undefined) d.preferences.weeklyBudgetTokens = weeklyBudgetTokens
+      if (parsed.theme !== undefined) d.preferences.theme = parsed.theme as Theme
     })
     return c.json(data.get().preferences)
   })

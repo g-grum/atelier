@@ -562,6 +562,19 @@ describe('createApp', () => {
     expect(bad.status).toBe(400)
   })
 
+  test('theme: absent by default, PATCHable to light, rejects invalid value', async () => {
+    const { app } = freshApp()
+    const headers = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+    // Clé absente = dark côté client (rétrocompat disque, spec charte v5).
+    const before = await (await app.request('/api/preferences', { headers })).json() as Record<string, unknown>
+    expect('theme' in before).toBe(false)
+    const patched = await app.request('/api/preferences', { method: 'PATCH', headers, body: JSON.stringify({ theme: 'light' }) })
+    expect(patched.status).toBe(200)
+    expect(((await patched.json()) as { theme: string }).theme).toBe('light')
+    const bad = await app.request('/api/preferences', { method: 'PATCH', headers, body: JSON.stringify({ theme: 'sepia' }) })
+    expect(bad.status).toBe(400)
+  })
+
   test("POST /api/projects/:id/sessions with raw bodies 'null' and '[]' responds 400 JSON — never a 500", async () => {
     const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
     for (const raw of ['null', '[]']) {

@@ -24,6 +24,9 @@ export const MODELS = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6']
 export type Project = { id: string; path: string; color: string }
 /** REST shape of GET/POST /api/projects. The persisted Project stays count-free — a derived count goes stale instantly, so the routes enrich through SessionsService.countSessions at response time; never persist it. */
 export type ProjectSummary = Project & { sessionCount: number }
+export type Theme = 'dark' | 'light'
+export const THEMES: readonly Theme[] = ['dark', 'light']
+
 export type Preferences = {
   ide: 'webstorm' | 'vscode' | 'cursor' | 'idea'
   defaultModel: string
@@ -33,6 +36,8 @@ export type Preferences = {
   weeklyBudgetTokens: number
   /** gh CLI keyring account used by the GitHub proxy — pinned so the active-account switch (atelier release ops) never breaks the PR widget. */
   githubUser: string
+  /** Thème UI. Clé absente = dark (rétrocompat disque, spec charte v5). */
+  theme?: Theme
 }
 
 /** One recorded usage sample (REST: GET /api/usage/history). All four counters persist — the forecast's fidelity depends on cache counts; a lossy total can't be backfilled. */
