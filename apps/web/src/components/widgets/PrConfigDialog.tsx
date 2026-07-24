@@ -26,7 +26,9 @@ function clampLimit(raw: string): number {
  */
 export function PrConfigDialog({ instance, onSave, onClose }: PrConfigDialogProps) {
   const [repo, setRepo] = useState(instance.config?.repo ?? '')
-  const [limit, setLimit] = useState(instance.config?.limit ?? 10)
+  // Raw string, clamped only at save time: clamping on keystroke snaps an
+  // emptied field back to 10, making clear-then-retype impossible.
+  const [limitRaw, setLimitRaw] = useState(String(instance.config?.limit ?? 10))
   const [error, setError] = useState<string | null>(null)
 
   const save = () => {
@@ -34,7 +36,7 @@ export function PrConfigDialog({ instance, onSave, onClose }: PrConfigDialogProp
       setError('« repo » doit être de la forme owner/repo')
       return
     }
-    onSave({ ...instance, config: { repo, limit } })
+    onSave({ ...instance, config: { repo, limit: clampLimit(limitRaw) } })
     onClose()
   }
 
@@ -77,8 +79,8 @@ export function PrConfigDialog({ instance, onSave, onClose }: PrConfigDialogProp
               min={1}
               max={30}
               className={FIELD_CLASS}
-              value={limit}
-              onChange={(event) => setLimit(clampLimit(event.target.value))}
+              value={limitRaw}
+              onChange={(event) => setLimitRaw(event.target.value)}
             />
           </div>
         </div>

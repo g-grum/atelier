@@ -61,6 +61,19 @@ describe('DashboardGrid', () => {
     expect(saved[0]![1]!.type).toBe('modified-files')
   })
 
+  test('palette: multi-instance type stays enabled when present; adding appends another instance', async () => {
+    const withPr: WidgetInstance[] = [...layout, { id: 'p1', type: 'github-prs', span: 2, height: 'M', config: { repo: 'o/r' } }]
+    const { saved } = renderGrid(withPr)
+    await openMenuOn(screen.getByRole('button', { name: '+ Widget' }))
+    const item = screen.getByRole('menuitem', { name: 'Pull Requests' })
+    expect(item.getAttribute('aria-disabled')).not.toBe('true')
+    fireEvent.click(item)
+    expect(saved).toHaveLength(1)
+    expect(saved[0]!).toHaveLength(4)
+    expect(saved[0]![3]!.type).toBe('github-prs')
+    expect(saved[0]![3]!.id).not.toBe('p1')
+  })
+
   test('empty layout: only the « + Widget » affordance renders', () => {
     renderGrid([])
     expect(screen.queryAllByRole('group')).toHaveLength(0)

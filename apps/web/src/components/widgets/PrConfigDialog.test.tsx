@@ -22,6 +22,23 @@ describe('PrConfigDialog', () => {
     expect((screen.getByLabelText('Nombre de PRs') as HTMLInputElement).value).toBe('10')
   })
 
+  test('clearing the limit field does not snap back — clear-then-retype works, clamp happens at save', () => {
+    const { saved } = renderDialog()
+    const limitField = screen.getByLabelText('Nombre de PRs') as HTMLInputElement
+    fireEvent.change(limitField, { target: { value: '' } })
+    expect(limitField.value).toBe('') // no snap-back to 10 mid-edit
+    fireEvent.change(limitField, { target: { value: '25' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(saved[0]!.config).toEqual({ repo: 'o/r', limit: 25 })
+  })
+
+  test('an emptied limit falls back to 10 at save, out-of-range clamps', () => {
+    const { saved } = renderDialog()
+    fireEvent.change(screen.getByLabelText('Nombre de PRs'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(saved[0]!.config).toEqual({ repo: 'o/r', limit: 10 })
+  })
+
   test('save emits the patched instance and closes', () => {
     const { saved, closed } = renderDialog()
     fireEvent.change(screen.getByLabelText('Repo (owner/nom)'), { target: { value: 'acme-corp/demoapp-backend' } })
