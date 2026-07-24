@@ -328,6 +328,25 @@
   .file-cap .open-all { border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; color: var(--color-cyan); }
   .file-cap .open-all:hover { text-decoration: underline; }
   .file-empty { margin: 0; padding: 2px 8px; font-size: 12px; color: var(--color-faint); }
+
+  /* Pull requests — compact-extensible list (row click expands, ↗ opens GitHub). */
+  .pr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .pr-item { border-bottom: 1px solid var(--color-line); }
+  .pr-item:last-child { border-bottom: none; }
+  .pr-row { display: flex; align-items: center; gap: 4px; }
+  .pr-line { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 5px 0; background: none; border: none; color: inherit; cursor: pointer; text-align: left; font: inherit; }
+  .pr-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .pr-dot.open { background: #3fb950; }
+  .pr-dot.merged { background: #a371f7; }
+  .pr-dot.closed { background: #f85149; }
+  .pr-dot.draft { background: #8b949e; }
+  .pr-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+  .pr-age { color: var(--color-faint); font: 500 10px var(--font-mono); flex: none; }
+  .pr-open { background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 2px 4px; }
+  .pr-details { padding: 0 0 7px 14px; color: var(--color-faint); font-size: 11px; }
+  .pr-open-detail { display: block; margin-top: 4px; background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 0; font-size: 11px; text-decoration: underline; }
+  .pr-empty, .pr-error { color: var(--color-faint); font-size: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .pr-skeleton { height: 60px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); }
 }
 
 @media (prefers-reduced-motion: no-preference) {
