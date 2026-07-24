@@ -1,10 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, shell } from 'electron'
 import { parsePort, resolveRuntime } from './resolve-runtime'
+import { readThemeGround } from './theme-ground'
 
 // Thin shell (spec: the desktop unit carries no business logic): generate a
 // token, spawn the server, wait for /health, open one window on the served UI.
@@ -109,7 +111,7 @@ function createWindow(): void {
   win = new BrowserWindow({
     width: 1280,
     height: 820,
-    backgroundColor: '#0c101c', // app ground token — no white flash on load
+    backgroundColor: readThemeGround(process.env.ATELIER_DATA ?? join(homedir(), '.atelier', 'app-data.json')), // suit le thème persisté — pas de flash au lancement
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   })
   // External links (PR widget ↗, target="_blank"): open in the system browser,
