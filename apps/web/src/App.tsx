@@ -211,6 +211,11 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
 
   const saveWidgets = useMutation({
     mutationFn: backend.putWidgets,
+    // Serialize concurrent saves (two quick drags): without a scope, an older
+    // mutation's onSuccess can land AFTER a newer one and stomp its optimistic
+    // state with stale server data; serialization also makes onMutate's
+    // `previous` snapshot always a settled state, never an unconfirmed one.
+    scope: { id: 'widgets' },
     // Optimistic: drag/resize must feel instant; rollback + toast on failure.
     onMutate: async (next: WidgetInstance[]) => {
       await queryClient.cancelQueries({ queryKey: ['widgets'] })

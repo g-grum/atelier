@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, ReactNode, Ref } from 'react'
 import type { WidgetHeight, WidgetInstance } from '@atelier/shared'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu'
 
@@ -15,7 +15,7 @@ export type WidgetFrameProps = {
   /** Spread onto the drag handle by DashboardGrid (dnd-kit listeners). */
   dragHandleProps?: Record<string, unknown>
   /** dnd-kit's setNodeRef — must land on a box-generating element (the section itself) to be measurable. */
-  frameRef?: React.Ref<HTMLElement>
+  frameRef?: Ref<HTMLElement>
   /** dnd-kit's transform/transition while dragging. */
   style?: CSSProperties
   children: ReactNode
