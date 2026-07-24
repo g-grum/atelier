@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ChatMessage, ProjectSummary, ServerEvent, SessionSummary } from '@atelier/shared'
 import { DEFAULT_WIDGETS } from '@atelier/shared'
-import type { Backend } from './api/backend'
+import { DEFAULT_PREFERENCES, type Backend } from './api/backend'
 import App from './App'
 import currentVersion from '../../../version.json'
 
@@ -55,8 +55,8 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     putWidgets: async (next) => next,
     getGithubPrs: async () => [],
     // No `theme` key → the boot resync applies dark (spec: clé absente = dark).
-    getPreferences: async () => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev' }),
-    patchPreferences: async (patch) => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev', ...patch }),
+    getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
+    patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
     ...overrides,
   }
 }
@@ -612,5 +612,31 @@ describe('App launch restore (spec 2026-07-24)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer la conversation' }))
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
     await waitFor(() => expect(stored()).toBeNull())
+  })
+})
+
+describe('App theme boot resync', () => {
+  afterEach(() => document.documentElement.removeAttribute('data-theme'))
+
+  test('a toggle made while getPreferences is in flight is NOT clobbered by the resync', async () => {
+    // Hold the GET open so the user can toggle before the server value lands.
+    let resolvePrefs: (p: import('@atelier/shared').Preferences) => void = () => {}
+    const backend = fakeBackend({
+      getPreferences: () => new Promise((resolve) => (resolvePrefs = resolve)),
+    })
+    renderApp(backend)
+
+    // Mount = dark (no data-theme). User deliberately switches to light mid-flight.
+    const toggle = await screen.findByRole('button', { name: 'Passer en mode clair' })
+    fireEvent.click(toggle)
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+
+    // The server (defaults: no theme → dark) resolves AFTER the toggle.
+    await act(async () => {
+      resolvePrefs({ ...DEFAULT_PREFERENCES })
+    })
+
+    // The deliberate choice survives — the late resync must not revert to dark.
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 })

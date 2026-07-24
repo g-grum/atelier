@@ -57,6 +57,9 @@ const realBackend: Backend = {
   patchPreferences: client.patchPreferences,
 }
 
+/** Baseline préférences (sans clé `theme` → dark) — partagé par le fixture et les tests, façon DEFAULT_WIDGETS. */
+export const DEFAULT_PREFERENCES: Preferences = { ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev' }
+
 // ── Fixture backend ──
 // In-memory stores seeded from the fixtures module (never mutates the module's
 // exported arrays — tests replay them too). History is static: a replayed turn
@@ -129,8 +132,8 @@ function createFixtureBackend(): Backend {
     },
     getGithubPrs: async (_repo, limit) => fixturePrs.slice(0, limit),
     // No `theme` key → demo mode defaults to dark (spec: clé absente = dark).
-    getPreferences: async () => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev' }),
-    patchPreferences: async (patch) => ({ ide: 'webstorm', defaultModel: 'claude-fable-5', windowBudgetTokens: 2_000_000, weeklyBudgetTokens: 12_000_000, githubUser: 'alice-dev', ...patch }),
+    getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
+    patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
   }
 }
 

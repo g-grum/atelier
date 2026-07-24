@@ -18,7 +18,7 @@ import { DashboardGrid } from './components/widgets/DashboardGrid'
 import { PrConfigDialog } from './components/widgets/PrConfigDialog'
 import { PrListWidget } from './components/widgets/PrListWidget'
 import { clearLastSession, readLastSession, writeLastSession } from './lib/last-session'
-import { applyTheme } from './lib/theme'
+import { applyTheme, currentTheme } from './lib/theme'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
 
@@ -97,7 +97,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   // visible juste après le boot, quand le cache anti-flash diverge du disque,
   // est ATTENDU (spec charte v5) — ce n'est pas un bug.
   useEffect(() => {
-    backend.getPreferences().then((p) => applyTheme(p.theme ?? 'dark')).catch(() => {})
+    const atStart = currentTheme()
+    backend.getPreferences()
+      .then((p) => {
+        // Don't clobber a deliberate toggle made while the GET was in flight:
+        // only apply the server value if the theme is still what it was at mount.
+        if (currentTheme() === atStart) applyTheme(p.theme ?? 'dark')
+      })
+      .catch(() => {})
   }, [backend])
 
   const stream = useSyncExternalStore(
