@@ -10,8 +10,8 @@ export type MessageItemProps = {
 }
 
 /**
- * One chat message per mockup v4.2: user = blue-tinted "G" avatar + surface-2
- * bubble; assistant = indigo→magenta gradient avatar + plain text body.
+ * One chat message per mockup v5.0: user = neutral "G" avatar (surface-2 / muted)
+ * + surface-2 bubble; assistant = solid accent avatar + plain text body.
  */
 export function MessageItem({ role, text, queued = false, children }: MessageItemProps) {
   return (

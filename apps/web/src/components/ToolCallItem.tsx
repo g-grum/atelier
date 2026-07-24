@@ -9,7 +9,7 @@ export type ToolCallItemProps = {
   onOpenInIde: (file: string, line?: number) => void
 }
 
-/** Mockup color mapping: Bash = cyan, Edit/Write = violet, Read/Other = muted. */
+/** Mockup v5.0 color mapping: Bash = accent, Edit/Write = mauve, Read/Other = muted. */
 function kindClass(kind: ToolKind): string {
   if (kind === 'Bash') return 'bash'
   if (kind === 'Edit' || kind === 'Write') return 'edit'

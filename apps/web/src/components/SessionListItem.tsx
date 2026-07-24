@@ -1,8 +1,8 @@
 import type { SessionSummary } from '@atelier/shared'
 
 /**
- * Sidebar state dots (mockup v4.2 semantics):
- * - run: the session is streaming right now (mint, pulsing)
+ * Sidebar state dots (mockup v5.0 semantics):
+ * - run: the session is streaming right now (success green)
  * - idle: nothing happened yet — drafts and empty sessions (faint, filled)
  * - done: the session has history and is not streaming (outlined)
  */
