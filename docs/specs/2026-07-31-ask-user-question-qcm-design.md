@@ -54,7 +54,9 @@ Refuser / Autoriser / Toujours. Impossible de **sélectionner une réponse**. Pi
 - SDK 0.3.198 : `AskUserQuestionInput.questions[]` = `{question, header, options:
   {label, description, preview?}[], multiSelect}` ; réponse attendue =
   `updatedInput.answers: Record<questionText, réponse>` (multi-select joint par
-  `", "` — contrat de `AskUserQuestionOutput.answers`).
+  virgule — la docstring SDK dit « comma-separated » sans préciser l'espace ;
+  confirmer le séparateur exact contre Claude Code à l'implémentation, impact
+  faible : le modèle relit la chaîne).
 
 ## Architecture
 
@@ -120,13 +122,18 @@ canUseTool: (toolName, input) => {
   branchement `permissionMode`/`allowDangerouslySkipPermissions` de
   `buildQueryOptions` sont supprimés (le mode est entièrement résolu dans le
   callback ci-dessus).
+- `onMessage` gagne le cas `question_response` → `this.questions.resolve(requestId,
+  answers)`.
 - `onConnect` ré-émet aussi `questions.pending()` ; `abort`/`dispose` appellent
   `questions.abort()`.
 - **Silence du flux outil** : `handleTurnEvent` supprime le broadcast des
   `tool_use`/`tool_result` dont l'outil est `AskUserQuestion` — la carte QCM est la
   représentation du tour ; une ligne outil doublonnerait. (Suppression par
   `toolUseId` mémorisé au `tool_use` pour attraper le `tool_result` apparié.
-  `tool_use` porte `toolName` dans `SdkTurnEvent` ; `tool_result` non.)
+  `tool_use` porte `toolName` dans `SdkTurnEvent` ; `tool_result` non.) La remise à
+  zéro de `partialText` au `tool_use` **reste** même quand le broadcast est
+  supprimé — sinon le snapshot de reconnexion re-servirait le texte pré-QCM comme
+  run en cours.
 - **Historique** (rechargement de session) : `describe-tool-use.ts` gagne un cas
   `AskUserQuestion` → `{kind: 'Other', summary: 'QCM : <headers joints>'}` ; la
   carte interactive n'existe qu'en live, l'historique montre cette ligne sobre.
@@ -166,10 +173,11 @@ désactivation, résolution = carte figée dans l'historique) :
   `<code>` sous l'option sélectionnée/survolée), option « Autre… » dépliant un
   champ texte.
 - Single-select : boutons radio-like. MultiSelect : cases à cocher.
-- **Envoi** : cas mono-question single-select sans « Autre » → le clic envoie
-  directement (friction zéro, cas de loin le plus fréquent). Tous les autres cas →
-  bouton « Envoyer les réponses » actif quand chaque question a une réponse
-  (sélection ou « Autre » non vide).
+- **Envoi** : cas mono-question single-select → le clic sur une **option
+  prédéfinie** envoie directement (friction zéro, cas de loin le plus fréquent) ;
+  choisir « Autre… » ouvre le champ et l'envoi passe alors par le bouton. Tous les
+  autres cas (multi-questions, multiSelect) → bouton « Envoyer les réponses »
+  actif quand chaque question a une réponse (sélection ou « Autre » non vide).
 - Résolue : options choisies mises en évidence, le reste grisé ; dismiss → mention
   « Répondu dans le chat ».
 
@@ -203,6 +211,13 @@ inopérant dans ces sessions uniquement (dégradation locale, pas de régression
 - **Reconnexion** pendant un QCM → ré-émission `pending()`, dedup reducer ; après
   réponse, la carte vit dans l'état client (un ⌘R en cours de tour la perd — même
   comportement que les cartes permission, assumé).
+- **⌘R mid-turn avec QCM pendant** : le `tool_use` peut déjà être persisté dans le
+  JSONL — l'historique rechargé montre alors la ligne « QCM : … » ET la carte
+  ré-émise. Doublon cosmétique **assumé** en v1 (fenêtre rare, aucune ambiguïté
+  fonctionnelle).
+- **Message déjà en file quand le QCM arrive** : il attend la réponse au QCM (ou un
+  nouveau `sendMessage`, qui dismisse) — parité exacte avec les cartes permission
+  aujourd'hui, assumé.
 - **Abort / suppression de session** → deny all via `questions.abort()`.
 - **Plusieurs QCM pendants** (le SDK n'en émet normalement qu'un à la fois) : le
   broker gère N pendants ; `sendMessage` les dismisse tous.
