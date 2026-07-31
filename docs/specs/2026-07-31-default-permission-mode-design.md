@@ -47,20 +47,31 @@ export type Preferences = {
 
 - **`routes/settings-routes.ts`** : le PATCH préférences accepte `defaultPermissionMode`,
   validé contre `SESSION_PERMISSION_MODES` ou `null` (effacement → le gate revient).
-- **`store/app-data.ts`** : `EMPTY` gagne `defaultPermissionMode: null`. Le clonage
-  wholesale `{ ...EMPTY, ...parsed }` au load garantit la rétrocompat des
-  `app-data.json` existants.
-- **`sessions/sessions-service.ts`** : à la création d'une session **et** d'un draft, si
-  `preferences.defaultPermissionMode` est non-null, le mode est stampé immédiatement
-  (`permissionModes[id]` / `draft.permissionMode`). La résolution du mode effectif en
-  `session-stream.ts` reste inchangée, de même que le remap draft→réel existant.
+- **`store/app-data.ts`** : `EMPTY.preferences` gagne `defaultPermissionMode: null`. La
+  rétrocompat des `app-data.json` existants est assurée par le **deep-merge par clé** déjà
+  en place au load (`preferences: { ...base.preferences, ...parsed.preferences }`) — c'est
+  ce merge, et non un spread wholesale, qui injecte le nouveau défaut dans les fichiers
+  anciens.
+- **`sessions/sessions-service.ts`** : le stamping se fait **uniquement dans
+  `createDraft`** — seul point de naissance d'une session Atelier :
+  `permissionMode: preferences.defaultPermissionMode ?? null` remplace les **deux** `null`
+  codés en dur actuels (le record stocké **et** le `SessionSummary` retourné, qui doivent
+  rester cohérents). Le remap draft→réel existant (`mapDraft`) porte déjà ce mode dans
+  `permissionModes[sdkSessionId]` ; aucun autre site à toucher. La résolution du mode
+  effectif en `session-stream.ts` reste inchangée.
+- **Sessions externes** : une session créée hors Atelier (CLI Claude Code directement)
+  arrive via `sdk.listSessions` avec `permissionMode: null` et passe donc par le gate même
+  quand un défaut est défini — comportement voulu, pas un bug.
 
 ### 3. Web — gate (`components/PermissionModeGate.tsx`)
 
 Checkbox « Se souvenir de ce choix » (décochée par défaut). La signature devient
 `onChoose(mode, remember)`. Dans `App.tsx`, si `remember` : PATCH session (existant) puis
-PATCH préférences `{ defaultPermissionMode: mode }`. Le gate continue de s'afficher pour
-toute session dont le `permissionMode` est `null` (sessions antérieures, défaut effacé).
+PATCH préférences `{ defaultPermissionMode: mode }`. Les deux PATCH sont indépendants : si
+le PATCH session échoue, le PATCH préférences part quand même (le gate reste alors affiché
+pour cette session, les suivantes profiteront du défaut). Le gate continue de s'afficher
+pour toute session dont le `permissionMode` est `null` (sessions antérieures, sessions
+externes, défaut effacé).
 
 ### 4. Web — réglages (`components/SettingsPanel.tsx`)
 
@@ -101,9 +112,11 @@ s'affiche que le mode vienne du gate ou du défaut.
 
 ## Tests
 
-- **Serveur** : round-trip PATCH/GET préférences (valeurs valides, `null`, invalide → 400) ;
-  création session/draft avec défaut défini → mode stampé ; défaut `null` → pas de stamp ;
-  remap draft→réel conserve le mode stampé.
+- **Serveur** : round-trip PATCH/GET préférences (valeurs valides, invalide → 400) ;
+  PATCH `defaultPermissionMode: null` **efface** une valeur précédemment définie (piège
+  undefined-vs-null du pattern `!== undefined`) ; `createDraft` avec défaut défini →
+  `draft.permissionMode` stampé **et** `SessionSummary` retourné cohérent ; défaut `null` →
+  `permissionMode: null` (gate) ; remap draft→réel (`mapDraft`) conserve le mode stampé.
 - **Web** : gate avec checkbox (choix + se souvenir → deux mutations) ; section réglages
   (sélection, effacement) ; session avec mode déjà défini → pas de gate (pattern
   auto-sélection d'App.test.tsx) ; puce visible en `bypassPermissions`, absente sinon.
