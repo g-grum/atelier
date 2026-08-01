@@ -51,11 +51,11 @@ apps/web/src/styles.css                      # styles du popover
 - [ ] **Step 1: Écrire le test qui échoue.** Dans `protocol.test.ts` :
 
 ```ts
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { isServerEvent } from './protocol'
 
 describe('isServerEvent', () => {
-  it('accepte un événement commands', () => {
+  test('accepte un événement commands', () => {
     expect(isServerEvent({ type: 'commands', sessionId: 's1', commands: [] })).toBe(true)
   })
 })
@@ -120,7 +120,7 @@ Couture testable pour un contrat de frontière que le mock ne voit pas — même
 import { toSlashCommandInfo } from './sdk-client'
 
 describe('toSlashCommandInfo', () => {
-  it('mappe les champs et normalise aliases absent en tableau vide', () => {
+  test('mappe les champs et normalise aliases absent en tableau vide', () => {
     expect(toSlashCommandInfo([
       { name: 'review', description: 'Review (project)', argumentHint: '<file>' },
       { name: 'superpowers:brainstorming', description: '(superpowers) …', argumentHint: '', aliases: ['brainstorming'] },
@@ -130,7 +130,7 @@ describe('toSlashCommandInfo', () => {
     ])
   })
 
-  it('remplace les champs manquants par des chaînes vides', () => {
+  test('remplace les champs manquants par des chaînes vides', () => {
     expect(toSlashCommandInfo([{ name: 'x' }] as never)).toEqual([{ name: 'x', description: '', argumentHint: '', aliases: [] }])
   })
 })
@@ -191,17 +191,17 @@ git commit -m "feat(server): mapping pur SlashCommand vers SlashCommandInfo
 - [ ] **Step 1: Écrire le test qui échoue.** Créer `sdk-client.mock.test.ts` :
 
 ```ts
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { MockSdkClient } from './sdk-client.mock'
 
 describe('MockSdkClient.listCommands', () => {
-  it('renvoie les commandes scénarisées et enregistre l’appel', async () => {
+  test('renvoie les commandes scénarisées et enregistre l’appel', async () => {
     const mock = new MockSdkClient({ commands: [{ name: 'review', description: 'r', argumentHint: '', aliases: [] }] })
     expect(await mock.listCommands('/tmp/p')).toEqual([{ name: 'review', description: 'r', argumentHint: '', aliases: [] }])
     expect(mock.calls).toContainEqual({ method: 'listCommands', args: ['/tmp/p'] })
   })
 
-  it('renvoie [] par défaut', async () => {
+  test('renvoie [] par défaut', async () => {
     expect(await new MockSdkClient().listCommands('/tmp/p')).toEqual([])
   })
 })
@@ -292,35 +292,45 @@ git commit -m "feat(server): sonde de découverte listCommands
 - Create: `apps/server/src/commands/commands-routes.test.ts`
 - Modify: `apps/server/src/app.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue.** Créer `commands-routes.test.ts` — calquer la construction d'app sur `apps/server/src/app.test.ts` (lire ce fichier d'abord pour reprendre le helper existant et le header d'auth ; **ne pas** en réinventer un) :
+- [ ] **Step 1: Écrire le test qui échoue.** Créer `commands-routes.test.ts`. Le helper reprend la construction `AppData` sur tmpdir d'`app.test.ts:20-22`, en montant la route seule (pas `createApp`) — donc **pas de header d'auth** à fournir, le middleware token vit dans `createApp` :
 
 ```ts
-import { describe, expect, it } from 'bun:test'
-import { commandsRoutes } from './commands-routes'
+import { describe, expect, test } from 'bun:test'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
+import { AppData } from '../store/app-data'
+import { commandsRoutes } from './commands-routes'
 
-// data : un AppData minimal exposant get() → { projects: [...] }.
-// Reprendre le fake d'app.test.ts plutôt que d'en écrire un nouveau.
+const CMD = { name: 'review', description: 'Relire', argumentHint: '<file>', aliases: [] }
+
+/** AppData réel sur un tmpdir jetable (même motif que freshApp, app.test.ts:20-22). */
+function freshRoutes(sdk: MockSdkClient = new MockSdkClient(), withProject = true) {
+  const data = new AppData(join(mkdtempSync(join(tmpdir(), 'atelier-cmds-')), 'data.json'))
+  if (withProject) data.update((d) => { d.projects.push({ id: 'p1', path: '/tmp/p1', color: '#ffffff' }) })
+  return { app: commandsRoutes(data, sdk), data }
+}
 
 describe('GET /projects/:id/commands', () => {
-  it('renvoie la liste pour un projet connu', async () => {
-    const sdk = new MockSdkClient({ commands: [{ name: 'review', description: 'r', argumentHint: '', aliases: [] }] })
-    const app = commandsRoutes(fakeData({ projects: [{ id: 'p1', path: '/tmp/p1', color: '#fff' }] }), sdk)
+  test('renvoie la liste pour un projet connu, sondé sur son path', async () => {
+    const sdk = new MockSdkClient({ commands: [CMD] })
+    const { app } = freshRoutes(sdk)
     const res = await app.request('/projects/p1/commands')
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual([{ name: 'review', description: 'r', argumentHint: '', aliases: [] }])
+    expect(await res.json()).toEqual([CMD])
     expect(sdk.calls).toContainEqual({ method: 'listCommands', args: ['/tmp/p1'] })
   })
 
-  it('404 sur projet inconnu', async () => {
-    const app = commandsRoutes(fakeData({ projects: [] }), new MockSdkClient())
+  test('404 sur projet inconnu', async () => {
+    const { app } = freshRoutes(new MockSdkClient(), false)
     expect((await app.request('/projects/nope/commands')).status).toBe(404)
   })
 
-  it('200 avec [] quand la sonde échoue', async () => {
+  test('200 avec [] quand la sonde jette', async () => {
     const sdk = new MockSdkClient()
     sdk.listCommands = async () => { throw new Error('boom') }
-    const app = commandsRoutes(fakeData({ projects: [{ id: 'p1', path: '/tmp/p1', color: '#fff' }] }), sdk)
+    const { app } = freshRoutes(sdk)
     const res = await app.request('/projects/p1/commands')
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([])
@@ -451,7 +461,7 @@ git commit -m "feat(server): événement de tour commands sur commands_changed
 - [ ] **Step 1: Écrire le test qui échoue.** Dans `session-stream.test.ts`, calquer un test existant de diffusion d'événement (lire d'abord comment un turn scénarisé est passé au `MockSdkClient` et comment les événements diffusés sont collectés) :
 
 ```ts
-it('diffuse l’événement commands avec le sessionId', async () => {
+test('diffuse l’événement commands avec le sessionId', async () => {
   // turn scénarisé : [{ type: 'commands', commands: [{ name: 'review', description: 'r', argumentHint: '', aliases: [] }] }]
   // envoyer un user_message, attendre l'idle, puis :
   expect(sent).toContainEqual({
@@ -506,7 +516,7 @@ Toute la logique de matching vit ici pour être testée sans DOM.
 - [ ] **Step 1: Écrire le test qui échoue.**
 
 ```ts
-import { describe, expect, it } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { commandPrefix, completeCommand, matchCommands } from './slash-commands'
 
 const CMDS = [
@@ -515,43 +525,43 @@ const CMDS = [
 ]
 
 describe('commandPrefix', () => {
-  it('renvoie le préfixe quand le brouillon commence par /', () => {
+  test('renvoie le préfixe quand le brouillon commence par /', () => {
     expect(commandPrefix('/rev', 4)).toBe('rev')
   })
-  it('renvoie une chaîne vide juste après le slash', () => {
+  test('renvoie une chaîne vide juste après le slash', () => {
     expect(commandPrefix('/', 1)).toBe('')
   })
-  it('ne déclenche pas hors du premier mot', () => {
+  test('ne déclenche pas hors du premier mot', () => {
     expect(commandPrefix('/review mon-fichier', 19)).toBeNull()
   })
-  it('déclenche si le curseur revient dans le premier mot', () => {
+  test('déclenche si le curseur revient dans le premier mot', () => {
     expect(commandPrefix('/review mon-fichier', 4)).toBe('review')
   })
-  it('ne déclenche pas sur un chemin en milieu de phrase', () => {
+  test('ne déclenche pas sur un chemin en milieu de phrase', () => {
     expect(commandPrefix('regarde src/foo', 15)).toBeNull()
   })
 })
 
 describe('matchCommands', () => {
-  it('filtre sur le nom', () => {
+  test('filtre sur le nom', () => {
     expect(matchCommands(CMDS, 'rev').map((c) => c.name)).toEqual(['review'])
   })
-  it('filtre AUSSI sur les alias', () => {
+  test('filtre AUSSI sur les alias', () => {
     expect(matchCommands(CMDS, 'brain').map((c) => c.name)).toEqual(['superpowers:brainstorming'])
   })
-  it('renvoie tout sur préfixe vide', () => {
+  test('renvoie tout sur préfixe vide', () => {
     expect(matchCommands(CMDS, '')).toHaveLength(2)
   })
-  it('est insensible à la casse', () => {
+  test('est insensible à la casse', () => {
     expect(matchCommands(CMDS, 'REV').map((c) => c.name)).toEqual(['review'])
   })
 })
 
 describe('completeCommand', () => {
-  it('complète et ajoute une espace quand il n’y a pas de reste', () => {
+  test('complète et ajoute une espace quand il n’y a pas de reste', () => {
     expect(completeCommand('/rev', 'review')).toBe('/review ')
   })
-  it('remplace le PREMIER TOKEN SEULEMENT et préserve le reste', () => {
+  test('remplace le PREMIER TOKEN SEULEMENT et préserve le reste', () => {
     expect(completeCommand('/rev mon-fichier', 'review')).toBe('/review mon-fichier')
   })
 })
@@ -625,17 +635,17 @@ git commit -m "feat(web): module pur de matching des slash commands
 - [ ] **Step 1: Écrire le test qui échoue.**
 
 ```ts
-it('stocke la liste sur l’événement commands', () => {
+test('stocke la liste sur l’événement commands', () => {
   const cmds = [{ name: 'review', description: '', argumentHint: '', aliases: [] }]
   const next = reduce(initialState(), { type: 'commands', sessionId: 's1', commands: cmds })
   expect(next.commands).toEqual(cmds)
 })
 
-it('vaut null avant tout événement', () => {
+test('vaut null avant tout événement', () => {
   expect(initialState().commands).toBeNull()
 })
 
-it('revient à null au resync (reset)', () => {
+test('revient à null au resync (reset)', () => {
   expect(reset([]).commands).toBeNull()
 })
 ```
@@ -734,13 +744,48 @@ git commit -m "feat(web): listCommands dans la couche API
 - Modify: `apps/web/src/components/Composer.test.tsx`
 - Modify: `apps/web/src/styles.css`
 
-- [ ] **Step 1: Écrire les tests qui échouent.** Ajouter à `Composer.test.tsx` (reprendre le helper de rendu existant ; la prop `commands` s'ajoute à ses props) :
+- [ ] **Step 1a: Étendre le helper existant.** `renderComposer` (`Composer.test.tsx:10-26`) construit un `ComposerProps` complet ; la prop `commands` devenant requise, **les 100 % des tests existants cassent au typage** sans un défaut. Ajouter dans l'objet `props`, avant le spread `...overrides` :
+
+```ts
+    commands: [],
+```
+
+- [ ] **Step 1b: Écrire les tests qui échouent.** Ajouter à `Composer.test.tsx` :
 
 ```ts
 const CMDS = [
   { name: 'review', description: 'Relire', argumentHint: '<file>', aliases: [] },
   { name: 'superpowers:brainstorming', description: 'Brainstorm', argumentHint: '', aliases: ['brainstorming'] },
 ]
+
+/** Frappe en positionnant le curseur en fin de texte (le déclenchement dépend du caret). */
+function type(value: string) {
+  const el = textarea() as HTMLTextAreaElement
+  fireEvent.change(el, { target: { value, selectionStart: value.length } })
+}
+
+const options = () => screen.queryAllByRole('option')
+```
+
+Exemple complet du cas le plus subtil (les 10 autres suivent le même moule) :
+
+```ts
+test('Enter complète sans envoyer quand le popover est ouvert', () => {
+  const { sent } = renderComposer({ commands: CMDS })
+  type('/rev')
+  expect(options()).toHaveLength(1)
+  fireEvent.keyDown(textarea(), { key: 'Enter' })
+  expect(sent).toEqual([])                                    // rien n'est parti
+  expect((textarea() as HTMLTextAreaElement).value).toBe('/review ')
+})
+
+test('zéro résultat : Enter envoie', () => {
+  const { sent } = renderComposer({ commands: CMDS })
+  type('/zzz')
+  expect(options()).toHaveLength(0)
+  fireEvent.keyDown(textarea(), { key: 'Enter' })
+  expect(sent).toEqual(['/zzz'])
+})
 ```
 
 Cas à couvrir (un `it` par ligne) :
