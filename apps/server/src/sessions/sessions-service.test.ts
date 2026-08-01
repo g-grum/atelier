@@ -90,6 +90,32 @@ describe('SessionsService', () => {
     expect(summary.permissionMode).toBeNull()
   })
 
+  test('createDraft stamps preferences.defaultPermissionMode — no gate for the new session', async () => {
+    const { service, data } = freshSetup()
+    data.update((d) => {
+      d.preferences.defaultPermissionMode = 'bypassPermissions'
+    })
+
+    const summary = service.createDraft('p1', {})
+
+    // Le SessionSummary retourné ET le record stocké portent le mode (cohérence spec).
+    expect(summary.permissionMode).toBe('bypassPermissions')
+    const result = await service.list('p1')
+    expect(result[0]?.permissionMode).toBe('bypassPermissions')
+  })
+
+  test('a stamped draft keeps its mode through materialization (mapDraft)', () => {
+    const { service, data } = freshSetup()
+    data.update((d) => {
+      d.preferences.defaultPermissionMode = 'default'
+    })
+    const draft = service.createDraft('p1', {})
+
+    data.mapDraft(draft.id, 'sdk-1')
+
+    expect(data.get().permissionModes['sdk-1']).toBe('default')
+  })
+
   test('list yields permissionMode null for an SDK session without a recorded choice', async () => {
     const sdkSession = { id: 's1', name: 'session', updatedAt: '2025-01-01T00:00:00.000Z', messageCount: 0 }
     const { service } = freshSetup([sdkSession])

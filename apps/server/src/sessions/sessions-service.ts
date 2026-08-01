@@ -71,10 +71,13 @@ export class SessionsService {
     const { preferences } = this.data.get()
     const id = randomUUID()
     const resolvedModel = model ?? preferences.defaultModel
+    // Défaut global stampé à la naissance (spec 2026-07-31) — null = le gate demandera.
+    // Les DEUX null codés en dur (record stocké + summary retourné) passent par cette valeur.
+    const permissionMode = preferences.defaultPermissionMode ?? null
     const createdAt = new Date().toISOString()
 
     this.data.update((d) => {
-      d.drafts.push({ id, projectId, name: name ?? null, model: resolvedModel, createdAt, permissionMode: null })
+      d.drafts.push({ id, projectId, name: name ?? null, model: resolvedModel, createdAt, permissionMode })
     })
 
     return {
@@ -85,7 +88,7 @@ export class SessionsService {
       messageCount: 0,
       isDraft: true,
       model: resolvedModel,
-      permissionMode: null,
+      permissionMode,
     }
   }
 
