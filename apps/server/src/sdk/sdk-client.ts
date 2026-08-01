@@ -241,7 +241,8 @@ type QueryOptions = NonNullable<Parameters<typeof query>[0]['options']>
  *   `behavior:literal("allow"),updatedInput:record(string(),unknown())` — a
  *   bare `{ behavior: 'allow' }` fails the whole permission request with
  *   "Tool permission request failed: ZodError" (observed live). Echo the
- *   original input back unchanged.
+ *   original input back unchanged — unless the callback supplied its own
+ *   updatedInput (e.g. les réponses d'un QCM AskUserQuestion).
  */
 export function buildQueryOptions(params: RunTurnParams, abortController: AbortController): QueryOptions {
   return {
