@@ -35,6 +35,8 @@ const EMPTY: AppDataShape = {
     windowBudgetTokens: 2_000_000,
     weeklyBudgetTokens: 12_000_000,
     githubUser: 'alice-dev',
+    // Absent/null = le gate demande à chaque session (comportement historique, spec 2026-07-31).
+    defaultPermissionMode: null,
   },
   drafts: [],
   draftMap: {},

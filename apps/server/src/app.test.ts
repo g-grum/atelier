@@ -408,6 +408,15 @@ describe('createApp', () => {
     expect(prefs.weeklyBudgetTokens).toBe(12_000_000)
   })
 
+  test('GET /api/preferences exposes defaultPermissionMode null by default — the gate asks each session', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/preferences', {
+      headers: { Authorization: 'Bearer test-token' },
+    })
+    const prefs = await res.json() as { defaultPermissionMode: 'default' | 'bypassPermissions' | null }
+    expect(prefs.defaultPermissionMode).toBeNull()
+  })
+
   test('PATCH /api/preferences persists changes', async () => {
     const { app } = freshApp()
     const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
