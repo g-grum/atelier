@@ -333,6 +333,8 @@
   .perm-gate .perm-gate-btn.danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
   .perm-gate .perm-gate-btn.danger:hover { border-color: var(--color-red); background: color-mix(in srgb, var(--color-red) 8%, transparent); }
   .perm-gate .perm-gate-btn:disabled { opacity: 0.5; cursor: default; }
+  .perm-gate .perm-gate-remember { flex-basis: 100%; display: flex; align-items: center; gap: 6px; color: var(--color-faint); font-size: 11.5px; cursor: pointer; }
+  .perm-gate .perm-gate-remember input { accent-color: var(--color-indigo); cursor: pointer; }
 
   /* Confirmation dialog actions (delete session) — perm-gate button grammar:
      neutral surface button, red for the destructive choice. */

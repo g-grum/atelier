@@ -207,6 +207,48 @@ describe('App per-session permissions gate', () => {
     await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
     expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
   })
+
+  test('checking « Se souvenir » patches the session AND the preference default', async () => {
+    let mode: SessionSummary['permissionMode'] = null
+    const prefPatches: unknown[] = []
+    const backend = fakeBackend({
+      listSessions: async () => [{ ...session, permissionMode: mode }],
+      patchSession: async (_id, patch) => {
+        if (patch.permissionMode !== undefined) mode = patch.permissionMode
+      },
+      patchPreferences: async (patch) => {
+        prefPatches.push(patch)
+        return { ...DEFAULT_PREFERENCES, ...patch }
+      },
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByLabelText(/Se souvenir de ce choix/))
+    fireEvent.click(screen.getByRole('button', { name: /dangereux/i }))
+
+    await waitFor(() => expect(prefPatches).toEqual([{ defaultPermissionMode: 'bypassPermissions' }]))
+  })
+
+  test('choosing WITHOUT the checkbox never patches the preferences', async () => {
+    let mode: SessionSummary['permissionMode'] = null
+    const prefPatches: unknown[] = []
+    const backend = fakeBackend({
+      listSessions: async () => [{ ...session, permissionMode: mode }],
+      patchSession: async (_id, patch) => {
+        if (patch.permissionMode !== undefined) mode = patch.permissionMode
+      },
+      patchPreferences: async (patch) => {
+        prefPatches.push(patch)
+        return { ...DEFAULT_PREFERENCES, ...patch }
+      },
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Permissions normales' }))
+
+    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(prefPatches).toEqual([])
+  })
 })
 
 describe('App plan limits panel', () => {

@@ -278,6 +278,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     onError: (error) => setNotice(`Impossible d’enregistrer le choix de permissions : ${errorMessage(error)}`),
   })
 
+  // « Se souvenir » du gate — PATCH préférences indépendant du PATCH session :
+  // si l'un échoue l'autre tient (spec 2026-07-31, gestion d'erreurs).
+  const rememberPermissionDefault = useMutation({
+    mutationFn: (mode: SessionPermissionMode) => backend.patchPreferences({ defaultPermissionMode: mode }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['preferences'] }),
+    onError: (error) => setNotice(`Impossible d’enregistrer le défaut de permissions : ${errorMessage(error)}`),
+  })
+
   // Dashboard layout — fallback to the shared default so a fetch failure
   // still renders a usable dashboard (spec: edits keep failing visibly).
   const widgetsQuery = useQuery({ queryKey: ['widgets'], queryFn: backend.getWidgets, retry: false })
@@ -406,8 +414,9 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           {needsPermissionChoice && (
             <PermissionModeGate
               pending={setPermissionMode.isPending}
-              onChoose={(mode) => {
+              onChoose={(mode, remember) => {
                 if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
+                if (remember) rememberPermissionDefault.mutate(mode)
               }}
             />
           )}
