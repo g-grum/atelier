@@ -19,7 +19,7 @@ export type AlwaysRule = {
 
 export type ProposedRule = Pick<AlwaysRule, 'toolName' | 'matcher'>
 
-export const MODELS = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6'] as const
+export const MODELS = ['claude-fable-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-4-6'] as const
 
 export type Project = { id: string; path: string; color: string }
 /** GET /api/projects/:id/github-account — the GitHub account a project pushes as (derived from its `origin` remote), with its owner/repo. Both null when the project has no GitHub origin. */
