@@ -37,7 +37,7 @@ apps/web/src/App.test.tsx                    # fakeBackend() gagne listCommands
 apps/web/src/styles.css                      # styles du popover
 ```
 
-**Décision de découpage :** toute la logique de matching vit dans un module **pur** (`lib/slash-commands.ts`) testé isolément ; `Composer.tsx` ne garde que le rendu et le clavier. Sans cette séparation, les 11 cas de test du composer devraient tous passer par le DOM.
+**Décision de découpage :** toute la logique de matching vit dans un module **pur** (`lib/slash-commands.ts`) testé isolément ; `Composer.tsx` ne garde que le rendu et le clavier. Sans cette séparation, les 12 cas de test du composer devraient tous passer par le DOM.
 
 ---
 
@@ -868,7 +868,7 @@ if (open && !event.metaKey && !event.shiftKey) {
 - [ ] **Step 4: Lancer les tests, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/components/Composer.test.tsx`
-Expected: PASS (11 nouveaux cas)
+Expected: PASS (12 nouveaux cas)
 
 - [ ] **Step 5: Commit**
 
