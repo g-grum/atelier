@@ -420,6 +420,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
               }}
             />
           )}
+          {activeSession?.permissionMode === 'bypassPermissions' && (
+            <div
+              className="perm-bypass-chip"
+              role="status"
+              title="Défini pour cette session — le défaut se gère dans les réglages"
+            >
+              Skip permissions
+            </div>
+          )}
           <Composer
             disabled={selected === null || needsPermissionChoice}
             status={stream.status}

@@ -336,6 +336,9 @@
   .perm-gate .perm-gate-remember { flex-basis: 100%; display: flex; align-items: center; gap: 6px; color: var(--color-faint); font-size: 11.5px; cursor: pointer; }
   .perm-gate .perm-gate-remember input { accent-color: var(--color-indigo); cursor: pointer; }
 
+  /* Rappel discret qu'une session tourne SANS garde-fou — rouge (état dangereux), jamais ambre. */
+  .perm-bypass-chip { align-self: flex-start; margin: 8px 28px 0; padding: 2px 9px; font: 700 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-red); border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-red) 8%, transparent); }
+
   /* Confirmation dialog actions (delete session) — perm-gate button grammar:
      neutral surface button, red for the destructive choice. */
   .dialog-btn { font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 5px 11px; cursor: pointer; }

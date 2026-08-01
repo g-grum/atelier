@@ -251,6 +251,24 @@ describe('App per-session permissions gate', () => {
   })
 })
 
+describe('App bypass indicator', () => {
+  test('a bypassPermissions session shows the red chip near the composer', async () => {
+    renderApp(fakeBackend({ listSessions: async () => [{ ...session, permissionMode: 'bypassPermissions' }] }))
+    // findByText EXACT (pas findByRole('status') : dnd-kit monte déjà une LiveRegion
+    // role="status" via DashboardGrid — la requête par rôle matcherait deux éléments).
+    // Le match exact ne touche pas le bouton du gate « Skip permissions (dangereux) »,
+    // qui de toute façon ne se rend pas pour une session décidée.
+    const chip = await screen.findByText('Skip permissions')
+    expect(chip.title).toContain('le défaut se gère dans les réglages')
+  })
+
+  test('a default-mode session shows no chip', async () => {
+    renderApp(fakeBackend())
+    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(screen.queryByText('Skip permissions')).toBeNull()
+  })
+})
+
 describe('App plan limits panel', () => {
   test('the right panel shows the plan gauges fetched from the backend', async () => {
     renderApp(
