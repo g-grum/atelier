@@ -104,7 +104,8 @@ export type ClientMessage =
   | { type: 'user_message'; text: string }
   | { type: 'permission_response'; requestId: string; decision: PermissionDecision }
   | { type: 'abort' }
-  | /** answers ABSENT = « répondu en texte » (dismiss). Multi-select : valeurs jointes par virgule. « Autre » : le texte libre est la valeur. */ { type: 'question_response'; requestId: string; answers?: Record<string, string> }
+  /** answers ABSENT = « répondu en texte » (dismiss). Multi-select : valeurs jointes par virgule. « Autre » : le texte libre est la valeur. */
+  | { type: 'question_response'; requestId: string; answers?: Record<string, string> }
 
 // ── WS server → client ──
 export type PermissionRequest = {
