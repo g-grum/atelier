@@ -74,6 +74,17 @@ describe('buildQueryOptions', () => {
 
     expect(result).toEqual({ behavior: 'deny', message: 'refusé par la règle' })
   })
+
+  test('canUseTool fait transiter updatedInput du résultat', async () => {
+    const options = buildQueryOptions(
+      makeRunTurnParams({
+        canUseTool: async () => ({ behavior: 'allow', updatedInput: { questions: [], answers: { Q: 'R' } } }),
+      }),
+      new AbortController(),
+    )
+    const result = await options.canUseTool!('AskUserQuestion', { questions: [] }, sdkCanUseToolOptions)
+    expect(result).toEqual({ behavior: 'allow', updatedInput: { questions: [], answers: { Q: 'R' } } })
+  })
 })
 
 describe('mapUsageWindows', () => {

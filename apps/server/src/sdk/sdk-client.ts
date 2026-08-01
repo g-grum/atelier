@@ -28,7 +28,10 @@ export type SdkTurnEvent =
   | { type: 'turn_done' }
   | { type: 'turn_error'; reason: string; resetAt?: string }
 
-export type CanUseTool = (toolName: string, input: unknown) => Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }>
+export type CanUseTool = (
+  toolName: string,
+  input: unknown,
+) => Promise<{ behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string }>
 
 export type RunTurnParams = {
   cwd: string
@@ -253,7 +256,7 @@ export function buildQueryOptions(params: RunTurnParams, abortController: AbortC
     // SDK CanUseTool: (toolName, input: Record<string, unknown>, options) → PermissionResult
     canUseTool: async (toolName, input) => {
       const result = await params.canUseTool(toolName, input)
-      if (result.behavior === 'allow') return { behavior: 'allow', updatedInput: input }
+      if (result.behavior === 'allow') return { behavior: 'allow', updatedInput: result.updatedInput ?? input }
       return { behavior: 'deny', message: result.message }
     },
   }
