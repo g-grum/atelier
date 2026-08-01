@@ -32,7 +32,8 @@ apps/web/src/state/stream-reducer.ts         # + commands: SlashCommandInfo[] | 
 apps/web/src/api/client.ts                   # + listCommands
 apps/web/src/api/backend.ts                  # + listCommands dans Backend + fixture
 apps/web/src/components/Composer.tsx         # + prop commands, popover, clavier
-apps/web/src/components/ChatView.tsx         # câble react-query → prop
+apps/web/src/App.tsx                         # rend <Composer> (:423) — câble react-query → prop
+apps/web/src/App.test.tsx                    # fakeBackend() gagne listCommands
 apps/web/src/styles.css                      # styles du popover
 ```
 
@@ -145,11 +146,12 @@ Expected: FAIL — `toSlashCommandInfo` n'est pas exporté.
 
 ```ts
 /**
- * Mappe les SlashCommand du SDK vers notre DTO. Couture testable pour deux
- * écarts de frontière : `aliases` est OPTIONNEL côté SDK (`aliases?: string[]`)
- * mais requis chez nous — un `undefined` casserait le filtrage du composer ;
- * et description/argumentHint peuvent manquer (argumentHint n'est renseigné
- * que sur ~20 des 68 commandes observées).
+ * Mappe les SlashCommand du SDK vers notre DTO. Couture testable pour l'écart
+ * de frontière qui compte : `aliases` est OPTIONNEL côté SDK
+ * (`aliases?: string[]`) mais requis chez nous — un `undefined` casserait le
+ * filtrage du composer. `description`/`argumentHint` sont déclarés requis par
+ * le SDK ; les `??` ne sont qu'une ceinture (argumentHint est souvent la chaîne
+ * vide — renseigné sur ~20 des 68 commandes observées — mais jamais absent).
  */
 export function toSlashCommandInfo(commands: readonly SlashCommand[]): SlashCommandInfo[] {
   return commands.map((c) => ({
@@ -458,17 +460,20 @@ git commit -m "feat(server): événement de tour commands sur commands_changed
 - Modify: `apps/server/src/stream/session-stream.ts`
 - Test: `apps/server/src/stream/session-stream.test.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue.** Dans `session-stream.test.ts`, calquer un test existant de diffusion d'événement (lire d'abord comment un turn scénarisé est passé au `MockSdkClient` et comment les événements diffusés sont collectés) :
+- [ ] **Step 1: Écrire le test qui échoue.** Dans `session-stream.test.ts`, en réutilisant les helpers déjà présents en tête de fichier (`setup` :16, `makeSink` :28, `clientMessage` :40, `tick` :14) :
 
 ```ts
 test('diffuse l’événement commands avec le sessionId', async () => {
-  // turn scénarisé : [{ type: 'commands', commands: [{ name: 'review', description: 'r', argumentHint: '', aliases: [] }] }]
-  // envoyer un user_message, attendre l'idle, puis :
-  expect(sent).toContainEqual({
-    type: 'commands',
-    sessionId: <id de la session>,
-    commands: [{ name: 'review', description: 'r', argumentHint: '', aliases: [] }],
-  })
+  const CMD = { name: 'review', description: 'r', argumentHint: '', aliases: [] }
+  const { registry } = setup({ turns: [[{ type: 'commands', commands: [CMD] }, { type: 'turn_done' }]] })
+  const stream = registry.get('s1', 'p1')
+  const { events, send } = makeSink()
+
+  stream.onConnect(send)
+  stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+  await tick()
+
+  expect(events).toContainEqual({ type: 'commands', sessionId: 's1', commands: [CMD] })
 })
 ```
 
@@ -481,11 +486,11 @@ Expected: FAIL — aucun événement `commands` diffusé.
 
 ```ts
       case 'commands':
-        this.broadcast({ type: 'commands', sessionId: this.publicId(), commands: event.commands })
+        this.broadcast({ type: 'commands', sessionId: this.sessionId(), commands: event.commands })
         return
 ```
 
-⚠️ Utiliser **le même accesseur de sessionId que les `case` voisins** (`tool_use`, `tool_result`) — lire le code autour de la ligne 177 et copier exactement leur façon de résoudre l'id (draft vs session résolue). Ne pas inventer `publicId()` s'il n'existe pas.
+`this.sessionId()` (`session-stream.ts:292`) est l'accesseur privé utilisé **tel quel** par tous les `case` voisins (`tool_use` :188, `tool_result` :196, `usage` :212, `rate_limit` :230) — il résout l'id draft → id SDK après matérialisation. N'en invente pas un autre.
 
 - [ ] **Step 4: Lancer les tests, vérifier le succès**
 
@@ -714,7 +719,15 @@ export function listCommands(projectId: string): Promise<SlashCommandInfo[]> {
   listCommands: (projectId: string) => Promise<SlashCommandInfo[]>
 ```
 
-Puis câbler l'implémentation réelle (`listCommands`) là où les autres méthodes le sont, et ajouter `listCommands: async () => []` à toute fixture/fake de `Backend` (chercher les objets qui implémentent `Backend` dans `apps/web/src` — au minimum `state/fixtures.ts`).
+Ajouter aussi `SlashCommandInfo` à l'import type en tête de `client.ts` **et** de `backend.ts`.
+
+**Trois sites implémentent `Backend` — les trois doivent gagner l'entrée, sinon le typage casse :**
+
+1. `apps/web/src/api/backend.ts` → `realBackend` : `listCommands,` (la vraie fonction importée de `client.ts`)
+2. `apps/web/src/api/backend.ts` → l'objet renvoyé par `createFixtureBackend()` : `listCommands: async () => []`
+3. `apps/web/src/App.test.tsx` → `fakeBackend()` : `listCommands: async () => []`
+
+⚠️ Le site 3 a un type de retour explicite `Backend` : l'oublier casse **toute** la suite `App.test.tsx` au typecheck. (`state/fixtures.ts` ne contient que des données brutes, aucun objet `Backend` — rien à y faire.)
 
 - [ ] **Step 3: Vérifier le typage**
 
@@ -791,7 +804,7 @@ test('zéro résultat : Enter envoie', () => {
 Cas à couvrir (un `it` par ligne) :
 1. taper `/rev` affiche une option `review`
 2. taper `/brain` affiche `superpowers:brainstorming` (**filtrage par alias**)
-3. `Enter` popover ouvert **complète et n'envoie pas** (`onSend` non appelé, textarea = `/review `)
+3. `Enter` popover ouvert **complète et n'envoie pas** (`onSend` non appelé, textarea = `/review `) — cas détaillé plus bas
 4. `Tab` complète comme `Enter`
 5. un clic sur une option complète
 6. `↓` puis `Enter` sélectionne la **deuxième** option
@@ -800,6 +813,7 @@ Cas à couvrir (un `it` par ligne) :
 9. `Esc` ferme le popover **en gardant le texte**
 10. `regarde src/foo` **n'ouvre pas** le popover
 11. prop `commands` vide ⇒ **jamais** de popover
+12. **Shift+Enter popover ouvert insère une nouvelle ligne** — ne complète pas, n'envoie pas (`onSend` non appelé, la valeur n'est pas devenue `/review `)
 
 - [ ] **Step 2: Lancer les tests, vérifier l'échec**
 
@@ -828,8 +842,11 @@ const open = matches.length > 0
 - `onKeyDown`, **avant** la logique d'envoi existante :
 
 ```ts
-// ⌘↵ garde son échappatoire inconditionnelle — testée explicitement.
-if (open && !event.metaKey) {
+// Deux échappatoires INCONDITIONNELLES, même popover ouvert :
+//  - ⌘↵ envoie (testé explicitement)
+//  - Shift+Enter insère une nouvelle ligne — sans le !shiftKey, le popover
+//    volerait le saut de ligne dès qu'on est dans le premier mot.
+if (open && !event.metaKey && !event.shiftKey) {
   if (event.key === 'ArrowDown') { event.preventDefault(); setActive((i) => (i + 1) % matches.length); return }
   if (event.key === 'ArrowUp') { event.preventDefault(); setActive((i) => (i - 1 + matches.length) % matches.length); return }
   if (event.key === 'Enter' || event.key === 'Tab') {
@@ -867,11 +884,12 @@ git commit -m "feat(web): autocomplétion des slash commands dans le composer
 ### Task 3.5: Câblage final
 
 **Files:**
-- Modify: `apps/web/src/components/ChatView.tsx` (ou le parent qui rend `<Composer>` — le localiser d'abord)
+- Modify: `apps/web/src/App.tsx` (~ligne 423 — `<Composer>` y est rendu **en frère** de `<ChatView>`, pas à l'intérieur)
 
-- [ ] **Step 1: Localiser le point de rendu**
+- [ ] **Step 1: Confirmer le point de rendu**
 
 Run: `grep -rn "<Composer" apps/web/src`
+Expected: une seule occurrence, dans `App.tsx`.
 
 - [ ] **Step 2: Câbler.** Dans le parent : `useQuery` sur `['commands', projectId]` → `backend.listCommands(projectId)`, avec `staleTime: Infinity` (la sonde coûte ~3,8 s ; la liste ne bouge quasiment jamais) et `enabled` seulement si `projectId` est défini. Puis :
 
