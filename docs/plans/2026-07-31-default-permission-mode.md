@@ -25,7 +25,7 @@
 - Modify: `apps/server/src/store/app-data.ts:28-47` (constante `EMPTY`)
 - Test: `apps/server/src/app.test.ts` (section `// 8. GET/PATCH /api/preferences`, ~ligne 397)
 
-- [ ] **Step 0: Mettre le WIP non lié de côté (non-interactif)**
+- [x] **Step 0: Mettre le WIP non lié de côté (non-interactif)**
 
 `packages/shared/src/protocol.ts` porte un hunk WIP non lié (ajout `claude-opus-5` à `MODELS`, ligne 22). Le stasher AVANT de commencer, pour que les `git add` par chemin restent sûrs :
 
@@ -35,7 +35,7 @@ git stash push -m "wip opus-5 (hors périmètre plan permissions)" -- packages/s
 
 (Les hunks WIP — `MODELS` ligne 22 et `MODEL_LABELS` — ne chevauchent pas les zones touchées par ce plan ; le `git stash pop` de la Task 7 se réappliquera sans conflit.)
 
-- [ ] **Step 1: Écrire le test qui échoue**
+- [x] **Step 1: Écrire le test qui échoue**
 
 Dans `apps/server/src/app.test.ts`, juste après le test `'GET /api/preferences returns defaults'` (~ligne 409), ajouter :
 
@@ -50,12 +50,12 @@ Dans `apps/server/src/app.test.ts`, juste après le test `'GET /api/preferences 
   })
 ```
 
-- [ ] **Step 2: Vérifier l'échec**
+- [x] **Step 2: Vérifier l'échec**
 
 Run: `bun test apps/server/src/app.test.ts -t 'defaultPermissionMode null by default'`
 Expected: FAIL — `undefined` reçu au lieu de `null` (la clé n'existe pas encore dans `EMPTY`).
 
-- [ ] **Step 3: Implémenter le contrat + le défaut**
+- [x] **Step 3: Implémenter le contrat + le défaut**
 
 Dans `packages/shared/src/protocol.ts`, ajouter à la fin du type `Preferences` (après `theme?: Theme`) :
 
@@ -75,19 +75,19 @@ Dans `apps/server/src/store/app-data.ts`, dans `EMPTY.preferences` (après `gith
 
 Rétrocompat : le deep-merge par clé du constructeur (`preferences: { ...base.preferences, ...parsed.preferences }`, ligne 65) injecte ce défaut dans les `app-data.json` existants — aucun autre changement.
 
-- [ ] **Step 4: Vérifier que le test passe**
+- [x] **Step 4: Vérifier que le test passe**
 
 Run: `bun test apps/server/src/app.test.ts -t 'defaultPermissionMode null by default'`
 Expected: PASS
 
-- [ ] **Step 5: Typecheck l'ensemble du monorepo**
+- [x] **Step 5: Typecheck l'ensemble du monorepo**
 
 Il n'existe PAS de script `typecheck`/`validate` — utiliser tsc directement (dispo dans `node_modules/.bin`, tsconfig par app, aucun à la racine ni dans packages/shared) :
 
 Run: `bunx tsc --noEmit -p apps/server && bunx tsc --noEmit -p apps/web && bunx tsc --noEmit -p apps/desktop`
 Expected: 0 erreur (le champ est optionnel — `DEFAULT_PREFERENCES` web et les fixtures existantes compilent sans modification).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/shared/src/protocol.ts apps/server/src/store/app-data.ts apps/server/src/app.test.ts
@@ -104,7 +104,7 @@ Vérifier avec `git show --stat HEAD` que seuls ces trois fichiers sont dans le 
 - Modify: `apps/server/src/routes/settings-routes.ts:60-98` (handler PATCH)
 - Test: `apps/server/src/app.test.ts` (même section)
 
-- [ ] **Step 1: Écrire les trois tests qui échouent**
+- [x] **Step 1: Écrire les trois tests qui échouent**
 
 Dans `apps/server/src/app.test.ts`, après le test ajouté en Task 1 :
 
@@ -170,12 +170,12 @@ Dans `apps/server/src/app.test.ts`, après le test ajouté en Task 1 :
   })
 ```
 
-- [ ] **Step 2: Vérifier l'échec**
+- [x] **Step 2: Vérifier l'échec**
 
 Run: `bun test apps/server/src/app.test.ts -t 'defaultPermissionMode'`
 Expected: le test Task 1 PASS ; les trois nouveaux FAIL — le PATCH ignore le champ, donc : test 1 reçoit `null`, test 2 échoue sur l'assertion intermédiaire (`'default'` attendu, `null` reçu), test 3 reçoit 200 au lieu de 400.
 
-- [ ] **Step 3: Implémenter la validation + l'écriture**
+- [x] **Step 3: Implémenter la validation + l'écriture**
 
 Dans `apps/server/src/routes/settings-routes.ts` :
 
@@ -207,12 +207,12 @@ import { SESSION_PERMISSION_MODES, THEMES, type ProjectSummary, type SessionPerm
       }
 ```
 
-- [ ] **Step 4: Vérifier que tout passe**
+- [x] **Step 4: Vérifier que tout passe**
 
 Run: `bun test apps/server/src/app.test.ts`
 Expected: PASS (tous, y compris les tests body-guard existants — `null`/`[]` en corps brut restent des 400 via `readJsonObject`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/routes/settings-routes.ts apps/server/src/app.test.ts
@@ -227,7 +227,7 @@ git commit -m "feat(server): PATCH /preferences valide et persiste defaultPermis
 - Modify: `apps/server/src/sessions/sessions-service.ts:70-90` (méthode `createDraft`)
 - Test: `apps/server/src/sessions/sessions-service.test.ts`
 
-- [ ] **Step 1: Écrire les deux tests qui échouent**
+- [x] **Step 1: Écrire les deux tests qui échouent**
 
 Dans `apps/server/src/sessions/sessions-service.test.ts`, après le test `'createDraft returns permissionMode null — the UI must ask before the first turn'` (~ligne 91) :
 
@@ -259,12 +259,12 @@ Dans `apps/server/src/sessions/sessions-service.test.ts`, après le test `'creat
   })
 ```
 
-- [ ] **Step 2: Vérifier l'échec**
+- [x] **Step 2: Vérifier l'échec**
 
 Run: `bun test apps/server/src/sessions/sessions-service.test.ts -t 'stamp'`
 Expected: FAIL ×2 — premier test : `null` reçu (createDraft code le mode en dur) ; second test : `undefined` reçu (`permissionModes['sdk-1']` absent — mapDraft saute les modes null).
 
-- [ ] **Step 3: Implémenter le stamping**
+- [x] **Step 3: Implémenter le stamping**
 
 Dans `apps/server/src/sessions/sessions-service.ts`, remplacer `createDraft` (lignes 70-90) par :
 
@@ -295,17 +295,17 @@ Dans `apps/server/src/sessions/sessions-service.ts`, remplacer `createDraft` (li
   }
 ```
 
-- [ ] **Step 4: Vérifier que tout passe**
+- [x] **Step 4: Vérifier que tout passe**
 
 Run: `bun test apps/server/src/sessions/sessions-service.test.ts`
 Expected: PASS — y compris le test existant `'createDraft returns permissionMode null …'` (défaut absent → `?? null`).
 
-- [ ] **Step 5: Lancer toute la suite serveur**
+- [x] **Step 5: Lancer toute la suite serveur**
 
 Run: `bun test apps/server`
 Expected: PASS (le stream, le broker et `session-stream.ts:114` ne changent pas).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/server/src/sessions/sessions-service.ts apps/server/src/sessions/sessions-service.test.ts
@@ -324,7 +324,7 @@ git commit -m "feat(server): createDraft stampe defaultPermissionMode — plus d
 - Modify: `apps/web/src/styles.css:328-335` (bloc `.perm-gate`)
 - Test: `apps/web/src/App.test.tsx` (describe `'App per-session permissions gate'`, ~ligne 165)
 
-- [ ] **Step 1: Écrire les deux tests qui échouent**
+- [x] **Step 1: Écrire les deux tests qui échouent**
 
 Dans `apps/web/src/App.test.tsx`, à la fin du describe `'App per-session permissions gate'` (avant sa fermeture ~ligne 210) :
 
@@ -374,12 +374,12 @@ Dans `apps/web/src/App.test.tsx`, à la fin du describe `'App per-session permis
 
 Note : `DEFAULT_PREFERENCES` est déjà importé en tête de fichier (ligne 6). Le premier test échoue sur `findByLabelText(/Se souvenir/)` tant que la checkbox n'existe pas. Le second passe déjà avant l'implémentation (rien ne patche les préférences aujourd'hui) : c'est le garde-fou de non-régression, ne pas s'étonner qu'il soit vert au Step 2.
 
-- [ ] **Step 2: Vérifier l'échec**
+- [x] **Step 2: Vérifier l'échec**
 
 Run: `bun test apps/web/src/App.test.tsx -t 'Se souvenir'`
 Expected: FAIL — « Unable to find a label with the text of: /Se souvenir de ce choix/ ».
 
-- [ ] **Step 3: Implémenter la checkbox dans le gate**
+- [x] **Step 3: Implémenter la checkbox dans le gate**
 
 Remplacer intégralement `apps/web/src/components/PermissionModeGate.tsx` par :
 
@@ -429,7 +429,7 @@ export function PermissionModeGate({ onChoose, pending }: PermissionModeGateProp
 }
 ```
 
-- [ ] **Step 4: Câbler App.tsx**
+- [x] **Step 4: Câbler App.tsx**
 
 Dans `apps/web/src/App.tsx`, après la mutation `setPermissionMode` (~ligne 279), ajouter :
 
@@ -457,7 +457,7 @@ Et remplacer le rendu du gate (~lignes 406-413) par :
           )}
 ```
 
-- [ ] **Step 5: Styler la checkbox**
+- [x] **Step 5: Styler la checkbox**
 
 Dans `apps/web/src/styles.css`, après la ligne `.perm-gate .perm-gate-btn:disabled …` (ligne 335) :
 
@@ -468,12 +468,12 @@ Dans `apps/web/src/styles.css`, après la ligne `.perm-gate .perm-gate-btn:disab
 
 (`.perm-gate` est déjà en `flex-wrap: wrap` — le `flex-basis: 100%` pose la checkbox sur sa propre ligne.)
 
-- [ ] **Step 6: Vérifier que tout passe**
+- [x] **Step 6: Vérifier que tout passe**
 
 Run: `bun test apps/web/src/App.test.tsx`
 Expected: PASS — les deux nouveaux tests ET les trois tests gate existants (leur `onChoose` ne cochant jamais la checkbox, aucun PATCH préférences ne part).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/components/PermissionModeGate.tsx apps/web/src/App.tsx apps/web/src/styles.css apps/web/src/App.test.tsx
@@ -488,7 +488,7 @@ git commit -m "feat(web): checkbox « Se souvenir » dans le gate — enregistre
 - Modify: `apps/web/src/components/SettingsPanel.tsx` (nouvelle section entre « Thème » ~ligne 221 et « Règles » ~ligne 223)
 - Test: `apps/web/src/components/SettingsPanel.test.tsx`
 
-- [ ] **Step 1: Écrire le test qui échoue**
+- [x] **Step 1: Écrire le test qui échoue**
 
 Dans `apps/web/src/components/SettingsPanel.test.tsx`, dans le describe `'SettingsPanel'` :
 
@@ -511,12 +511,12 @@ Dans `apps/web/src/components/SettingsPanel.test.tsx`, dans le describe `'Settin
   })
 ```
 
-- [ ] **Step 2: Vérifier l'échec**
+- [x] **Step 2: Vérifier l'échec**
 
 Run: `bun test apps/web/src/components/SettingsPanel.test.tsx -t 'permissions select'`
 Expected: FAIL — « Unable to find a label with the text of: Permissions des nouvelles sessions ».
 
-- [ ] **Step 3: Implémenter la section**
+- [x] **Step 3: Implémenter la section**
 
 Dans `apps/web/src/components/SettingsPanel.tsx` :
 
@@ -558,12 +558,12 @@ import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary, type Se
       </section>
 ```
 
-- [ ] **Step 4: Vérifier que tout passe**
+- [x] **Step 4: Vérifier que tout passe**
 
 Run: `bun test apps/web/src/components/SettingsPanel.test.tsx`
 Expected: PASS (la fixture `preferences` du fichier n'a pas le champ — optionnel, aucun autre test à toucher).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/components/SettingsPanel.tsx apps/web/src/components/SettingsPanel.test.tsx
@@ -579,7 +579,7 @@ git commit -m "feat(web): réglage « Permissions des nouvelles sessions » (dem
 - Modify: `apps/web/src/styles.css` (après le bloc `.perm-gate`)
 - Test: `apps/web/src/App.test.tsx`
 
-- [ ] **Step 1: Écrire les deux tests qui échouent**
+- [x] **Step 1: Écrire les deux tests qui échouent**
 
 Dans `apps/web/src/App.test.tsx`, nouveau describe après `'App per-session permissions gate'` :
 
@@ -603,12 +603,12 @@ describe('App bypass indicator', () => {
 })
 ```
 
-- [ ] **Step 2: Vérifier l'échec**
+- [x] **Step 2: Vérifier l'échec**
 
 Run: `bun test apps/web/src/App.test.tsx -t 'bypass indicator'`
 Expected: FAIL ×1 (premier test) — « Unable to find an element with the text: Skip permissions » ; le second passe déjà (rien à afficher) : c'est le garde-fou de non-régression.
 
-- [ ] **Step 3: Implémenter la puce**
+- [x] **Step 3: Implémenter la puce**
 
 Dans `apps/web/src/App.tsx`, juste avant `<Composer` (~ligne 414) :
 
@@ -631,12 +631,12 @@ Dans `apps/web/src/styles.css`, après les règles `.perm-gate-remember` (Task 4
   .perm-bypass-chip { align-self: flex-start; margin: 8px 28px 0; padding: 2px 9px; font: 700 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-red); border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-red) 8%, transparent); }
 ```
 
-- [ ] **Step 4: Vérifier que tout passe**
+- [x] **Step 4: Vérifier que tout passe**
 
 Run: `bun test apps/web/src/App.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/App.tsx apps/web/src/styles.css apps/web/src/App.test.tsx
@@ -647,14 +647,14 @@ git commit -m "feat(web): puce rouge « Skip permissions » quand la session act
 
 ### Task 7: Gates finaux + release
 
-- [ ] **Step 1: Suite complète + typecheck**
+- [x] **Step 1: Suite complète + typecheck**
 
 Il n'existe PAS de script `validate` ni de biome dans ce repo — les gates réels sont :
 
 Run: `bun test && bunx tsc --noEmit -p apps/server && bunx tsc --noEmit -p apps/web && bunx tsc --noEmit -p apps/desktop`
 Expected: 0 erreur (~430+ tests verts, 3 typechecks propres).
 
-- [ ] **Step 2: Bump version + notes**
+- [x] **Step 2: Bump version + notes**
 
 Dans `version.json` (racine), incrémenter le patch et remplacer les notes (FR concises, style existant) :
 
@@ -668,12 +668,12 @@ Dans `version.json` (racine), incrémenter le patch et remplacer les notes (FR c
 }
 ```
 
-- [ ] **Step 3: Build web (déploiement 2ᵉ étage)**
+- [x] **Step 3: Build web (déploiement 2ᵉ étage)**
 
 Run: `bun run build:web`
 Expected: build OK — l'app en cours toaste « Une nouvelle version est disponible » ; ⌘R suffit (aucun changement desktop/main.ts → pas de `package:mac`).
 
-- [ ] **Step 4: Commit final**
+- [x] **Step 4: Commit final**
 
 ```bash
 git add version.json
@@ -684,6 +684,6 @@ git commit -m "release: <version> — mode de permissions par défaut"
 
 Le WIP opus-5 appartient à une session jumelle active (feature slash-commands/QCM). Le stash a été restauré immédiatement après la Task 1 pour ne pas perturber son travail — plus aucune tâche de ce plan ne touche `protocol.ts`/`models.ts`. Conséquence assumée : le `build:web` du Step 3 embarquera ce WIP non commité (comportement pré-existant, sans impact sur cette feature).
 
-- [ ] **Step 5: Vérification end-to-end**
+- [x] **Step 5: Vérification end-to-end**
 
 Avant de démarrer quoi que ce soit : `lsof -nP -iTCP:4517 -sTCP:LISTEN` — si un serveur écoute, identifier son propriétaire (`ps -p <pid> -o lstart,command`) et NE PAS le tuer s'il appartient à une session vivante ; utiliser `ATELIER_PORT=4519` pour tester à côté. Puis : créer une session → cocher « Se souvenir » + « Skip permissions » → vérifier que la session suivante ne montre PAS le gate et porte la puce rouge → Réglages → vérifier visuellement que la valeur « Skip permissions (dangereux) » du select s'affiche en ROUGE (deux utilitaires text-* concurrents, l'ordre CSS généré décide — non couvert par les tests) → repasser sur « Demander à chaque session » → la session suivante remontre le gate.
