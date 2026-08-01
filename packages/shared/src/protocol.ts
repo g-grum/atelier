@@ -19,6 +19,11 @@ export type AlwaysRule = {
 
 export type ProposedRule = Pick<AlwaysRule, 'toolName' | 'matcher'>
 
+// ── QCM (spec 2026-07-31-ask-user-question-qcm) ──
+/** Miroir de AskUserQuestionInput.questions[] (SDK sdk-tools.d.ts). */
+export type QcmOption = { label: string; description: string; preview?: string }
+export type QcmQuestion = { question: string; header: string; options: QcmOption[]; multiSelect: boolean }
+
 export const MODELS = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6'] as const
 
 export type Project = { id: string; path: string; color: string }
@@ -48,8 +53,9 @@ export type Preferences = {
 export type UsageEvent = { at: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
 
 /**
- * Per-session permission behavior for SDK turns. 'bypassPermissions' maps to
- * the Agent SDK's dangerously-skip-permissions mode (canUseTool is bypassed).
+ * Per-session permission behavior for SDK turns. 'bypassPermissions' est un
+ * auto-allow sélectif dans canUseTool (tout sauf AskUserQuestion — le QCM
+ * remonte toujours à la UI) ; le mode SDK 'bypassPermissions' n'est plus utilisé.
  */
 export type SessionPermissionMode = 'default' | 'bypassPermissions'
 export const SESSION_PERMISSION_MODES: readonly SessionPermissionMode[] = ['default', 'bypassPermissions']
@@ -98,6 +104,7 @@ export type ClientMessage =
   | { type: 'user_message'; text: string }
   | { type: 'permission_response'; requestId: string; decision: PermissionDecision }
   | { type: 'abort' }
+  | /** answers ABSENT = « répondu en texte » (dismiss). Multi-select : valeurs jointes par virgule. « Autre » : le texte libre est la valeur. */ { type: 'question_response'; requestId: string; answers?: Record<string, string> }
 
 // ── WS server → client ──
 export type PermissionRequest = {
@@ -109,17 +116,24 @@ export type PermissionRequest = {
   proposedRule: ProposedRule | null
 }
 
+export type QuestionRequest = {
+  type: 'question_request'
+  requestId: string
+  questions: QcmQuestion[]
+}
+
 export type ServerEvent =
   | { type: 'assistant_delta'; sessionId: string; text: string }
   | { type: 'tool_use'; sessionId: string; toolUseId: string; kind: ToolKind; summary: string; file?: string; line?: number; diffstat?: { added: number; removed: number } }
   | { type: 'tool_result'; sessionId: string; toolUseId: string; ok: boolean; summary: string }
   | (PermissionRequest & { sessionId: string })
+  | (QuestionRequest & { sessionId: string })
   | { type: 'usage'; sessionId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
   | { type: 'rate_limit'; sessionId: string; limit: RateLimitSnapshot }
   | { type: 'status'; sessionId: string; state: 'idle' | 'streaming' | 'error'; error?: { reason: string; resetAt?: string }; partialText?: string; mapping?: { draftId: string; sessionId: string } }
 
-const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'usage', 'rate_limit', 'status'])
-const CLIENT_MESSAGE_TYPES = new Set(['user_message', 'permission_response', 'abort'])
+const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'question_request', 'usage', 'rate_limit', 'status'])
+const CLIENT_MESSAGE_TYPES = new Set(['user_message', 'permission_response', 'abort', 'question_response'])
 
 export function isServerEvent(value: unknown): value is ServerEvent {
   return isRecordWithType(value, SERVER_EVENT_TYPES)
