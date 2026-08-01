@@ -57,6 +57,15 @@ describe('QuestionBroker', () => {
     expect((await promise).behavior).toBe('allow')
   })
 
+  test('answers tableau (wire hostile) → no-op, la question reste répondable', async () => {
+    const { broker, published } = makeBroker()
+    const promise = broker.request(VALID_INPUT)
+    broker.resolve(published[0]!.requestId, ['A'] as never)
+    expect(broker.pending()).toHaveLength(1)
+    broker.resolve(published[0]!.requestId, { 'Quelle approche ?': 'A' })
+    expect((await promise).behavior).toBe('allow')
+  })
+
   test('input malformé → deny immédiat, rien de publié', async () => {
     const { broker, published } = makeBroker()
     expect(await broker.request({ nope: true })).toEqual({ behavior: 'deny', message: 'Entrée AskUserQuestion invalide' })

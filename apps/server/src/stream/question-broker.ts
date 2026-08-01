@@ -94,6 +94,7 @@ function parseQuestions(input: unknown): QcmQuestion[] | null {
   return parsed
 }
 
+/** Garde wire (le typage ne survit pas au réseau) : rejette aussi les tableaux — typeof [] === 'object'. */
 function isStringRecord(value: unknown): value is Record<string, string> {
-  return typeof value === 'object' && value !== null && Object.values(value).every((v) => typeof v === 'string')
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every((v) => typeof v === 'string')
 }
