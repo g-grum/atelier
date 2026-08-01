@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
-import { THEMES, type ProjectSummary, type Theme } from '@atelier/shared'
+import { SESSION_PERMISSION_MODES, THEMES, type ProjectSummary, type SessionPermissionMode, type Theme } from '@atelier/shared'
 import type { AppData } from '../store/app-data'
 import type { SessionsService } from '../sessions/sessions-service'
 import { openInIde, spawnLaunch, type LaunchFn } from '../ide/open-in-ide'
@@ -73,6 +73,15 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
     if (parsed.theme !== undefined && !THEMES.includes(parsed.theme as Theme)) {
       return c.json({ error: 'requête invalide : « theme » doit être « dark » ou « light »' }, 400)
     }
+    // null = effacer (le gate revient) ; sinon un des SESSION_PERMISSION_MODES. Le pattern
+    // `!== undefined` du bloc d'écriture rend le null explicite indispensable (spec 2026-07-31).
+    if (
+      parsed.defaultPermissionMode !== undefined &&
+      parsed.defaultPermissionMode !== null &&
+      !SESSION_PERMISSION_MODES.includes(parsed.defaultPermissionMode as SessionPermissionMode)
+    ) {
+      return c.json({ error: 'requête invalide : « defaultPermissionMode » doit être « default », « bypassPermissions » ou null' }, 400)
+    }
     // Calibratable usage budgets (estimates by design — spec « Usage & limits »):
     // optional, but when present they must be strictly positive integers.
     for (const field of ['windowBudgetTokens', 'weeklyBudgetTokens'] as const) {
@@ -93,6 +102,9 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
       if (windowBudgetTokens !== undefined) d.preferences.windowBudgetTokens = windowBudgetTokens
       if (weeklyBudgetTokens !== undefined) d.preferences.weeklyBudgetTokens = weeklyBudgetTokens
       if (parsed.theme !== undefined) d.preferences.theme = parsed.theme as Theme
+      if (parsed.defaultPermissionMode !== undefined) {
+        d.preferences.defaultPermissionMode = parsed.defaultPermissionMode as SessionPermissionMode | null
+      }
     })
     return c.json(data.get().preferences)
   })

@@ -417,6 +417,66 @@ describe('createApp', () => {
     expect(prefs.defaultPermissionMode).toBeNull()
   })
 
+  test('PATCH /api/preferences persists defaultPermissionMode and survives a reload', async () => {
+    const { app, filePath } = freshApp()
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    const rp = await app.request('/api/preferences', {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ defaultPermissionMode: 'bypassPermissions' }),
+    })
+    expect(rp.status).toBe(200)
+    const prefs = await rp.json() as { defaultPermissionMode: string | null }
+    expect(prefs.defaultPermissionMode).toBe('bypassPermissions')
+
+    const reloaded = new AppData(filePath)
+    expect(reloaded.get().preferences.defaultPermissionMode).toBe('bypassPermissions')
+  })
+
+  test('PATCH /api/preferences with defaultPermissionMode null CLEARS a set value (undefined-vs-null trap)', async () => {
+    const { app } = freshApp()
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    await app.request('/api/preferences', {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ defaultPermissionMode: 'default' }),
+    })
+    // Assertion intermédiaire : sans elle, le test passerait PAR VACUITÉ avant
+    // l'implémentation (deux PATCH ignorés → la valeur reste null → toBeNull vert).
+    const rg1 = await app.request('/api/preferences', { headers: auth })
+    expect(((await rg1.json()) as { defaultPermissionMode: string | null }).defaultPermissionMode).toBe('default')
+
+    const rp = await app.request('/api/preferences', {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ defaultPermissionMode: null }),
+    })
+    expect(rp.status).toBe(200)
+    const prefs = await rp.json() as { defaultPermissionMode: string | null }
+    expect(prefs.defaultPermissionMode).toBeNull()
+  })
+
+  test('PATCH /api/preferences rejects an unknown defaultPermissionMode with 400 and leaves preferences untouched', async () => {
+    const { app } = freshApp()
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    for (const value of ['yolo', 42, true, {}] as const) {
+      const res = await app.request('/api/preferences', {
+        method: 'PATCH',
+        headers: auth,
+        body: JSON.stringify({ defaultPermissionMode: value }),
+      })
+      expect(res.status).toBe(400)
+      const body = await res.json() as { error: string }
+      expect(typeof body.error).toBe('string')
+    }
+    const rg = await app.request('/api/preferences', { headers: auth })
+    const prefs = await rg.json() as { defaultPermissionMode: string | null }
+    expect(prefs.defaultPermissionMode).toBeNull()
+  })
+
   test('PATCH /api/preferences persists changes', async () => {
     const { app } = freshApp()
     const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
