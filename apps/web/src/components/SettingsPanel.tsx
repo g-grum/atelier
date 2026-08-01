@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings } from 'lucide-react'
 import { useState } from 'react'
-import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary, type Theme } from '@atelier/shared'
+import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary, type SessionPermissionMode, type Theme } from '@atelier/shared'
 import * as client from '../api/client'
 import { modelLabel } from '../lib/models'
 import { applyTheme } from '../lib/theme'
@@ -218,6 +218,34 @@ function SettingsBody({ api }: { api: SettingsApi }) {
           </select>
         )}
         <p className={HINT_CLASS}>Bascule aussi via l’icône ☀︎/☾ de la barre du haut.</p>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <label className={LABEL_CLASS} htmlFor="settings-permissions">
+          Permissions des nouvelles sessions
+        </label>
+        {prefsQuery.isPending ? (
+          <p className={HINT_CLASS}>Chargement…</p>
+        ) : prefs === undefined ? null : (
+          <select
+            id="settings-permissions"
+            // Le skip est un état dangereux : la valeur sélectionnée s'affiche en rouge
+            // (l'ambre reste réservé aux prompts de permissions — charte).
+            className={`${SELECT_CLASS}${prefs.defaultPermissionMode === 'bypassPermissions' ? ' text-red' : ''}`}
+            value={prefs.defaultPermissionMode ?? ''}
+            disabled={patchPrefs.isPending}
+            onChange={(event) =>
+              patchPrefs.mutate({
+                defaultPermissionMode: event.target.value === '' ? null : (event.target.value as SessionPermissionMode),
+              })
+            }
+          >
+            <option value="">Demander à chaque session</option>
+            <option value="default">Permissions normales</option>
+            <option value="bypassPermissions">Skip permissions (dangereux)</option>
+          </select>
+        )}
+        <p className={HINT_CLASS}>Appliqué aux nouvelles sessions uniquement — les sessions existantes gardent leur mode.</p>
       </section>
 
       <section className="flex flex-col gap-2">
