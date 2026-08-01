@@ -680,16 +680,9 @@ git add version.json
 git commit -m "release: <version> — mode de permissions par défaut"
 ```
 
-- [ ] **Step 4bis: Restaurer le WIP stashé (Task 1, Step 0)**
+- [x] **Step 4bis: Restaurer le WIP stashé — DÉJÀ FAIT (coordination sessions parallèles)**
 
-Placé APRÈS `build:web` exprès : le bundle déployé ne doit pas embarquer le WIP opus-5 non commité.
-
-```bash
-git stash pop
-git diff --stat
-```
-
-Expected: le diff WIP `claude-opus-5` (protocol.ts + models.ts) est de retour dans le working tree, non stagé — il appartient à un autre travail, le laisser tel quel.
+Le WIP opus-5 appartient à une session jumelle active (feature slash-commands/QCM). Le stash a été restauré immédiatement après la Task 1 pour ne pas perturber son travail — plus aucune tâche de ce plan ne touche `protocol.ts`/`models.ts`. Conséquence assumée : le `build:web` du Step 3 embarquera ce WIP non commité (comportement pré-existant, sans impact sur cette feature).
 
 - [ ] **Step 5: Vérification end-to-end**
 
