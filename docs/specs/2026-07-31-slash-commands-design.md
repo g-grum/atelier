@@ -118,14 +118,32 @@ listCommands(cwd: string): Promise<SlashCommandInfo[]>
 
 Implémentation : un `query()` jetable avec un `AbortController`, itéré jusqu'au
 message `system`/`init`, puis `await q.supportedCommands()`, puis `abort()`
-immédiat. Aucun message n'est jamais envoyé au modèle, et le spike confirme
-qu'**aucun transcript de session n'est créé**.
+immédiat.
+
+**Le `prompt` doit être une string non vide** — une constante fixe du type
+`'atelier: command discovery probe'`. Ce n'est pas un détail libre : les deux
+variantes « propres » ont été testées et **ne fonctionnent pas**.
+
+| `prompt` passé | `init` reçu ? |
+|---|---|
+| `AsyncIterable` qui ne yield jamais | **non** — bloque indéfiniment (>5 min) |
+| `AsyncIterable` vide qui se termine | **non** — seuls des `system/hook_*` arrivent |
+| string non vide | **oui** — `init` en ~1,8 s |
+
+Le mode *streaming input* ne produit donc jamais l'`init` dont la sonde dépend.
+La string reste néanmoins **sans coût de tour** : l'`abort()` intervient sur
+`init`, c'est-à-dire **avant** tout message `assistant`, `stream_event` ou
+`result` — aucun de ces messages n'a été observé, et **aucun transcript de
+session n'est créé** (spike § Spikes).
 
 - Contrat **ne-jette-jamais** (modèle `deriveMessageCount`,
   `sdk-client.ts:387-397`) : toute défaillance → `[]`.
 - Le mapping `SlashCommand → SlashCommandInfo` est une fonction **pure
   exportée**, couture testable pour un contrat de frontière que le mock ne voit
-  pas — même justification que `mapUsageWindows` et `buildQueryOptions`.
+  pas — même justification que `mapUsageWindows` et `buildQueryOptions`. Il doit
+  **normaliser `aliases: undefined → []`** : le champ est optionnel côté SDK
+  (`aliases?: string[]`) mais requis dans notre type, exactement le genre
+  d'écart de frontière que `mapRateLimitInfo` documente déjà pour `resetsAt`.
 - `sdk-client.mock.ts` implémente la méthode.
 
 **Coût mesuré : ~3,8 s** (init ~1,8 s, puis `supportedCommands()` ~2 s). C'est
@@ -278,12 +296,20 @@ réponses sont déjà intégrées ci-dessus. Aucun spike ne reste à faire.
    plugins (`superpowers:*`) et les natives (`compact`, `usage`, `clear`,
    `init`, `review`, `agents`, `context`) — **68 au total**, contre **0** pour un
    scan disque sur ce poste. Coût : ~3,8 s, d'où le cache de §5.
+3. **Alias effectivement peuplés** (justification de la décision 3, observée et
+   non déduite) : la sonde renvoie
+   `{ name: "superpowers:brainstorming", aliases: ["brainstorming"] }` et
+   `{ name: "frontend-design:frontend-design", aliases: ["frontend-design"] }`.
+   Sans filtrage sur `aliases`, taper `/brainstorming` ne matcherait donc rien.
+4. **Forme du `prompt` de la sonde** — voir le tableau du §2 : seules les
+   strings non vides produisent l'`init`. `argumentHint` n'est renseigné que sur
+   **20 des 68** commandes.
 
 ## Tests
 
 - **`sdk-client.test.ts`** — mapping `SlashCommand → SlashCommandInfo` (dont
-  `aliases` et `argumentHint` vide) ; `listCommands` renvoie `[]` sur échec
-  (ne-jette-jamais) ; émission de l'événement sur `commands_changed`.
+  `aliases: undefined → []` et `argumentHint` vide) ; `listCommands` renvoie `[]`
+  sur échec (ne-jette-jamais) ; émission de l'événement sur `commands_changed`.
 - **`commands-routes.test.ts`** — 200 avec liste ; 404 projet inconnu ; 200 avec
   `[]` quand la sonde échoue.
 - **`session-stream.test.ts`** — l'événement `commands` est diffusé avec le bon
@@ -293,10 +319,11 @@ réponses sont déjà intégrées ci-dessus. Aucun spike ne reste à faire.
 - **`protocol.test.ts`** — `isServerEvent` accepte `'commands'` (le piège du
   `Set`).
 - **`Composer.test.tsx`** — filtrage par préfixe sur `name` **et** sur `aliases` ;
-  navigation `↑`/`↓` ; **`Enter` complète sans envoyer** ; **zéro résultat ⇒
-  `Enter` envoie** ; complétion du **premier token seulement**, reste du
-  brouillon préservé ; `⌘↵` envoie même popover ouvert ; `Esc` ferme en gardant
-  le texte ; `src/foo` ne déclenche pas ; prop `commands` vide ⇒ pas de popover.
+  navigation `↑`/`↓` ; **`Enter` complète sans envoyer** ; **`Tab` complète
+  comme `Enter`** ; **clic souris complète** ; **zéro résultat ⇒ `Enter`
+  envoie** ; complétion du **premier token seulement**, reste du brouillon
+  préservé ; `⌘↵` envoie même popover ouvert ; `Esc` ferme en gardant le texte ;
+  `src/foo` ne déclenche pas ; prop `commands` vide ⇒ pas de popover.
 
 ## Hors périmètre
 
