@@ -17,7 +17,9 @@ function makeItems(count: number): ChatItem[] {
  * document in a 400px viewport, with a controllable scrollTop.
  */
 function setup(initialItems: ChatItem[]) {
-  const view = render(<ChatView items={initialItems} status="idle" onOpenInIde={() => {}} onPermissionDecision={() => {}} />)
+  const view = render(
+    <ChatView items={initialItems} status="idle" onOpenInIde={() => {}} onPermissionDecision={() => {}} onQuestionAnswer={() => {}} />,
+  )
   const el = view.container.querySelector('.messages')
   if (!(el instanceof HTMLElement)) throw new Error('no .messages scroller')
 
@@ -34,7 +36,9 @@ function setup(initialItems: ChatItem[]) {
   Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => geometry.clientHeight })
 
   const rerender = (items: ChatItem[]) =>
-    view.rerender(<ChatView items={items} status="streaming" onOpenInIde={() => {}} onPermissionDecision={() => {}} />)
+    view.rerender(
+      <ChatView items={items} status="streaming" onOpenInIde={() => {}} onPermissionDecision={() => {}} onQuestionAnswer={() => {}} />,
+    )
   const userScrollTo = (top: number) => {
     scrollTop = top
     fireEvent.scroll(el)
@@ -96,10 +100,59 @@ describe('ChatView permissions', () => {
         status="streaming"
         onOpenInIde={() => {}}
         onPermissionDecision={(requestId, decision) => calls.push([requestId, decision])}
+        onQuestionAnswer={() => {}}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Autoriser une fois' }))
     expect(calls).toEqual([['req-1', 'allow']])
+  })
+})
+
+describe('ChatView questions (QCM)', () => {
+  const questionItem: ChatItem = {
+    kind: 'question',
+    requestId: 'q1',
+    questions: [
+      {
+        question: 'Quelle approche ?',
+        header: 'Approche',
+        options: [
+          { label: 'A', description: 'la première' },
+          { label: 'B', description: 'la seconde' },
+        ],
+        multiSelect: false,
+      },
+    ],
+  }
+
+  test('rend une carte question et remonte la réponse', () => {
+    const calls: [string, Record<string, string>][] = []
+    render(
+      <ChatView
+        items={[questionItem]}
+        status="streaming"
+        onOpenInIde={() => {}}
+        onPermissionDecision={() => {}}
+        onQuestionAnswer={(requestId, answers) => calls.push([requestId, answers])}
+      />,
+    )
+    // Mono-question single-select : cliquer une option prédéfinie envoie directement.
+    fireEvent.click(screen.getByRole('button', { name: 'A la première' }))
+    expect(calls).toEqual([['q1', { 'Quelle approche ?': 'A' }]])
+  })
+
+  test('un QCM pendant masque le typing indicator', () => {
+    render(
+      <ChatView
+        items={[questionItem]}
+        status="streaming"
+        onOpenInIde={() => {}}
+        onPermissionDecision={() => {}}
+        onQuestionAnswer={() => {}}
+      />,
+    )
+    // Question non résolue : le tour est bloqué en attendant l'utilisateur.
+    expect(screen.queryByLabelText('Claude écrit')).toBeNull()
   })
 })
 
@@ -111,6 +164,7 @@ describe('ChatView queued messages', () => {
         status="streaming"
         onOpenInIde={() => {}}
         onPermissionDecision={() => {}}
+        onQuestionAnswer={() => {}}
       />,
     )
     expect(screen.getByText('En attente')).toBeTruthy()
@@ -121,6 +175,7 @@ describe('ChatView queued messages', () => {
         status="streaming"
         onOpenInIde={() => {}}
         onPermissionDecision={() => {}}
+        onQuestionAnswer={() => {}}
       />,
     )
     expect(screen.queryByText('En attente')).toBeNull()

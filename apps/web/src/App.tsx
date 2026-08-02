@@ -391,6 +391,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             status={stream.status}
             // Sends permission_response on the socket and resolves the item locally.
             onPermissionDecision={(requestId, decision) => controller.respondPermission(requestId, decision)}
+            // Sends question_response on the socket and freezes the QCM card locally.
+            onQuestionAnswer={(requestId, answers) => controller.answerQuestion(requestId, answers)}
             onOpenInIde={(file, line) => {
               // The server answers { ok: false, reason } instead of a 5xx when
               // the IDE cannot be opened — both that and a transport rejection
