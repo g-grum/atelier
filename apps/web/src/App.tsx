@@ -179,6 +179,21 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     retry: false,
   })
 
+  // Slash commands du projet de la session ouverte (même projet que celui de
+  // `activeProject`) — la liste initiale de l'autocomplétion du composer.
+  // `staleTime: Infinity` : la sonde SDK côté serveur coûte ~3,8 s et la liste
+  // ne bouge quasiment jamais ; un rafraîchissement en cours de session arrive
+  // par l'événement WS `commands`, pas par un refetch. Silencieux sur échec
+  // (retry: false) — sans liste, le composer redevient une textarea ordinaire.
+  const commandsProjectId = selected?.projectId ?? projectId
+  const commandsQuery = useQuery({
+    queryKey: ['commands', commandsProjectId],
+    queryFn: () => backend.listCommands(commandsProjectId ?? ''),
+    enabled: commandsProjectId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  })
+
   const openSession = useCallback(
     (sessionId: string, projectId: string) => {
       const attempt = ++openAttempt.current
@@ -432,6 +447,9 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           <Composer
             disabled={selected === null || needsPermissionChoice}
             status={stream.status}
+            // Précédence, pas de fusion (spec §5) : les deux listes viennent du
+            // même producteur (le SDK), celle du WS est juste plus fraîche.
+            commands={stream.commands ?? commandsQuery.data ?? []}
             onSend={(text) => controller.sendMessage(text)}
             // Explicit abort — the only ClientMessage that stops a turn.
             onAbort={() => controller.abort()}
