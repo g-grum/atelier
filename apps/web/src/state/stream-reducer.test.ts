@@ -181,3 +181,19 @@ describe('reset', () => {
     expect(state.status).toBe('streaming')
   })
 })
+
+describe('slash commands', () => {
+  test('stocke la liste sur l’événement commands', () => {
+    const cmds = [{ name: 'review', description: '', argumentHint: '', aliases: [] }]
+    const next = reduce(initialState(), { type: 'commands', sessionId: 's1', commands: cmds })
+    expect(next.commands).toEqual(cmds)
+  })
+
+  test('vaut null avant tout événement', () => {
+    expect(initialState().commands).toBeNull()
+  })
+
+  test('revient à null au resync (reset)', () => {
+    expect(reset([]).commands).toBeNull()
+  })
+})
