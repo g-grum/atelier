@@ -27,6 +27,12 @@ describe('protocol guards', () => {
   })
 })
 
+describe('isServerEvent', () => {
+  test('accepte un événement commands', () => {
+    expect(isServerEvent({ type: 'commands', sessionId: 's1', commands: [] })).toBe(true)
+  })
+})
+
 describe('widget contracts', () => {
   test('DEFAULT_WIDGETS mirrors the current aside: rate-limits then modified-files, full width, height M', () => {
     expect(DEFAULT_WIDGETS.map((w) => w.type)).toEqual(['rate-limits', 'modified-files'])
