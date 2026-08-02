@@ -948,6 +948,34 @@ describe('SessionStream', () => {
     expect(() => registry.dispose('ghost')).not.toThrow()
   })
 
+  // 9. Status hub — snapshot on connect + broadcast of transitions
+  test('le hub envoie un snapshot à la connexion puis diffuse les transitions', async () => {
+    const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
+    const s = registry.get('s1', 'p1')
+    s.onMessage(clientMessage({ type: 'user_message', text: 'hi' })) // → streaming
+
+    const seen: Array<{ sessionId: string; state: string }> = []
+    registry.onStatusConnect((e) => seen.push({ sessionId: e.sessionId, state: e.state }))
+    // initial snapshot: s1 already streaming
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'streaming' })
+
+    await tick() // drain the turn
+
+    // broadcast transition: s1 → idle
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'idle' })
+  })
+
+  test('onStatusClose retire le sink', () => {
+    const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
+    const seen: unknown[] = []
+    const sink = (e: { sessionId: string }) => seen.push(e)
+    registry.onStatusConnect(sink)
+    const before = seen.length
+    registry.onStatusClose(sink)
+    registry.get('s2', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'x' }))
+    expect(seen.length).toBe(before) // nothing after close (beyond the snapshot already received)
+  })
+
   test('registry.dispose accepts the draft id after materialization re-keyed the stream', async () => {
     const draft: Draft = { id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString() }
     const { registry } = setup({

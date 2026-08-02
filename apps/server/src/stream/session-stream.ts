@@ -1,4 +1,4 @@
-import type { PermissionRequest, ServerEvent, SessionState } from '@atelier/shared'
+import type { PermissionRequest, ServerEvent, SessionState, SessionStatusEvent } from '@atelier/shared'
 import { parseClientMessage } from '@atelier/shared'
 import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
@@ -346,6 +346,7 @@ export class SessionStream {
  */
 export class SessionStreamRegistry {
   private readonly streams = new Map<string, SessionStream>()
+  private readonly statusSinks = new Set<(event: SessionStatusEvent) => void>()
 
   constructor(
     private readonly data: AppData,
@@ -368,10 +369,28 @@ export class SessionStreamRegistry {
             this.streams.set(to, entry)
           }
         },
+        onStatusChange: (sessionId, state) => this.publishStatus(sessionId, state),
       })
       this.streams.set(key, stream)
     }
     return stream
+  }
+
+  /** Abonne un sink au flux d'état global : snapshot immédiat de toutes les sessions vivantes, puis transitions. */
+  onStatusConnect(send: (event: SessionStatusEvent) => void): void {
+    this.statusSinks.add(send)
+    for (const [sessionId, stream] of this.streams) {
+      send({ type: 'session_status', sessionId, state: stream.currentState })
+    }
+  }
+
+  onStatusClose(send: (event: SessionStatusEvent) => void): void {
+    this.statusSinks.delete(send)
+  }
+
+  private publishStatus(sessionId: string, state: SessionState): void {
+    const event: SessionStatusEvent = { type: 'session_status', sessionId, state }
+    for (const send of this.statusSinks) send(event)
   }
 
   /**
