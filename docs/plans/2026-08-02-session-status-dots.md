@@ -45,18 +45,17 @@
 
 - [ ] **Step 1: Écrire le test qui échoue**
 
-Ajouter (ou créer le fichier avec l'import qui va bien) :
+⚠️ **`packages/shared/src/protocol.test.ts` EXISTE déjà** (importe `{ describe, expect, test }` de `bun:test` et plusieurs symboles de `./protocol`). NE PAS recréer le fichier ni ré-importer `describe`/`expect` (double binding = SyntaxError). **Fusionner** : ajouter `parseSessionStatus` à l'import existant `from './protocol'`, puis ajouter ce `describe` (en réutilisant `test` déjà importé) :
 
 ```ts
-import { describe, expect, it } from 'bun:test'
-import { parseSessionStatus } from './protocol'
+// import existant complété : import { …, parseSessionStatus } from './protocol'
 
 describe('parseSessionStatus', () => {
-  it('accepte un évènement bien formé', () => {
+  test('accepte un évènement bien formé', () => {
     expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 's1', state: 'streaming' })))
       .toEqual({ type: 'session_status', sessionId: 's1', state: 'streaming' })
   })
-  it('rejette un mauvais type, un état inconnu, un sessionId non-string ou un JSON invalide', () => {
+  test('rejette un mauvais type, un état inconnu, un sessionId non-string ou un JSON invalide', () => {
     expect(parseSessionStatus(JSON.stringify({ type: 'status', sessionId: 's1', state: 'idle' }))).toBeNull()
     expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 's1', state: 'busy' }))).toBeNull()
     expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 42, state: 'idle' }))).toBeNull()
@@ -122,16 +121,20 @@ Suivre le harnais du fichier (construction d'un `SessionStream` avec SDK factice
 ```ts
 it('émet chaque transition d’état via onStatusChange (streaming au démarrage, idle en fin)', async () => {
   const states: Array<{ sessionId: string; state: string }> = []
-  // …construire le stream comme les tests existants, en passant :
+  // Construire un SessionStream DIRECTEMENT (import { SessionStream }) — registry.get()
+  // n'accepte pas onStatusChange ; SessionStream est exporté. Passer au constructeur :
   //   onStatusChange: (sessionId, state) => states.push({ sessionId, state })
-  // puis déclencher un tour qui émet un turn_done (réutiliser le SDK factice du fichier).
+  // et scripter le SDK factice pour émettre { type: 'turn_done' } (le mock ne l'auto-émet PAS).
   stream.onMessage(JSON.stringify({ type: 'user_message', text: 'hi' }))
-  await /* le drain du tour, comme les tests existants */ Promise.resolve()
+  await tick() // = Bun.sleep(0) : draine réellement le générateur async (Promise.resolve() ne suffit PAS)
   expect(states.map((s) => s.state)).toEqual(['streaming', 'idle'])
 })
 ```
 
-> Note d'implémentation pour le test : calquer exactement la mise en place d'un test existant qui envoie un `user_message` et attend `turn_done` (chercher `turn_done` dans `session-stream.test.ts`). N'inventer aucune API SDK — réutiliser le stub du fichier.
+> Notes d'implémentation, calquées sur `session-stream.test.ts` :
+> - **Drain :** utiliser le `tick()`/`Bun.sleep(0)` du fichier (chercher `tick` / `Bun.sleep`), PAS `Promise.resolve()` — un seul microtask capture `['streaming']` et rate `'idle'`.
+> - **SDK factice :** scripter les `turns` avec un `{ type: 'turn_done' }` (le mock ne l'émet jamais seul). N'inventer aucune API SDK — réutiliser le stub (`sdk-client.mock.ts`).
+> - **Construction :** `import { SessionStream } from './session-stream'` et instancier à la main pour passer `onStatusChange` (le registre ne l'expose pas). La couverture registre passe par Task 3.
 
 - [ ] **Step 2: Lancer le test → échec**
 
@@ -181,10 +184,17 @@ Remplacer **chaque** `this.state = '…'` par `this.setState('…')` :
 Dans `materializeDraft` (après `this.onRekey?.(…)`, l'id résolu change), ré-émettre l'état courant sous le NOUVEL id pour que le hub bascule le vert du draft vers l'id SDK :
 
 ```ts
+// Ré-émet sous l'id SDK. NB : l'émission `streaming` sous l'id DRAFT (ligne 116) n'est
+// pas rétractée → une entrée fantôme `draftId → streaming` peut rester dans `statuses`
+// côté client. Inoffensif : le remap `mapping` retire le draft de la liste de sessions,
+// donc cette entrée n'est jamais rendue ni ne transite vers `waiting` ; toute nouvelle
+// connexion au hub snapshot le registre re-keyé proprement.
 this.onStatusChange?.(sdkSessionId, this.state)
 ```
 
 (La déclaration du champ `private state` ligne 34 reste `= 'idle'` : l'init n'émet rien, c'est voulu — pas d'`onStatusChange` avant qu'un abonné existe.)
+
+> **Type partagé (cohérence) :** typer `onStatusChange`, `setState` et `currentState` avec le `SessionState` de `@atelier/shared` (`import type { SessionState } from '@atelier/shared'`) plutôt que de ré-inliner `'idle' | 'streaming' | 'error'`. Idem pour `publishStatus` en Task 3.
 
 - [ ] **Step 4: Lancer les tests → succès**
 
@@ -476,11 +486,10 @@ export class SessionStatusStore {
   handle(event: SessionStatusEvent): void {
     const { sessionId, state } = event
     const prev = this.statuses.get(sessionId)
-    if (prev === state) {
-      // Rien ne change pour les pastilles ; garder le snapshot stable.
-      if (state === 'streaming') return
-      return
-    }
+    // Aucun changement d'état → aucune mutation, snapshot stable. Sûr même pour un
+    // 'streaming' répété : une session dans `waiting` a toujours statuses=idle|error
+    // (jamais streaming), donc ce retour anticipé ne peut pas sauter un `waiting.delete`.
+    if (prev === state) return
     this.statuses = new Map(this.statuses).set(sessionId, state)
     let waiting = this.waiting
     if (state === 'streaming') {
@@ -654,7 +663,7 @@ export class StatusSocket {
 }
 ```
 
-> `location` n'existe pas dans l'environnement `bun test` : le test n'instancie JAMAIS le socket réel (il injecte `createSocket`), donc la construction d'URL n'est pas exécutée. Si un test global de `bun test` échoue sur `location`, vérifier le setup DOM des tests web existants (`happy-dom`/`jsdom` déjà en place pour `*.test.tsx`).
+> **`location`/`getToken` dans les tests :** le constructeur construit l'URL (`location.protocol`, `location.host`, `getToken()`) dès `new StatusSocket(...)`, MÊME avec `createSocket` injecté — le test instancie bien la vraie classe. Ça passe parce que `bunfig.toml` précharge `apps/web/test-setup.ts` (`GlobalRegistrator.register()`, happy-dom) qui fournit `location` et `getToken` globalement. Précédent direct : `apps/web/src/api/ws.test.ts` instancie `new SessionSocket('s1','p1',{...})` sur le même patron et est vert. Aucune action requise — juste ne pas croire que l'URL n'est « pas exécutée ».
 
 - [ ] **Step 4: Lancer → succès**
 
@@ -677,10 +686,10 @@ git commit -m "feat(web): StatusSocket receive-only auto-reconnectant"
 
 - [ ] **Step 1: Instancier le store (stable pour la durée de vie du composant)**
 
-Près de la création du `controller` (haut du composant `App`), ajouter — même patron `useRef`/`useMemo` que `controller` :
+Près de la création du `controller` (haut du composant `App`), ajouter — même patron `useMemo` que `controller` (évite d'allouer un store jeté à chaque rendu) :
 
 ```tsx
-const statusStore = useRef(new SessionStatusStore()).current
+const statusStore = useMemo(() => new SessionStatusStore(), [])
 ```
 
 Imports en tête de fichier :
@@ -713,30 +722,30 @@ useEffect(() => {
 }, [selected, statusStore])
 ```
 
-- [ ] **Step 5: Passer `statuses`/`waiting` à la sidebar**
+- [ ] **Step 5: Committer les parties autonomes (store + socket + effets)**
 
-Dans le JSX `<SessionSidebar … />` (vers la ligne 349), ajouter :
+Les Steps 1-4 (import, `useMemo`, `useEffect` d'ouverture, `useSyncExternalStore`, `setActive`) ne touchent PAS le contrat de props de `SessionSidebar` — `App.tsx` compile et `App.test.tsx` reste vert. Committer ce lot :
+
+```bash
+git add apps/web/src/App.tsx
+git commit -m "feat(web): App abonne le status hub (store + socket + focus)"
+```
+
+Run: `bun test apps/web/src/App.test.tsx`
+Expected: PASS (aucune régression — la sidebar reçoit encore ses anciennes props).
+
+- [ ] **Step 6: Passer `statuses`/`waiting` à la sidebar (à committer AVEC Task 8)**
+
+Dans le JSX `<SessionSidebar … />` (ouverture vers la ligne 364), ajouter :
 
 ```tsx
           statuses={sessionStatuses.statuses}
           waiting={sessionStatuses.waiting}
 ```
 
-(`streamingSessionId={…}` ligne 357 reste **inchangé** — il porte toujours le vert optimiste de la session active.)
+(`streamingSessionId={…}` (vers la ligne 372) reste **inchangé** — il porte toujours le vert optimiste de la session active. Les numéros de ligne ont dérivé avec les commits slash-commands : se fier au texte d'ancrage, pas au numéro.)
 
-- [ ] **Step 6: Vérifier la compilation (le rendu réel est testé en Task 8)**
-
-Run: `bun test apps/web/src/App.test.tsx`
-Expected: PASS (aucune régression ; les props ajoutées sont optionnelles à ce stade — voir Task 8 qui ajoute leur type. Si App.test échoue sur le type manquant, faire Task 8 dans le même lot).
-
-> **Dépendance :** les Steps 5 de cette tâche et la Task 8 modifient le contrat de props de `SessionSidebar`. Les committer ensemble si le typage l'exige (`git add` groupé au Step 5 de Task 8).
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add apps/web/src/App.tsx
-git commit -m "feat(web): App abonne le status hub et alimente la sidebar"
-```
+⚠️ **Ces props n'existent sur `SessionSidebarProps` qu'après Task 8** : ce Step SEUL ne typecheck pas. NE PAS committer ni lancer `bun test` ici — enchaîner Task 8, qui committe `App.tsx` + le composant + son test en un seul lot cohérent.
 
 ---
 
@@ -747,36 +756,47 @@ git commit -m "feat(web): App abonne le status hub et alimente la sidebar"
 **Files:**
 - Modify: `apps/web/src/components/SessionListItem.tsx`
 - Modify: `apps/web/src/components/SessionSidebar.tsx`
-- Test: `apps/web/src/components/SessionSidebar.test.tsx` (créer si absent) ou `SessionListItem.test.tsx`
+- Modify: `apps/web/src/components/SessionSidebar.test.tsx` (le fichier EXISTE — 234 lignes)
 
-- [ ] **Step 1: Écrire le test qui échoue**
+⚠️ **Contraintes du fichier de test existant** (`SessionSidebar.test.tsx`), à respecter pour ne pas casser la suite :
+1. Il a déjà un helper LOCAL `function dotState(name: string)` (ligne ~70) qui lit `data-state` sur le DOM. **Ne PAS importer un `dotState` du composant** (collision de nom). On garde `dotState` **interne** au composant (non exporté) et on teste par le RENDU, avec le helper DOM existant.
+2. Le helper `renderSidebar` (lignes ~44-58) construit un `SessionSidebarProps` complet. Comme on ajoute des props **requises** `statuses`/`waiting`, il faut leur donner un défaut dans `renderSidebar`, sinon TOUS les tests existants cessent de compiler et `SessionList` appelle `.get`/`.has` sur `undefined`.
+3. Les sessions factices existantes sont `realSession` (id `s1`, `messageCount 5`) et `draftSession` (id `d1`, draft). Réutiliser ces constantes — pas de factory `sess()`.
 
-Tester `dotState` via le rendu de la liste (le composant expose `data-state` sur `.dot`). Exemple minimal, en montant `SessionList` avec des sessions factices + maps :
+- [ ] **Step 1: Écrire les tests qui échouent**
+
+(a) Ajouter les défauts dans `renderSidebar` (après `streamingSessionId: null,`) :
 
 ```tsx
-// pseudo : monter la sidebar (ou extraire dotState en export testable).
-// Priorité attendue : streaming(vert) > waiting(bleu) > idle > done.
-// Cas :
-//  - session streaming dans `statuses`      → data-state="run"
-//  - session dans `waiting`                 → data-state="waiting"
-//  - session id === streamingSessionId      → data-state="run" (vert optimiste actif)
-//  - session avec historique, ni l'un ni l'autre → data-state="done"
-//  - draft / messageCount 0                 → data-state="idle"
+    statuses: new Map(),
+    waiting: new Set(),
 ```
 
-> Si `dotState` n'est pas exporté, l'exporter depuis `SessionSidebar.tsx` pour le tester unitairement — plus simple que de monter toute la nav. Assertion directe :
-> ```tsx
-> expect(dotState(sess({ id: 'a', messageCount: 3 }), null, new Map([['a','streaming']]), new Set())).toBe('run')
-> expect(dotState(sess({ id: 'a', messageCount: 3 }), null, new Map(), new Set(['a']))).toBe('waiting')
-> expect(dotState(sess({ id: 'a', messageCount: 3 }), 'a', new Map(), new Set())).toBe('run')
-> expect(dotState(sess({ id: 'a', messageCount: 3 }), null, new Map(), new Set())).toBe('done')
-> expect(dotState(sess({ id: 'a', isDraft: true, messageCount: 0 }), null, new Map(), new Set())).toBe('idle')
-> ```
+(b) Ajouter, dans le `describe('SessionSidebar sessions', …)`, des assertions de rendu réutilisant le helper DOM `dotState(name)` et `realSession` (`s1`) :
+
+```tsx
+  test('vert (run) quand le hub signale streaming pour la session', () => {
+    renderSidebar({ statuses: new Map([['s1', 'streaming']]) })
+    expect(dotState('Refresh token expiré')).toBe('run')
+  })
+
+  test('bleu (waiting) quand la session est en attente hors focus', () => {
+    renderSidebar({ waiting: new Set(['s1']) })
+    expect(dotState('Refresh token expiré')).toBe('waiting')
+  })
+
+  test('le vert prime le bleu (priorité run > waiting)', () => {
+    renderSidebar({ statuses: new Map([['s1', 'streaming']]), waiting: new Set(['s1']) })
+    expect(dotState('Refresh token expiré')).toBe('run')
+  })
+```
+
+(Le cas `streamingSessionId: 's1'` → `run` et les cas `done`/`idle` par défaut sont déjà couverts par le test existant lignes 75-86 — inchangés.)
 
 - [ ] **Step 2: Lancer → échec**
 
 Run: `bun test apps/web/src/components/SessionSidebar.test.tsx`
-Expected: FAIL (type `'waiting'` inexistant / signature `dotState` inchangée / export absent).
+Expected: FAIL (type `'waiting'` inexistant ; `dotState` du composant ignore `statuses`/`waiting` ; les nouveaux `data-state` ne sortent pas).
 
 - [ ] **Step 3: Implémenter**
 
@@ -793,10 +813,10 @@ Dans `SessionListItem.tsx`, étendre le type et son docblock :
 export type SessionDotState = 'run' | 'waiting' | 'idle' | 'done'
 ```
 
-Dans `SessionSidebar.tsx` : étendre `SessionSidebarProps`, threader dans `SessionList`, et réécrire `dotState` (l'exporter pour le test) :
+Dans `SessionSidebar.tsx` : importer `SessionState`, étendre `SessionSidebarProps`, threader dans `SessionList`, réécrire `dotState` (**interne, NON exporté** — pas de collision avec le helper de test) :
 
 ```ts
-import type { SessionState } from '@atelier/shared'
+import type { ProjectSummary, SessionState, SessionSummary } from '@atelier/shared'
 
 // dans SessionSidebarProps :
   /** État live par session (hub) — vert pour 'streaming'. */
@@ -806,12 +826,12 @@ import type { SessionState } from '@atelier/shared'
 ```
 
 ```tsx
-// dans SessionList({ … }) : récupérer aussi statuses, waiting, et passer :
+// dans SessionList({ …, streamingSessionId, statuses, waiting, … }) : passer les maps à dotState :
         state={dotState(session, streamingSessionId, statuses, waiting)}
 ```
 
 ```ts
-export function dotState(
+function dotState(
   session: SessionSummary,
   streamingSessionId: string | null,
   statuses: ReadonlyMap<string, SessionState>,
@@ -824,6 +844,8 @@ export function dotState(
   return 'done'
 }
 ```
+
+> `SessionList` reçoit tout `SessionSidebarProps` (spread `{...props}` depuis `SessionSidebar`), donc `statuses`/`waiting` y arrivent déjà — il suffit de les ajouter au destructuring de `SessionList` (ligne ~128).
 
 - [ ] **Step 4: Lancer → succès**
 
