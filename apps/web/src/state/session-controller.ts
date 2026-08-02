@@ -1,7 +1,7 @@
 import type { ChatMessage, PermissionDecision, RateLimitSnapshot, ServerEvent } from '@atelier/shared'
 import { getMessages } from '../api/client'
 import { SessionSocket } from '../api/ws'
-import { initialState, reduce, reset, resolvePermission, type StreamState } from './stream-reducer'
+import { initialState, reduce, reset, resolvePermission, resolveQuestion, type StreamState } from './stream-reducer'
 
 /** The slice of SessionSocket the controller consumes — injectable in tests. */
 export type ControllerSocket = Pick<SessionSocket, 'on' | 'onReconnect' | 'send' | 'close'>
@@ -106,6 +106,9 @@ export class SessionController {
    */
   sendMessage(text: string): boolean {
     if (this.socket === null || this.resyncing) return false
+    // Taper un message pendant un QCM = y répondre en texte : dismiss d'abord
+    // (le deny dénoue le tour côté serveur), le message part au prochain idle.
+    this.dismissPendingQuestions()
     this.queue.push(text)
     this.setState({ ...this.state, items: [...this.state.items, { kind: 'user', text, queued: true }] })
     this.pump()
@@ -136,6 +139,24 @@ export class SessionController {
     if (this.socket === null) return
     this.socket.send({ type: 'permission_response', requestId, decision })
     this.setState(resolvePermission(this.state, requestId, decision))
+  }
+
+  answerQuestion(requestId: string, answers: Record<string, string>): void {
+    if (this.socket === null) return
+    this.socket.send({ type: 'question_response', requestId, answers })
+    this.setState(resolveQuestion(this.state, requestId, answers))
+  }
+
+  /** Dismiss (answers ABSENT sur le fil) de tous les QCM pendants — « répondu en texte ». */
+  private dismissPendingQuestions(): void {
+    let state = this.state
+    for (const item of this.state.items) {
+      if (item.kind === 'question' && item.resolved === undefined) {
+        this.socket?.send({ type: 'question_response', requestId: item.requestId })
+        state = resolveQuestion(state, item.requestId, undefined)
+      }
+    }
+    if (state !== this.state) this.setState(state)
   }
 
   /**
