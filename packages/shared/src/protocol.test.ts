@@ -3,6 +3,7 @@ import {
   DEFAULT_WIDGETS,
   isServerEvent,
   parseClientMessage,
+  parseSessionStatus,
   REPO_PATTERN,
   type ServerEvent,
 } from './protocol'
@@ -49,5 +50,18 @@ describe('widget contracts', () => {
     expect(REPO_PATTERN.test('no-slash')).toBe(false)
     expect(REPO_PATTERN.test('a/b/c')).toBe(false)
     expect(REPO_PATTERN.test('owner/repo?x=1')).toBe(false)
+  })
+})
+
+describe('parseSessionStatus', () => {
+  test('accepte un évènement bien formé', () => {
+    expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 's1', state: 'streaming' })))
+      .toEqual({ type: 'session_status', sessionId: 's1', state: 'streaming' })
+  })
+  test('rejette un mauvais type, un état inconnu, un sessionId non-string ou un JSON invalide', () => {
+    expect(parseSessionStatus(JSON.stringify({ type: 'status', sessionId: 's1', state: 'idle' }))).toBeNull()
+    expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 's1', state: 'busy' }))).toBeNull()
+    expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 42, state: 'idle' }))).toBeNull()
+    expect(parseSessionStatus('{not json')).toBeNull()
   })
 })

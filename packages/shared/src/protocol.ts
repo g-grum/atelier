@@ -147,6 +147,23 @@ function isRecordWithType(value: unknown, types: Set<string>): boolean {
   return typeof value === 'object' && value !== null && 'type' in value && types.has((value as { type: string }).type)
 }
 
+// ── Status hub (spec 2026-08-02) : canal WS séparé /api/sessions-status ──
+export type SessionState = 'idle' | 'streaming' | 'error'
+/** Diffusé par le hub à chaque transition d'état d'une session (et en snapshot à la connexion). Volontairement HORS de ServerEvent : le socket de session et son réducteur ne le voient jamais. */
+export type SessionStatusEvent = { type: 'session_status'; sessionId: string; state: SessionState }
+
+const SESSION_STATES = new Set<SessionState>(['idle', 'streaming', 'error'])
+
+export function parseSessionStatus(raw: string): SessionStatusEvent | null {
+  try {
+    const v = JSON.parse(raw) as Record<string, unknown>
+    if (v?.type !== 'session_status' || typeof v.sessionId !== 'string' || !SESSION_STATES.has(v.state as SessionState)) return null
+    return { type: 'session_status', sessionId: v.sessionId, state: v.state as SessionState }
+  } catch {
+    return null
+  }
+}
+
 // ── Widget dashboard (spec 2026-07-21) ──
 export type WidgetType = 'github-prs' | 'rate-limits' | 'modified-files'
 export type WidgetHeight = 'S' | 'M' | 'L'
