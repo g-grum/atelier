@@ -84,10 +84,16 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
         return (
           <fieldset key={q.question} className="q-block" disabled={disabled}>
             <div className="q-chip">{q.header}</div>
-            <div className="q-text">{q.question}</div>
+            {/* legend : associe programmatiquement la question à son groupe d'options. */}
+            <legend className="q-text">{q.question}</legend>
             <div className="q-options">
               {q.options.map((option) => {
-                const active = resolved === 'answered' ? chosen !== undefined && splitChoices(chosen).includes(option.label) : draft.selected.includes(option.label)
+                // Résolu : match exact en single-select (la valeur n'est jamais jointe) ;
+                // re-split de la jointure virgule uniquement en multiSelect.
+                const active =
+                  resolved === 'answered'
+                    ? chosen !== undefined && (q.multiSelect ? splitChoices(chosen).includes(option.label) : chosen === option.label)
+                    : draft.selected.includes(option.label)
                 return (
                   <button
                     key={option.label}
@@ -118,6 +124,7 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
               <input
                 type="text"
                 className="q-other"
+                aria-label="Réponse libre"
                 placeholder="Ta réponse…"
                 value={draft.other}
                 onChange={(e) => setDraft(q, { other: e.target.value })}

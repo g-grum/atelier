@@ -84,6 +84,9 @@ describe('QuestionPrompt', () => {
     render(<QuestionPrompt item={{ ...MONO, resolved: 'answered', answers: { 'Quelle approche ?': 'A' } }} onAnswer={mock()} />)
     for (const button of screen.getAllByRole('button')) expect((button as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('Répondu')).toBeTruthy()
+    // La réponse choisie est bien surlignée, et elle seule.
+    expect(screen.getByRole('button', { name: /la première/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: /la seconde/ }).getAttribute('aria-pressed')).toBe('false')
   })
 
   test('résolu dismissed : mention « Répondu dans le chat »', () => {
