@@ -170,7 +170,7 @@ class FixtureSocket implements ControllerSocket {
       this.clearTimers()
       this.emit({ type: 'status', sessionId: this.sessionId, state: 'idle' })
     }
-    // permission_response: the controller already resolved the item locally.
+    // permission_response, question_response: the controller already resolved the item locally.
   }
 
   close(): void {
