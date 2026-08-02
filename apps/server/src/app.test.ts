@@ -721,6 +721,22 @@ describe('createApp', () => {
     expect(res.status).not.toBe(400)
   })
 
+  // 9bis. Status hub route: receive-only, no projectId guard (unlike the
+  // per-session stream above) — any authenticated request reaches the upgrade.
+  test('GET /api/sessions-status without a token is rejected by the /api/* auth middleware', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/sessions-status')
+    expect(res.status).toBe(401)
+  })
+
+  test('GET /api/sessions-status with a valid token passes through to the upgrade', async () => {
+    const { app } = freshApp()
+    // No real Bun server here, so the upgrade itself cannot succeed — reaching
+    // past the auth middleware (anything but 401) is the point.
+    const res = await app.request('/api/sessions-status?token=test-token')
+    expect(res.status).not.toBe(401)
+  })
+
   // 10. GET/DELETE /api/rules
   test('GET /api/rules returns [] initially', async () => {
     const { app } = freshApp()
