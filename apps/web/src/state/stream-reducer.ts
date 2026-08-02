@@ -205,7 +205,7 @@ function applyStatus(state: StreamState, event: Extract<ServerEvent, { type: 'st
   return next
 }
 
-/** A tool_use / permission_request ends the current assistant text run. */
+/** A tool_use / permission_request / question_request ends the current assistant text run. */
 function closeTextRun(items: ChatItem[]): ChatItem[] {
   return items.map((item) => (item.kind === 'assistant' && item.streaming ? { ...item, streaming: false } : item))
 }
