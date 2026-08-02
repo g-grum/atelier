@@ -1,4 +1,4 @@
-import type { ChatMessage, PermissionDecision, ProposedRule, ServerEvent, ToolKind } from '@atelier/shared'
+import type { ChatMessage, PermissionDecision, ProposedRule, ServerEvent, SlashCommandInfo, ToolKind } from '@atelier/shared'
 
 export type ChatItem =
   | { kind: 'user'; text: string; /** true while the message waits in the client-side queue (sent at next idle). */ queued?: boolean }
@@ -27,6 +27,13 @@ export type StreamState = {
   status: 'idle' | 'streaming' | 'error'
   error?: { reason: string; resetAt?: string }
   modifiedFiles: Map<string, { added: number; removed: number; lastLine?: number }>
+  /**
+   * Liste poussée par le SDK (commands_changed). null = jamais reçue.
+   * Par-session et reconstruite par reset() au resync : la liste est alors
+   * perdue et l'UI retombe sur celle de react-query (clefée par projet, même
+   * origine SDK). Comportement ASSUMÉ, documenté dans la spec §5 — pas un bug.
+   */
+  commands: SlashCommandInfo[] | null
 }
 
 export function initialState(): StreamState {
@@ -34,6 +41,7 @@ export function initialState(): StreamState {
     items: [],
     status: 'idle',
     modifiedFiles: new Map(),
+    commands: null,
   }
 }
 
@@ -85,6 +93,9 @@ export function reduce(state: StreamState, event: ServerEvent): StreamState {
       // App-global plan data — surfaced through the controller's onRateLimit
       // callback (react-query cache), never part of the per-session view-model.
       return state
+    case 'commands':
+      // Le SDK REMPLACE la liste, il ne fusionne pas (contrat commands_changed).
+      return { ...state, commands: event.commands }
     case 'status':
       return applyStatus(state, event)
   }

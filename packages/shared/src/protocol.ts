@@ -90,6 +90,14 @@ export type ChatMessage =
   | { role: 'assistant'; text: string; at: string }
   | { role: 'tool'; toolUseId: string; kind: ToolKind; summary: string; ok: boolean; file?: string; line?: number; diffstat?: { added: number; removed: number }; at: string }
 
+/**
+ * Une slash command proposée à l'autocomplétion. `name` est SANS le slash
+ * initial (contrat SDK). `aliases` porte les noms courts des commandes
+ * namespacées (`superpowers:brainstorming` → `brainstorming`) : le filtrage
+ * DOIT les inclure, sinon les commandes de plugins sont introuvables.
+ */
+export type SlashCommandInfo = { name: string; description: string; argumentHint: string; aliases: string[] }
+
 // ── WS client → server ──
 /** The three answers to a permission_request — 'always' also persists an AlwaysRule. */
 export type PermissionDecision = 'allow' | 'deny' | 'always'
@@ -117,8 +125,9 @@ export type ServerEvent =
   | { type: 'usage'; sessionId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
   | { type: 'rate_limit'; sessionId: string; limit: RateLimitSnapshot }
   | { type: 'status'; sessionId: string; state: 'idle' | 'streaming' | 'error'; error?: { reason: string; resetAt?: string }; partialText?: string; mapping?: { draftId: string; sessionId: string } }
+  | { type: 'commands'; sessionId: string; commands: SlashCommandInfo[] }
 
-const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'usage', 'rate_limit', 'status'])
+const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'usage', 'rate_limit', 'status', 'commands'])
 const CLIENT_MESSAGE_TYPES = new Set(['user_message', 'permission_response', 'abort'])
 
 export function isServerEvent(value: unknown): value is ServerEvent {

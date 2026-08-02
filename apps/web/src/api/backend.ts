@@ -1,4 +1,4 @@
-import type { ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
@@ -36,6 +36,8 @@ export type Backend = {
   getPreferences: () => Promise<Preferences>
   /** Partial update of the preferences store — resolves to the merged result. */
   patchPreferences: (patch: Partial<Preferences>) => Promise<Preferences>
+  /** Slash commands du projet — alimente l'autocomplétion du composer. */
+  listCommands: (projectId: string) => Promise<SlashCommandInfo[]>
 }
 
 const realBackend: Backend = {
@@ -58,6 +60,7 @@ const realBackend: Backend = {
   getProjectGithubAccount: client.getProjectGithubAccount,
   getPreferences: client.getPreferences,
   patchPreferences: client.patchPreferences,
+  listCommands: client.listCommands,
 }
 
 /** Baseline préférences (sans clé `theme` → dark) — partagé par le fixture et les tests, façon DEFAULT_WIDGETS. */
@@ -139,6 +142,8 @@ function createFixtureBackend(): Backend {
     // No `theme` key → demo mode defaults to dark (spec: clé absente = dark).
     getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
+    // Demo mode: aucune sonde SDK à disposition → pas d'autocomplétion.
+    listCommands: async () => [],
   }
 }
 

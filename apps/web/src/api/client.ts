@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -163,4 +163,15 @@ export function getGithubPrs(repo: string, limit: number): Promise<PrSummary[]> 
 /** The GitHub account the given project pushes as (derived server-side from its origin remote). */
 export function getProjectGithubAccount(projectId: string): Promise<ProjectGithubAccount> {
   return request<ProjectGithubAccount>('GET', `/projects/${encodeURIComponent(projectId)}/github-account`)
+}
+
+// ── Slash commands ──
+
+/**
+ * Slash commands disponibles dans le projet. Le serveur ouvre une sonde SDK
+ * jetable pour les découvrir : ~3,8 s au premier appel, d'où le cache long
+ * côté appelant (react-query).
+ */
+export function listCommands(projectId: string): Promise<SlashCommandInfo[]> {
+  return request<SlashCommandInfo[]>('GET', `/projects/${encodeURIComponent(projectId)}/commands`)
 }

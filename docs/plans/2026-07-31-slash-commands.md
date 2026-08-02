@@ -32,7 +32,7 @@ apps/web/src/state/stream-reducer.ts         # + commands: SlashCommandInfo[] | 
 apps/web/src/api/client.ts                   # + listCommands
 apps/web/src/api/backend.ts                  # + listCommands dans Backend + fixture
 apps/web/src/components/Composer.tsx         # + prop commands, popover, clavier
-apps/web/src/App.tsx                         # rend <Composer> (:423) — câble react-query → prop
+apps/web/src/App.tsx                         # rend <Composer> (:432) — câble react-query → prop
 apps/web/src/App.test.tsx                    # fakeBackend() gagne listCommands
 apps/web/src/styles.css                      # styles du popover
 ```
@@ -49,7 +49,7 @@ apps/web/src/styles.css                      # styles du popover
 - Modify: `packages/shared/src/protocol.ts`
 - Test: `packages/shared/src/protocol.test.ts` (créer s'il n'existe pas)
 
-- [ ] **Step 1: Écrire le test qui échoue.** Dans `protocol.test.ts` :
+- [x] **Step 1: Écrire le test qui échoue.** Dans `protocol.test.ts` :
 
 ```ts
 import { describe, expect, test } from 'bun:test'
@@ -62,12 +62,12 @@ describe('isServerEvent', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec**
+- [x] **Step 2: Lancer le test, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test packages/shared/src/protocol.test.ts`
 Expected: FAIL — `isServerEvent` renvoie `false` (`'commands'` absent du `Set`).
 
-- [ ] **Step 3: Implémenter.** Dans `protocol.ts`, après `ChatMessage` (~ligne 89) :
+- [x] **Step 3: Implémenter.** Dans `protocol.ts`, après `ChatMessage` (~ligne 89) :
 
 ```ts
 /**
@@ -91,12 +91,12 @@ Et — **le piège** — ajouter `'commands'` au `Set` ligne 119 :
 const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'usage', 'rate_limit', 'status', 'commands'])
 ```
 
-- [ ] **Step 4: Lancer le test, vérifier le succès**
+- [x] **Step 4: Lancer le test, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test packages/shared/src/protocol.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/shared/src/protocol.ts packages/shared/src/protocol.test.ts
@@ -115,7 +115,7 @@ Couture testable pour un contrat de frontière que le mock ne voit pas — même
 - Modify: `apps/server/src/sdk/sdk-client.ts`
 - Test: `apps/server/src/sdk/sdk-client.test.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue.** Ajouter à `sdk-client.test.ts` :
+- [x] **Step 1: Écrire le test qui échoue.** Ajouter à `sdk-client.test.ts` :
 
 ```ts
 import { toSlashCommandInfo } from './sdk-client'
@@ -137,12 +137,12 @@ describe('toSlashCommandInfo', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec**
+- [x] **Step 2: Lancer le test, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/src/sdk/sdk-client.test.ts`
 Expected: FAIL — `toSlashCommandInfo` n'est pas exporté.
 
-- [ ] **Step 3: Implémenter.** Dans `sdk-client.ts`, section Helpers :
+- [x] **Step 3: Implémenter.** Dans `sdk-client.ts`, section Helpers :
 
 ```ts
 /**
@@ -165,12 +165,12 @@ export function toSlashCommandInfo(commands: readonly SlashCommand[]): SlashComm
 
 Ajouter `SlashCommand` à l'import du SDK (ligne 4-13) et `SlashCommandInfo` à l'import `@atelier/shared` (ligne 14).
 
-- [ ] **Step 4: Lancer le test, vérifier le succès**
+- [x] **Step 4: Lancer le test, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/src/sdk/sdk-client.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/sdk/sdk-client.ts apps/server/src/sdk/sdk-client.test.ts
@@ -190,7 +190,7 @@ git commit -m "feat(server): mapping pur SlashCommand vers SlashCommandInfo
 
 ⚠️ **La vraie sonde n'est pas testable en unitaire** (elle lance le CLI). Le test couvre le mock et le contrat ; la sonde réelle a été validée par spike (voir spec § Spikes).
 
-- [ ] **Step 1: Écrire le test qui échoue.** Créer `sdk-client.mock.test.ts` :
+- [x] **Step 1: Écrire le test qui échoue.** Créer `sdk-client.mock.test.ts` :
 
 ```ts
 import { describe, expect, test } from 'bun:test'
@@ -209,19 +209,19 @@ describe('MockSdkClient.listCommands', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec**
+- [x] **Step 2: Lancer le test, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/src/sdk/sdk-client.mock.test.ts`
 Expected: FAIL — `listCommands` n'existe pas sur `MockSdkClient`.
 
-- [ ] **Step 3a: Étendre l'interface.** Dans `sdk-client.ts`, dans `interface SdkClient` (ligne 44-50) :
+- [x] **Step 3a: Étendre l'interface.** Dans `sdk-client.ts`, dans `interface SdkClient` (ligne 44-50) :
 
 ```ts
   /** Liste des slash commands du répertoire. Ne jette jamais — [] en cas d'échec. */
   listCommands(cwd: string): Promise<SlashCommandInfo[]>
 ```
 
-- [ ] **Step 3b: Implémenter la sonde** dans `AgentSdkClient` :
+- [x] **Step 3b: Implémenter la sonde** dans `AgentSdkClient` :
 
 ```ts
   /**
@@ -262,7 +262,7 @@ Expected: FAIL — `listCommands` n'existe pas sur `MockSdkClient`.
   }
 ```
 
-- [ ] **Step 3c: Étendre le mock.** Dans `sdk-client.mock.ts` : ajouter `commands?: SlashCommandInfo[]` à `MockOptions`, le champ privé `private readonly commands: SlashCommandInfo[]`, l'affectation dans le constructeur (`commands = []` par défaut), et :
+- [x] **Step 3c: Étendre le mock.** Dans `sdk-client.mock.ts` : ajouter `commands?: SlashCommandInfo[]` à `MockOptions`, le champ privé `private readonly commands: SlashCommandInfo[]`, l'affectation dans le constructeur (`commands = []` par défaut), et :
 
 ```ts
   async listCommands(cwd: string): Promise<SlashCommandInfo[]> {
@@ -271,12 +271,12 @@ Expected: FAIL — `listCommands` n'existe pas sur `MockSdkClient`.
   }
 ```
 
-- [ ] **Step 4: Lancer le test, vérifier le succès**
+- [x] **Step 4: Lancer le test, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/src/sdk/`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/sdk/
@@ -294,7 +294,7 @@ git commit -m "feat(server): sonde de découverte listCommands
 - Create: `apps/server/src/commands/commands-routes.test.ts`
 - Modify: `apps/server/src/app.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue.** Créer `commands-routes.test.ts`. Le helper reprend la construction `AppData` sur tmpdir d'`app.test.ts:20-22`, en montant la route seule (pas `createApp`) — donc **pas de header d'auth** à fournir, le middleware token vit dans `createApp` :
+- [x] **Step 1: Écrire le test qui échoue.** Créer `commands-routes.test.ts`. Le helper reprend la construction `AppData` sur tmpdir d'`app.test.ts:20-22`, en montant la route seule (pas `createApp`) — donc **pas de header d'auth** à fournir, le middleware token vit dans `createApp` :
 
 ```ts
 import { describe, expect, test } from 'bun:test'
@@ -340,12 +340,12 @@ describe('GET /projects/:id/commands', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec**
+- [x] **Step 2: Lancer le test, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/src/commands/`
 Expected: FAIL — module introuvable.
 
-- [ ] **Step 3: Implémenter.** Créer `commands-routes.ts` :
+- [x] **Step 3: Implémenter.** Créer `commands-routes.ts` :
 
 ```ts
 import { Hono } from 'hono'
@@ -381,7 +381,7 @@ export function commandsRoutes(data: AppData, sdk: SdkClient): Hono {
 }
 ```
 
-- [ ] **Step 4a: Monter la route.** Dans `app.ts` (ligne 37-39) :
+- [x] **Step 4a: Monter la route.** Dans `app.ts` (ligne 37-39) :
 
 ```ts
   api.route('/', commandsRoutes(data, sdk))
@@ -389,12 +389,12 @@ export function commandsRoutes(data: AppData, sdk: SdkClient): Hono {
 
 `sdk` est déjà un paramètre de `createApp` (ligne 19) — ne pas modifier la signature.
 
-- [ ] **Step 4b: Lancer les tests, vérifier le succès**
+- [x] **Step 4b: Lancer les tests, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/`
 Expected: PASS (aucune régression)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/commands/ apps/server/src/app.ts
@@ -415,13 +415,13 @@ git commit -m "feat(server): route GET /projects/:id/commands
 
 ⚠️ **On n'ajoute PAS de sonde `supportedCommands()` à l'init du tour** : le bloc `init` (`sdk-client.ts:104-121`) `await`e déjà la sonde `usage` avant le premier delta ; une seconde sonde séquentielle de ~2 s retarderait le premier token de **chaque** tour. La liste initiale vient de la route (Task 1.4).
 
-- [ ] **Step 1: Étendre le type.** Dans `SdkTurnEvent` (`sdk-client.ts:21-29`) :
+- [x] **Step 1: Étendre le type.** Dans `SdkTurnEvent` (`sdk-client.ts:21-29`) :
 
 ```ts
   | { type: 'commands'; commands: SlashCommandInfo[] }
 ```
 
-- [ ] **Step 2: Implémenter l'émission.** Dans la boucle `for await` de `runTurn`, **après** le bloc `system`/`init` existant :
+- [x] **Step 2: Implémenter l'émission.** Dans la boucle `for await` de `runTurn`, **après** le bloc `system`/`init` existant :
 
 ```ts
         // SDKCommandsChangedMessage (sdk.d.ts:2782) : la liste a changé en cours
@@ -433,17 +433,17 @@ git commit -m "feat(server): route GET /projects/:id/commands
         }
 ```
 
-- [ ] **Step 3: Vérifier le typage**
+- [x] **Step 3: Vérifier le typage**
 
 Run: `cd apps/server && /Users/demo/.bun/bin/bunx tsc --noEmit; cd ../..`
 Expected: aucune erreur (le narrowing marche : `SDKCommandsChangedMessage` est dans l'union `SDKMessage`, `sdk.d.ts:3736`).
 
-- [ ] **Step 4: Lancer la suite serveur**
+- [x] **Step 4: Lancer la suite serveur**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/sdk/sdk-client.ts
@@ -460,7 +460,7 @@ git commit -m "feat(server): événement de tour commands sur commands_changed
 - Modify: `apps/server/src/stream/session-stream.ts`
 - Test: `apps/server/src/stream/session-stream.test.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue.** Dans `session-stream.test.ts`, en réutilisant les helpers déjà présents en tête de fichier (`setup` :16, `makeSink` :28, `clientMessage` :40, `tick` :14) :
+- [x] **Step 1: Écrire le test qui échoue.** Dans `session-stream.test.ts`, en réutilisant les helpers déjà présents en tête de fichier (`setup` :16, `makeSink` :28, `clientMessage` :40, `tick` :14) :
 
 ```ts
 test('diffuse l’événement commands avec le sessionId', async () => {
@@ -477,12 +477,12 @@ test('diffuse l’événement commands avec le sessionId', async () => {
 })
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec**
+- [x] **Step 2: Lancer le test, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/src/stream/session-stream.test.ts`
 Expected: FAIL — aucun événement `commands` diffusé.
 
-- [ ] **Step 3: Implémenter.** Dans `handleTurnEvent` (`session-stream.ts:177`), ajouter un `case` :
+- [x] **Step 3: Implémenter.** Dans `handleTurnEvent` (`session-stream.ts:177`), ajouter un `case` :
 
 ```ts
       case 'commands':
@@ -492,12 +492,12 @@ Expected: FAIL — aucun événement `commands` diffusé.
 
 `this.sessionId()` (`session-stream.ts:292`) est l'accesseur privé utilisé **tel quel** par tous les `case` voisins (`tool_use` :188, `tool_result` :196, `usage` :212, `rate_limit` :230) — il résout l'id draft → id SDK après matérialisation. N'en invente pas un autre.
 
-- [ ] **Step 4: Lancer les tests, vérifier le succès**
+- [x] **Step 4: Lancer les tests, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/server/`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/stream/session-stream.ts apps/server/src/stream/session-stream.test.ts
@@ -518,7 +518,7 @@ Toute la logique de matching vit ici pour être testée sans DOM.
 - Create: `apps/web/src/lib/slash-commands.ts`
 - Create: `apps/web/src/lib/slash-commands.test.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue.**
+- [x] **Step 1: Écrire le test qui échoue.**
 
 ```ts
 import { describe, expect, test } from 'bun:test'
@@ -572,12 +572,12 @@ describe('completeCommand', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec**
+- [x] **Step 2: Lancer le test, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/lib/slash-commands.test.ts`
 Expected: FAIL — module introuvable.
 
-- [ ] **Step 3: Implémenter.**
+- [x] **Step 3: Implémenter.**
 
 ```ts
 import type { SlashCommandInfo } from '@atelier/shared'
@@ -615,12 +615,12 @@ export function completeCommand(text: string, name: string): string {
 }
 ```
 
-- [ ] **Step 4: Lancer le test, vérifier le succès**
+- [x] **Step 4: Lancer le test, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/lib/slash-commands.test.ts`
 Expected: PASS (11 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/lib/slash-commands.ts apps/web/src/lib/slash-commands.test.ts
@@ -637,7 +637,7 @@ git commit -m "feat(web): module pur de matching des slash commands
 - Modify: `apps/web/src/state/stream-reducer.ts`
 - Test: `apps/web/src/state/stream-reducer.test.ts`
 
-- [ ] **Step 1: Écrire le test qui échoue.**
+- [x] **Step 1: Écrire le test qui échoue.**
 
 ```ts
 test('stocke la liste sur l’événement commands', () => {
@@ -655,12 +655,12 @@ test('revient à null au resync (reset)', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer le test, vérifier l'échec**
+- [x] **Step 2: Lancer le test, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/state/stream-reducer.test.ts`
 Expected: FAIL — `commands` n'existe pas sur `StreamState`.
 
-- [ ] **Step 3: Implémenter.** Dans `StreamState` (ligne 25-30) :
+- [x] **Step 3: Implémenter.** Dans `StreamState` (ligne 25-30) :
 
 ```ts
   /**
@@ -681,12 +681,12 @@ Dans `initialState()` : `commands: null,`. Dans `reduce`, un `case` :
 
 `reset()` appelle déjà `initialState()` → `null` gratuitement.
 
-- [ ] **Step 4: Lancer le test, vérifier le succès**
+- [x] **Step 4: Lancer le test, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/state/`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/state/stream-reducer.ts apps/web/src/state/stream-reducer.test.ts
@@ -703,7 +703,7 @@ git commit -m "feat(web): état commands dans le stream-reducer
 - Modify: `apps/web/src/api/client.ts`
 - Modify: `apps/web/src/api/backend.ts`
 
-- [ ] **Step 1: Implémenter le client.** Dans `client.ts`, près de `getProjectGithubAccount` (ligne 164) :
+- [x] **Step 1: Implémenter le client.** Dans `client.ts`, près de `getProjectGithubAccount` (ligne 164) :
 
 ```ts
 /** Slash commands disponibles dans le projet (sonde SDK côté serveur, ~3,8 s au premier appel). */
@@ -712,7 +712,7 @@ export function listCommands(projectId: string): Promise<SlashCommandInfo[]> {
 }
 ```
 
-- [ ] **Step 2: Étendre `Backend`.** Dans `backend.ts`, dans le type `Backend` :
+- [x] **Step 2: Étendre `Backend`.** Dans `backend.ts`, dans le type `Backend` :
 
 ```ts
   /** Slash commands du projet — alimente l'autocomplétion du composer. */
@@ -729,17 +729,17 @@ Ajouter aussi `SlashCommandInfo` à l'import type en tête de `client.ts` **et**
 
 ⚠️ Le site 3 a un type de retour explicite `Backend` : l'oublier casse **toute** la suite `App.test.tsx` au typecheck. (`state/fixtures.ts` ne contient que des données brutes, aucun objet `Backend` — rien à y faire.)
 
-- [ ] **Step 3: Vérifier le typage**
+- [x] **Step 3: Vérifier le typage**
 
 Run: `cd apps/web && /Users/demo/.bun/bin/bunx tsc --noEmit; cd ../..`
 Expected: aucune erreur. Toute erreur « property listCommands is missing » désigne une fixture oubliée — la compléter.
 
-- [ ] **Step 4: Lancer la suite web**
+- [x] **Step 4: Lancer la suite web**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/api/
@@ -757,13 +757,13 @@ git commit -m "feat(web): listCommands dans la couche API
 - Modify: `apps/web/src/components/Composer.test.tsx`
 - Modify: `apps/web/src/styles.css`
 
-- [ ] **Step 1a: Étendre le helper existant.** `renderComposer` (`Composer.test.tsx:10-26`) construit un `ComposerProps` complet ; la prop `commands` devenant requise, **les 100 % des tests existants cassent au typage** sans un défaut. Ajouter dans l'objet `props`, avant le spread `...overrides` :
+- [x] **Step 1a: Étendre le helper existant.** `renderComposer` (`Composer.test.tsx:10-26`) construit un `ComposerProps` complet ; la prop `commands` devenant requise, **les 100 % des tests existants cassent au typage** sans un défaut. Ajouter dans l'objet `props`, avant le spread `...overrides` :
 
 ```ts
     commands: [],
 ```
 
-- [ ] **Step 1b: Écrire les tests qui échouent.** Ajouter à `Composer.test.tsx` :
+- [x] **Step 1b: Écrire les tests qui échouent.** Ajouter à `Composer.test.tsx` :
 
 ```ts
 const CMDS = [
@@ -815,12 +815,12 @@ Cas à couvrir (un `it` par ligne) :
 11. prop `commands` vide ⇒ **jamais** de popover
 12. **Shift+Enter popover ouvert insère une nouvelle ligne** — ne complète pas, n'envoie pas (`onSend` non appelé, la valeur n'est pas devenue `/review `)
 
-- [ ] **Step 2: Lancer les tests, vérifier l'échec**
+- [x] **Step 2: Lancer les tests, vérifier l'échec**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/components/Composer.test.tsx`
 Expected: FAIL sur les nouveaux cas.
 
-- [ ] **Step 3: Implémenter.** Dans `Composer.tsx` :
+- [x] **Step 3: Implémenter.** Dans `Composer.tsx` :
 
 - Ajouter à `ComposerProps` :
 
@@ -865,12 +865,12 @@ if (open && !event.metaKey && !event.shiftKey) {
   `<ul role="listbox">` + `<li role="option" aria-selected={i === active}>` avec `name`, `description`, et `argumentHint` **seulement s'il est non vide**. `onMouseDown` (pas `onClick` — `onClick` arriverait après le blur) déclenche la même complétion. `scrollIntoView` sur l'option active au changement de `active`.
 - **Popover écrit à la main** : `components/ui/` n'a pas de primitive listbox (button, dialog, dropdown-menu, input, sonner, tooltip seulement).
 
-- [ ] **Step 4: Lancer les tests, vérifier le succès**
+- [x] **Step 4: Lancer les tests, vérifier le succès**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/components/Composer.test.tsx`
 Expected: PASS (12 nouveaux cas)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/src/components/Composer.tsx apps/web/src/components/Composer.test.tsx apps/web/src/styles.css
@@ -884,14 +884,14 @@ git commit -m "feat(web): autocomplétion des slash commands dans le composer
 ### Task 3.5: Câblage final
 
 **Files:**
-- Modify: `apps/web/src/App.tsx` (~ligne 423 — `<Composer>` y est rendu **en frère** de `<ChatView>`, pas à l'intérieur)
+- Modify: `apps/web/src/App.tsx` (ligne 432 — `<Composer>` y est rendu **en frère** de `<ChatView>`, pas à l'intérieur)
 
-- [ ] **Step 1: Confirmer le point de rendu**
+- [x] **Step 1: Confirmer le point de rendu**
 
 Run: `grep -rn "<Composer" apps/web/src`
 Expected: une seule occurrence, dans `App.tsx`.
 
-- [ ] **Step 2: Câbler.** Dans le parent : `useQuery` sur `['commands', projectId]` → `backend.listCommands(projectId)`, avec `staleTime: Infinity` (la sonde coûte ~3,8 s ; la liste ne bouge quasiment jamais) et `enabled` seulement si `projectId` est défini. Puis :
+- [x] **Step 2: Câbler.** Dans le parent : `useQuery` sur `['commands', projectId]` → `backend.listCommands(projectId)`, avec `staleTime: Infinity` (la sonde coûte ~3,8 s ; la liste ne bouge quasiment jamais) et `enabled` seulement si `projectId` est défini. Puis :
 
 ```tsx
 commands={state.commands ?? restCommands ?? []}
@@ -899,12 +899,12 @@ commands={state.commands ?? restCommands ?? []}
 
 Précédence **`wsCommands ?? restCommands`** (spec §5) : les deux viennent du même producteur (le SDK), le WS est juste plus frais — aucune fusion.
 
-- [ ] **Step 3: Vérifier le typage**
+- [x] **Step 3: Vérifier le typage**
 
 Run: `cd apps/web && /Users/demo/.bun/bin/bunx tsc --noEmit; cd ../..`
 Expected: aucune erreur
 
-- [ ] **Step 4: Gate complet**
+- [x] **Step 4: Gate complet**
 
 ```bash
 /Users/demo/.bun/bin/bun test
@@ -915,7 +915,7 @@ cd apps/desktop && /Users/demo/.bun/bin/bunx tsc --noEmit; cd ../..
 
 Expected: **≥ 484 + nouveaux tests**, 0 fail, tsc propre partout.
 
-- [ ] **Step 5: Vérification manuelle (obligatoire — aucun test ne couvre la vraie sonde)**
+- [ ] **Step 5: Vérification manuelle (obligatoire — aucun test ne couvre la vraie sonde)** — `bun run build:web` OK ; le passage en UI reste à faire par un humain (non exécutable en headless).
 
 ```bash
 /Users/demo/.bun/bin/bun run build:web
@@ -923,7 +923,7 @@ Expected: **≥ 484 + nouveaux tests**, 0 fail, tsc propre partout.
 
 Puis recharger Atelier (le serveur sert `apps/web/dist` depuis le disque) et vérifier : taper `/` ouvre le popover ; `/brain` trouve `superpowers:brainstorming` par alias ; `Enter` complète ; envoyer `/review` produit bien une réponse expansée par le CLI. Sans cette étape, rien ne prouve que la sonde marche hors spike.
 
-- [ ] **Step 6: Commit final** (avec les cases de CE fichier cochées)
+- [x] **Step 6: Commit final** (avec les cases de CE fichier cochées)
 
 ```bash
 git add -A

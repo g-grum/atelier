@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, mapUsageWindows, type RunTurnParams } from './sdk-client'
+import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, mapUsageWindows, toSlashCommandInfo, type RunTurnParams } from './sdk-client'
 
 function makeRunTurnParams(overrides: Partial<RunTurnParams> = {}): RunTurnParams {
   return {
@@ -218,5 +218,21 @@ describe('mapSessionMessages', () => {
     expect(out).toHaveLength(2)
     expect(out[0]).toMatchObject({ role: 'assistant', text: 'here is the plan' })
     expect(out[1]).toMatchObject({ role: 'tool', toolUseId: 'tu-1' })
+  })
+})
+
+describe('toSlashCommandInfo', () => {
+  test('mappe les champs et normalise aliases absent en tableau vide', () => {
+    expect(toSlashCommandInfo([
+      { name: 'review', description: 'Review (project)', argumentHint: '<file>' },
+      { name: 'superpowers:brainstorming', description: '(superpowers) …', argumentHint: '', aliases: ['brainstorming'] },
+    ] as never)).toEqual([
+      { name: 'review', description: 'Review (project)', argumentHint: '<file>', aliases: [] },
+      { name: 'superpowers:brainstorming', description: '(superpowers) …', argumentHint: '', aliases: ['brainstorming'] },
+    ])
+  })
+
+  test('remplace les champs manquants par des chaînes vides', () => {
+    expect(toSlashCommandInfo([{ name: 'x' }] as never)).toEqual([{ name: 'x', description: '', argumentHint: '', aliases: [] }])
   })
 })
