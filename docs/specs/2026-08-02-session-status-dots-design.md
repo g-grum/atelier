@@ -67,7 +67,9 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
    - un `Set<sessionId>` des complétions **non acquittées**.
    ⚠️ **Le bleu est déclenché par une *transition*, jamais par un état absolu.**
    Le hub émet un snapshot initial listant potentiellement beaucoup de sessions
-   déjà `idle` (`session-stream.ts:296-301`) : celles-ci **ne doivent pas**
+   déjà `idle` (surface *nouvelle* — multi-session ; `session-stream.ts:296-301`
+   n'en est que la *forme* de payload par session, pas une liste existante) :
+   celles-ci **ne doivent pas**
    s'allumer en bleu. Condition stricte : l'état **précédemment connu** de la
    session était `streaming`, et le nouveau ne l'est plus. Le snapshot initial
    pose l'état de base sans jamais alimenter `waiting`.
@@ -105,7 +107,7 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
 - **Nouvelle surface** : un flux diffusant `{ type: 'session_status', sessionId, state }`
   à chaque transition d'état d'un `SessionStream`. Le hub **réutilise la forme du
   payload `status` existant** (`state: 'idle' | 'streaming' | 'error'`,
-  `packages/shared/src/protocol.ts:112-119`) sous un nouvel événement/transport
+  `packages/shared/src/protocol.ts:119`) sous un nouvel événement/transport
   dédié — le nom distinct (`session_status` vs `status`) marque juste qu'il ne
   passe pas par le socket de session actif. Plus un **snapshot initial**
   à la connexion (état courant de toutes les sessions au registre — même patron
@@ -141,26 +143,27 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
   (`SessionSidebar.tsx:146-150`) :
   ```
   // vert : hub dit streaming, OU la session active stream de façon optimiste
-  const activeStreaming = session.id === selected?.sessionId && stream.status === 'streaming'
-  if (statuses.get(session.id) === 'streaming' || activeStreaming) return 'run'
+  if (statuses.get(session.id) === 'streaming' || session.id === streamingSessionId) return 'run'
   if (waiting.has(session.id)) return 'waiting'                    // bleu
   if (session.isDraft || session.messageCount === 0) return 'idle'
   return 'done'
   ```
-  ⚠️ **Vert optimiste de la session active.** Aujourd'hui `stream.status`
-  bascule à `'streaming'` **optimistiquement** dès l'envoi, dans `pump()`
-  (`session-controller.ts:132`), avant confirmation serveur. Le hub, lui, ne
-  bascule qu'à la première transition serveur. Pour ne pas régresser la
-  réactivité du vert sur la session focalisée, on **combine** les deux sources
-  (`|| activeStreaming` ci-dessus) : la session active reste pilotée par son
+  ⚠️ **Vert optimiste de la session active — on garde `streamingSessionId`.**
+  Aujourd'hui `stream.status` bascule à `'streaming'` **optimistiquement** dès
+  l'envoi, dans `pump()` (`session-controller.ts:132`), avant confirmation
+  serveur ; `App.tsx:357` en dérive déjà `streamingSessionId = stream.status ===
+  'streaming' ? selected.sessionId : null` — c'est **exactement** le signal de
+  vert optimiste voulu. Plutôt que de retirer cette prop et re-threader
+  `selected` + `stream.status` dans `SessionSidebar`, on la **conserve** et on
+  la combine avec le hub (`|| session.id === streamingSessionId`). Moins de
+  churn, même comportement : la session active reste pilotée par son
   `SessionController`, les sessions de fond par le hub.
   La pastille se rend déjà en `SessionListItem.tsx:32`
   (`<span className="dot" data-state={state} …/>`) — aucun nouveau markup.
-  ⚠️ **Recâblage du call-site** : `dotState()` prend aujourd'hui
-  `streamingSessionId` (prop threadée depuis `App.tsx:357`) ; la nouvelle
-  signature lit les maps `statuses` / `waiting`. Le plan doit expliciter le
-  remplacement de la prop `streamingSessionId` de `SessionSidebar` par ces
-  deux sources et le retrait de la dérivation `App.tsx:357`.
+  ⚠️ **Recâblage du call-site** : `dotState()` reçoit aujourd'hui la seule prop
+  `streamingSessionId` ; la nouvelle signature ajoute les deux maps du hub
+  (`statuses` / `waiting`) **sans retirer** `streamingSessionId`. `App.tsx:357`
+  reste inchangé.
 - **CSS** : ajouter `.dot[data-state='waiting']` (bleu) dans
   `apps/web/src/styles.css` près des variantes existantes (209-212). Le vert
   garde son pulse (`styles.css:427-431`, respecte `prefers-reduced-motion`) ;
