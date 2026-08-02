@@ -25,6 +25,7 @@ export type SdkTurnEvent =
   | { type: 'tool_result'; toolUseId: string; ok: boolean; summary: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
   | { type: 'rate_limit'; window: RateLimitWindow; utilization: number; status: 'allowed' | 'allowed_warning' | 'rejected'; resetsAt?: string }
+  | { type: 'commands'; commands: SlashCommandInfo[] }
   | { type: 'session_started'; sessionId: string }
   | { type: 'turn_done' }
   | { type: 'turn_error'; reason: string; resetAt?: string }
@@ -157,6 +158,14 @@ export class AgentSdkClient implements SdkClient {
           } catch {
             // Never let a usage probe break the turn.
           }
+          continue
+        }
+
+        // SDKCommandsChangedMessage (sdk.d.ts:2782) : la liste a changé en cours
+        // de session (skills découverts dynamiquement…). Le contrat SDK est
+        // explicite — le client REMPLACE sa liste, il ne fusionne pas.
+        if (msg.type === 'system' && msg.subtype === 'commands_changed') {
+          yield { type: 'commands', commands: toSlashCommandInfo(msg.commands) }
           continue
         }
 
