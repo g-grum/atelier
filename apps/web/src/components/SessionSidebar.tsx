@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ProjectSummary, SessionSummary } from '@atelier/shared'
+import type { ProjectSummary, SessionState, SessionSummary } from '@atelier/shared'
 import { basename } from '../lib/utils'
 import { SessionListItem, type SessionDotState } from './SessionListItem'
 
@@ -21,6 +21,10 @@ export type SessionSidebarProps = {
   activeSessionId: string | null
   /** The session currently streaming (the active one while status === 'streaming'). */
   streamingSessionId: string | null
+  /** État live par session (hub) — vert pour 'streaming'. */
+  statuses: ReadonlyMap<string, SessionState>
+  /** Sessions ayant fini/échoué hors focus, en attente de l'utilisateur — bleu. */
+  waiting: ReadonlySet<string>
   onSelectProject: (projectId: string) => void
   onSelect: (session: SessionSummary) => void
   onCreateDraft: () => void
@@ -125,7 +129,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
   )
 }
 
-function SessionList({ sessions, activeSessionId, streamingSessionId, onSelect, onDelete }: SessionSidebarProps) {
+function SessionList({ sessions, activeSessionId, streamingSessionId, statuses, waiting, onSelect, onDelete }: SessionSidebarProps) {
   const ordered = [...sessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   return (
     <>
@@ -134,7 +138,7 @@ function SessionList({ sessions, activeSessionId, streamingSessionId, onSelect, 
           key={session.id}
           session={session}
           active={session.id === activeSessionId}
-          state={dotState(session, streamingSessionId)}
+          state={dotState(session, streamingSessionId, statuses, waiting)}
           onSelect={() => onSelect(session)}
           onDelete={() => onDelete(session)}
         />
@@ -143,8 +147,15 @@ function SessionList({ sessions, activeSessionId, streamingSessionId, onSelect, 
   )
 }
 
-function dotState(session: SessionSummary, streamingSessionId: string | null): SessionDotState {
-  if (session.id === streamingSessionId) return 'run'
+function dotState(
+  session: SessionSummary,
+  streamingSessionId: string | null,
+  statuses: ReadonlyMap<string, SessionState>,
+  waiting: ReadonlySet<string>,
+): SessionDotState {
+  // vert : hub dit streaming OU la session active stream de façon optimiste
+  if (statuses.get(session.id) === 'streaming' || session.id === streamingSessionId) return 'run'
+  if (waiting.has(session.id)) return 'waiting'
   if (session.isDraft || session.messageCount === 0) return 'idle'
   return 'done'
 }

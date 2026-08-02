@@ -385,6 +385,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           openProjectId={projectId}
           activeSessionId={selected?.sessionId ?? null}
           streamingSessionId={stream.status === 'streaming' ? (selected?.sessionId ?? null) : null}
+          statuses={sessionStatuses.statuses}
+          waiting={sessionStatuses.waiting}
           onSelectProject={(id) => {
             // A deliberate navigation — the pending launch restore must not
             // auto-open a session behind the user's back in this project.
