@@ -306,7 +306,7 @@
   .banner .banner-btn:hover { border-color: var(--color-red); color: var(--color-red); }
 
   /* ── Composer ───────────────────────── */
-  .composer { flex-shrink: 0; padding: 14px 28px 18px; border-top: 1px solid var(--color-line); }
+  .composer { position: relative; flex-shrink: 0; padding: 14px 28px 18px; border-top: 1px solid var(--color-line); }
   .composer .box { display: flex; align-items: center; gap: 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; padding: 11px 14px; }
   .composer .box:focus-within { border-color: var(--color-indigo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-indigo) 18%, transparent); }
   .composer .box.disabled { opacity: 0.5; }
@@ -322,6 +322,15 @@
   .composer .action.stop { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
   .composer .action.stop:hover { border-color: var(--color-red); }
   .composer .action:disabled { cursor: default; }
+
+  /* Autocomplétion des slash commands — popover AU-DESSUS du champ (le composer
+     est collé en bas de la fenêtre, une liste vers le bas sortirait de l'écran). */
+  .command-popover { position: absolute; bottom: calc(100% - 6px); left: 28px; right: 28px; z-index: 20; margin: 0; padding: 4px; list-style: none; max-height: 260px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; box-shadow: 0 10px 30px color-mix(in srgb, black 22%, transparent); }
+  .command-popover li { display: flex; align-items: baseline; gap: 8px; padding: 5px 9px; border-radius: 7px; cursor: pointer; font-size: 12.5px; }
+  .command-popover li.active { background: color-mix(in srgb, var(--color-indigo) 16%, transparent); }
+  .command-popover .cmd-name { font: 600 12.5px var(--font-mono); color: var(--color-text); white-space: nowrap; }
+  .command-popover .cmd-hint { font: 11px var(--font-mono); color: var(--color-indigo); white-space: nowrap; }
+  .command-popover .cmd-desc { flex: 1; min-width: 0; color: var(--color-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Per-session permissions question — asked once, above the composer. The
      dangerous choice is red (amber stays reserved for tool permissions). */

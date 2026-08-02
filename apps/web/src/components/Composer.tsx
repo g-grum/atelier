@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import type { SlashCommandInfo } from '@atelier/shared'
+import { commandPrefix, completeCommand, matchCommands } from '../lib/slash-commands'
 import type { StreamState } from '../state/stream-reducer'
 
 export type ComposerProps = {
@@ -10,15 +12,44 @@ export type ComposerProps = {
   onSend: (text: string) => boolean
   /** Sends the abort ClientMessage — the spec's only way to stop a turn. */
   onAbort: () => void
+  /** Liste pour l'autocomplétion. Vide ⇒ aucun popover (dégradation silencieuse). */
+  commands: SlashCommandInfo[]
 }
 
 /** Growth cap (~8 lines) — beyond it the textarea scrolls internally. */
 const MAX_TEXTAREA_HEIGHT_PX = 200
 
-export function Composer({ disabled, status, onSend, onAbort }: ComposerProps) {
+export function Composer({ disabled, status, onSend, onAbort, commands }: ComposerProps) {
   const [text, setText] = useState('')
   const streaming = status === 'streaming'
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Position du curseur : le déclenchement du popover en dépend (revenir dans
+  // le premier mot rouvre l'autocomplétion, en sortir la ferme).
+  const [caret, setCaret] = useState(0)
+  const [active, setActive] = useState(0)
+  // Fermeture explicite (Esc, ou complétion qui vient d'aboutir) : sans ça le
+  // nom complété — un préfixe valide de lui-même — rouvrirait le popover.
+  const [dismissed, setDismissed] = useState(false)
+  const activeRef = useRef<HTMLLIElement>(null)
+
+  const prefix = dismissed ? null : commandPrefix(text, caret)
+  const matches = prefix === null ? [] : matchCommands(commands, prefix)
+  const open = matches.length > 0
+
+  // Garde la sélection clavier visible quand la liste dépasse la hauteur du
+  // popover. happy-dom n'implémente pas scrollIntoView — appel optionnel.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [active])
+
+  const complete = (name: string) => {
+    const next = completeCommand(text, name)
+    setText(next)
+    setCaret(next.length)
+    setDismissed(true)
+    textareaRef.current?.focus()
+  }
 
   // Autofocus when a session becomes active (fresh draft or opened session):
   // the user can start typing without clicking the textarea first. Runs only
@@ -48,6 +79,30 @@ export function Composer({ disabled, status, onSend, onAbort }: ComposerProps) {
 
   return (
     <div className="composer">
+      {open && (
+        // Popover écrit à la main : components/ui/ n'a aucune primitive listbox.
+        <ul className="command-popover" role="listbox" aria-label="Commandes disponibles">
+          {matches.map((command, index) => (
+            <li
+              key={command.name}
+              ref={index === active ? activeRef : undefined}
+              role="option"
+              aria-selected={index === active}
+              className={index === active ? 'active' : undefined}
+              // onMouseDown, pas onClick : onClick arriverait APRÈS le blur de
+              // la textarea, qui aurait déjà fermé le popover.
+              onMouseDown={(event) => {
+                event.preventDefault()
+                complete(command.name)
+              }}
+            >
+              <span className="cmd-name">/{command.name}</span>
+              {command.argumentHint !== '' && <span className="cmd-hint">{command.argumentHint}</span>}
+              <span className="cmd-desc">{command.description}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className={`box${disabled ? ' disabled' : ''}`}>
         <textarea
           ref={textareaRef}
@@ -56,8 +111,39 @@ export function Composer({ disabled, status, onSend, onAbort }: ComposerProps) {
           disabled={disabled}
           placeholder="Répondre à Claude…"
           aria-label="Répondre à Claude"
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value)
+            setCaret(event.target.selectionStart ?? 0)
+            setActive(0)
+            setDismissed(false)
+          }}
           onKeyDown={(event) => {
+            // Deux échappatoires INCONDITIONNELLES, même popover ouvert :
+            //  - ⌘↵ envoie (testé explicitement)
+            //  - Shift+Enter insère une nouvelle ligne — sans le !shiftKey, le
+            //    popover volerait le saut de ligne dès le premier mot.
+            if (open && !event.metaKey && !event.shiftKey) {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault()
+                setActive((i) => (i + 1) % matches.length)
+                return
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault()
+                setActive((i) => (i - 1 + matches.length) % matches.length)
+                return
+              }
+              if (event.key === 'Enter' || event.key === 'Tab') {
+                event.preventDefault()
+                complete(matches[active]!.name)
+                return
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setDismissed(true)
+                return
+              }
+            }
             // ⌘↵ always sends; plain Enter sends too (Shift+Enter = newline).
             if (event.key === 'Enter' && (event.metaKey || !event.shiftKey)) {
               event.preventDefault()
