@@ -47,6 +47,8 @@ export interface SdkClient {
   getSessionMessages(sessionId: string): Promise<ChatMessage[]>
   renameSession(sessionId: string, name: string): Promise<void>
   deleteSession(sessionId: string, dir: string): Promise<void>
+  /** Liste des slash commands du répertoire. Ne jette jamais — [] en cas d'échec. */
+  listCommands(cwd: string): Promise<SlashCommandInfo[]>
   runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent>
 }
 
@@ -83,6 +85,43 @@ export class AgentSdkClient implements SdkClient {
    */
   async deleteSession(sessionId: string, dir: string): Promise<void> {
     await deleteSession(sessionId, { dir })
+  }
+
+  /**
+   * Sonde jetable : `supportedCommands()` vit sur l'objet Query, qui n'existe
+   * que pendant un tour — on en ouvre donc un et on l'avorte sur `init`.
+   *
+   * Le `prompt` DOIT être une string non vide. Mesuré (spec § Spikes) : en mode
+   * streaming input, un itérable qui ne yield jamais bloque (>5 min) et un
+   * itérable vide ne produit que des `system/hook_*` — dans les deux cas
+   * l'`init` dont la sonde dépend n'arrive JAMAIS. L'abort sur `init` précède
+   * tout message assistant/result : aucun tour modèle n'aboutit et aucun
+   * transcript n'est créé.
+   *
+   * Coût ~3,8 s → le client met en cache (react-query), le serveur non.
+   */
+  async listCommands(cwd: string): Promise<SlashCommandInfo[]> {
+    const abortController = new AbortController()
+    try {
+      const q = query({
+        prompt: 'atelier: command discovery probe',
+        options: { cwd, abortController },
+      })
+      for await (const msg of q as AsyncIterable<SDKMessage>) {
+        if (msg.type === 'system' && msg.subtype === 'init') {
+          const commands = await q.supportedCommands()
+          abortController.abort()
+          return toSlashCommandInfo(commands)
+        }
+      }
+      return []
+    } catch {
+      // Ne jette jamais (politique deriveMessageCount) : l'autocomplétion est
+      // un confort, son échec ne doit rien casser.
+      return []
+    } finally {
+      abortController.abort()
+    }
   }
 
   /** SDK: query({ prompt, options }) → Query (AsyncGenerator<SDKMessage>) */

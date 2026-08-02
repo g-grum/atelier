@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@atelier/shared'
+import type { ChatMessage, SlashCommandInfo } from '@atelier/shared'
 import type { CanUseTool, RunTurnParams, SdkClient, SdkSessionInfo, SdkTurnEvent } from './sdk-client'
 
 type NeedsPermission = { type: 'needs_permission'; toolName: string; input: unknown }
@@ -8,6 +8,7 @@ type MockOptions = {
   sessions?: SdkSessionInfo[]
   messages?: ChatMessage[]
   turns?: ScriptedEvent[][]
+  commands?: SlashCommandInfo[]
 }
 
 export class MockSdkClient implements SdkClient {
@@ -16,12 +17,14 @@ export class MockSdkClient implements SdkClient {
   private readonly sessions: SdkSessionInfo[]
   private readonly messages: ChatMessage[]
   private readonly turns: ScriptedEvent[][]
+  private readonly commands: SlashCommandInfo[]
   private turnIndex = 0
 
-  constructor({ sessions = [], messages = [], turns = [] }: MockOptions = {}) {
+  constructor({ sessions = [], messages = [], turns = [], commands = [] }: MockOptions = {}) {
     this.sessions = sessions
     this.messages = messages
     this.turns = turns
+    this.commands = commands
   }
 
   async listSessions(cwd: string): Promise<SdkSessionInfo[]> {
@@ -40,6 +43,11 @@ export class MockSdkClient implements SdkClient {
 
   async deleteSession(sessionId: string, dir: string): Promise<void> {
     this.calls.push({ method: 'deleteSession', args: [sessionId, dir] })
+  }
+
+  async listCommands(cwd: string): Promise<SlashCommandInfo[]> {
+    this.calls.push({ method: 'listCommands', args: [cwd] })
+    return this.commands
   }
 
   async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
