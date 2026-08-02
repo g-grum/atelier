@@ -252,6 +252,9 @@ export function buildQueryOptions(params: RunTurnParams, abortController: AbortC
     // Le mode SDK 'bypassPermissions' n'est plus utilisé : il court-circuitait
     // canUseTool et avalait les QCM AskUserQuestion. Le skip-permissions est
     // désormais un auto-allow sélectif DANS le callback (session-stream.ts).
+    // Repli documenté (spec QCM, « Risque principal ») : restaurer
+    // `permissionMode: 'bypassPermissions'` exige AUSSI
+    // `allowDangerouslySkipPermissions: true` (flag de sécurité Zod-requis).
     // SDK CanUseTool: (toolName, input: Record<string, unknown>, options) → PermissionResult
     canUseTool: async (toolName, input) => {
       const result = await params.canUseTool(toolName, input)

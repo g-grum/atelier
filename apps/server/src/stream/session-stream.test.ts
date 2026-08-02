@@ -117,9 +117,21 @@ describe('SessionStream', () => {
       expect(ofType(events, 'permission_request')).toHaveLength(0)
 
       // ... mais le QCM remonte toujours à la UI (reste pendant)
-      void canUseTool('AskUserQuestion', VALID_INPUT)
+      const qcm = canUseTool('AskUserQuestion', VALID_INPUT)
       await tick()
       expect(ofType(events, 'question_request')).toHaveLength(1)
+      // pendant = la promesse n'a PAS settle sans réponse de la UI
+      await expect(Promise.race([qcm.then(() => 'settled'), Promise.resolve('pending')])).resolves.toBe('pending')
+    })
+
+    test('un draft bypassPermissions auto-allow aussi (résolution draft-first)', async () => {
+      const draft: Draft = { id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString(), permissionMode: 'bypassPermissions' }
+      const { registry, sdk } = setup({ draft, turns: [[{ type: 'turn_done' }]] })
+
+      registry.get('d1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      await expect(runTurnParams(sdk).canUseTool('Bash', { command: 'ls' })).resolves.toEqual({ behavior: 'allow' })
     })
 
     test("bypassPermissions n'est plus transmis au SDK", async () => {

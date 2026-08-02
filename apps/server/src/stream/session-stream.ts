@@ -1,4 +1,4 @@
-import type { PermissionRequest, ServerEvent } from '@atelier/shared'
+import type { PermissionRequest, QuestionRequest, ServerEvent } from '@atelier/shared'
 import { parseClientMessage } from '@atelier/shared'
 import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
@@ -52,7 +52,7 @@ export class SessionStream {
       this.broadcast(this.toPermissionEvent(request))
     })
     this.questions = new QuestionBroker((request) => {
-      this.broadcast({ ...request, sessionId: this.sessionId() })
+      this.broadcast(this.toQuestionEvent(request))
     })
   }
 
@@ -61,7 +61,7 @@ export class SessionStream {
     send(this.snapshot())
     // Broker state is not history — reconnect recovery depends on this re-emit.
     for (const request of this.broker.pending()) send(this.toPermissionEvent(request))
-    for (const request of this.questions.pending()) send({ ...request, sessionId: this.sessionId() })
+    for (const request of this.questions.pending()) send(this.toQuestionEvent(request))
   }
 
   onMessage(raw: string): void {
@@ -318,6 +318,10 @@ export class SessionStream {
   }
 
   private toPermissionEvent(request: PermissionRequest): ServerEvent {
+    return { ...request, sessionId: this.sessionId() }
+  }
+
+  private toQuestionEvent(request: QuestionRequest): ServerEvent {
     return { ...request, sessionId: this.sessionId() }
   }
 
