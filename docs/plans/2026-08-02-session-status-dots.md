@@ -852,7 +852,7 @@ function dotState(
 Run: `bun test apps/web/src/components/SessionSidebar.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit (groupé avec le Step 5 de Task 7 si le typage l'exige)**
+- [ ] **Step 5: Commit (inclut le JSX du Step 6 de Task 7 — un seul lot qui typecheck)**
 
 ```bash
 git add apps/web/src/components/SessionListItem.tsx apps/web/src/components/SessionSidebar.tsx apps/web/src/components/SessionSidebar.test.tsx apps/web/src/App.tsx
