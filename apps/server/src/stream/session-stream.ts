@@ -1,4 +1,4 @@
-import type { PermissionRequest, ServerEvent } from '@atelier/shared'
+import type { PermissionRequest, ServerEvent, SessionState } from '@atelier/shared'
 import { parseClientMessage } from '@atelier/shared'
 import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
@@ -15,6 +15,8 @@ type SessionStreamParams = {
   sdk: SdkClient
   /** Called when a draft materializes so the registry can re-key its singleton. */
   onRekey?: (from: string, to: string) => void
+  /** Notifié à CHAQUE transition d'état (démarrage de tour inclus) — alimente le status hub. */
+  onStatusChange?: (sessionId: string, state: SessionState) => void
 }
 
 /**
@@ -28,10 +30,11 @@ export class SessionStream {
   private readonly data: AppData
   private readonly sdk: SdkClient
   private readonly onRekey?: (from: string, to: string) => void
+  private readonly onStatusChange?: (sessionId: string, state: SessionState) => void
   private readonly broker: PermissionBroker
 
   private readonly sinks = new Set<EventSink>()
-  private state: 'idle' | 'streaming' | 'error' = 'idle'
+  private state: SessionState = 'idle'
   /** Buffer of the current in-flight assistant text run — snapshot fodder for reconnects. */
   private partialText = ''
   private lastError?: { reason: string; resetAt?: string }
@@ -39,12 +42,13 @@ export class SessionStream {
   /** Draft name awaiting renameSession — applied at turn end, once the SDK CLI has flushed the session JSONL. */
   private pendingRename: { sessionId: string; name: string } | null = null
 
-  constructor({ id, projectId, data, sdk, onRekey }: SessionStreamParams) {
+  constructor({ id, projectId, data, sdk, onRekey, onStatusChange }: SessionStreamParams) {
     this.id = id
     this.projectId = projectId
     this.data = data
     this.sdk = sdk
     this.onRekey = onRekey
+    this.onStatusChange = onStatusChange
     const projectDir = data.get().projects.find((p) => p.id === projectId)?.path ?? ''
     this.broker = new PermissionBroker(data, projectId, projectDir, (request) => {
       this.broadcast(this.toPermissionEvent(request))
@@ -99,7 +103,7 @@ export class SessionStream {
     const { projects, drafts, modelOverrides, permissionModes, preferences } = this.data.get()
     const project = projects.find((p) => p.id === this.projectId)
     if (!project) {
-      this.state = 'error'
+      this.setState('error')
       this.lastError = { reason: `unknown project: ${this.projectId}` }
       this.broadcast(this.snapshot())
       return
@@ -113,7 +117,7 @@ export class SessionStream {
     // Unanswered (null/absent) runs as 'default' — never silently dangerous.
     const permissionMode = draft?.permissionMode ?? permissionModes[resolvedId] ?? 'default'
 
-    this.state = 'streaming'
+    this.setState('streaming')
     this.partialText = ''
     this.lastError = undefined
     const abort = new AbortController()
@@ -154,7 +158,7 @@ export class SessionStream {
       // (state already 'idle'), so a user_message in that gap starts the next
       // turn — a late rejection from the drained turn must not clobber it.
       if (!abort.signal.aborted && this.turnAbort === abort) {
-        this.state = 'error'
+        this.setState('error')
         this.lastError = { reason: err instanceof Error ? err.message : String(err) }
         this.broadcast(this.snapshot())
       }
@@ -167,7 +171,7 @@ export class SessionStream {
         this.turnAbort = null
         if (this.state === 'streaming') {
           // Aborted, or the turn ended without turn_done/turn_error — settle to idle.
-          this.state = 'idle'
+          this.setState('idle')
           this.broadcast(this.snapshot())
         }
       }
@@ -243,7 +247,7 @@ export class SessionStream {
         // deferred rename now, before the idle settle, so a sessions-list
         // refetch triggered by the idle status already sees the new name.
         await this.applyPendingRename()
-        this.state = 'idle'
+        this.setState('idle')
         this.broadcast(this.snapshot())
         return
       case 'turn_error':
@@ -251,7 +255,7 @@ export class SessionStream {
         // (the SDK query rejects with an AbortError, converted downstream) —
         // that is a normal Stop, not an error; finally settles the state to idle.
         if (signal.aborted) return
-        this.state = 'error'
+        this.setState('error')
         this.lastError = event.resetAt !== undefined ? { reason: event.reason, resetAt: event.resetAt } : { reason: event.reason }
         this.broadcast(this.snapshot())
         return
@@ -265,6 +269,11 @@ export class SessionStream {
     // both ids resolve to sdkSessionId, so a stale draft-id key would make every
     // future lookup miss and mint a duplicate stream.
     this.onRekey?.(draftId, sdkSessionId)
+    // Re-emits under the SDK id. NB: the `streaming` emission under the DRAFT id (line ~120)
+    // is not retracted → a stale `draftId → streaming` entry may linger in the client's `statuses`.
+    // Harmless: the `mapping` remap removes the draft from the session list, so it never renders
+    // nor transitions to `waiting`; any new hub connection snapshots the re-keyed `streams` map cleanly.
+    this.onStatusChange?.(sdkSessionId, this.state)
     // The rename itself must WAIT for turn end: at session_started the SDK CLI
     // has not yet flushed the session JSONL to ~/.claude/projects, so renaming
     // here throws "Session not found in any project directory" (observed live).
@@ -296,6 +305,17 @@ export class SessionStream {
   /** Events are stamped with the resolved id — after materialization the SDK id. */
   private sessionId(): string {
     return this.data.resolveSessionId(this.id)
+  }
+
+  /** État live courant — lu par le registre pour le snapshot du hub. */
+  get currentState(): SessionState {
+    return this.state
+  }
+
+  /** Unique point de mutation de `state` : notifie le hub à chaque transition. */
+  private setState(next: SessionState): void {
+    this.state = next
+    this.onStatusChange?.(this.sessionId(), next)
   }
 
   private snapshot(): ServerEvent {

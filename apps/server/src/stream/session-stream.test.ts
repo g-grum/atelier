@@ -6,7 +6,7 @@ import type { ServerEvent } from '@atelier/shared'
 import type { RunTurnParams, SdkTurnEvent } from '../sdk/sdk-client'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
 import { AppData, type Draft } from '../store/app-data'
-import { SessionStreamRegistry } from './session-stream'
+import { SessionStream, SessionStreamRegistry } from './session-stream'
 
 type Turns = NonNullable<ConstructorParameters<typeof MockSdkClient>[0]>['turns']
 
@@ -57,6 +57,29 @@ describe('SessionStream', () => {
 
     expect(events).toEqual([{ type: 'status', sessionId: 's1', state: 'idle' }])
     expect(Object.keys(events[0]!)).not.toContain('partialText')
+  })
+
+  // 1bis-a. onStatusChange hook — feeds the future status hub
+  test('émet chaque transition d’état via onStatusChange (streaming au démarrage, idle en fin)', async () => {
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new MockSdkClient({ turns: [[{ type: 'turn_done' }]] })
+    const states: Array<{ sessionId: string; state: string }> = []
+    const stream = new SessionStream({
+      id: 's1',
+      projectId: 'p1',
+      data,
+      sdk,
+      onStatusChange: (sessionId, state) => states.push({ sessionId, state }),
+    })
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'hi' }))
+    await tick()
+
+    expect(states.map((s) => s.state)).toEqual(['streaming', 'idle'])
   })
 
   // 1bis. Per-session permission mode → SDK bypass flag
