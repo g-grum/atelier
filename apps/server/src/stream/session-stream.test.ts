@@ -59,31 +59,129 @@ describe('SessionStream', () => {
     expect(Object.keys(events[0]!)).not.toContain('partialText')
   })
 
-  // 1bis. Per-session permission mode → SDK bypass flag
-  test('runTurn passes bypassPermissions when the session has a recorded bypassPermissions mode', async () => {
-    const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
-    data.update((d) => {
-      d.permissionModes['s1'] = 'bypassPermissions'
+  // 1bis. Routage QCM (spec AskUserQuestion) + skip-permissions en auto-allow sélectif
+  describe('routage QCM', () => {
+    const VALID_INPUT = {
+      questions: [{
+        question: 'Quelle approche ?',
+        header: 'Approche',
+        options: [{ label: 'A', description: 'a' }, { label: 'B', description: 'b' }],
+        multiSelect: false,
+      }],
+    }
+
+    test('AskUserQuestion publie question_request (pas permission_request) et la réponse settle allow+answers', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      const result = runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      const requests = ofType(events, 'question_request')
+      expect(requests).toEqual([{
+        type: 'question_request',
+        sessionId: 's1',
+        requestId: expect.any(String),
+        questions: VALID_INPUT.questions,
+      }])
+      expect(ofType(events, 'permission_request')).toHaveLength(0)
+
+      stream.onMessage(clientMessage({ type: 'question_response', requestId: requests[0]!.requestId, answers: { 'Quelle approche ?': 'A' } }))
+
+      await expect(result).resolves.toEqual({
+        behavior: 'allow',
+        updatedInput: { ...VALID_INPUT, answers: { 'Quelle approche ?': 'A' } },
+      })
     })
-    const stream = registry.get('s1', 'p1')
 
-    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
-    await tick()
+    test('bypassPermissions : tout est auto-allow SAUF AskUserQuestion', async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'bypassPermissions'
+      })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
 
-    expect(runTurnParams(sdk).bypassPermissions).toBe(true)
-  })
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      const canUseTool = runTurnParams(sdk).canUseTool
 
-  test('runTurn on a bypass draft passes bypassPermissions; default/undecided sessions do not', async () => {
-    const draft: Draft = { id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString(), permissionMode: 'bypassPermissions' }
-    const { registry, sdk } = setup({ draft, turns: [[{ type: 'turn_done' }], [{ type: 'turn_done' }]] })
+      // auto-allow immédiat, sans jamais consulter l'utilisateur
+      await expect(canUseTool('Bash', { command: 'ls' })).resolves.toEqual({ behavior: 'allow' })
+      expect(ofType(events, 'permission_request')).toHaveLength(0)
 
-    registry.get('d1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
-    await tick()
-    expect(runTurnParams(sdk).bypassPermissions).toBe(true)
+      // ... mais le QCM remonte toujours à la UI (reste pendant)
+      void canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+      expect(ofType(events, 'question_request')).toHaveLength(1)
+    })
 
-    registry.get('s2', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
-    await tick()
-    expect(runTurnParams(sdk, 1).bypassPermissions).toBeFalsy()
+    test("bypassPermissions n'est plus transmis au SDK", async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'bypassPermissions'
+      })
+
+      registry.get('s1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      // assertion runtime : la clé ne doit plus exister du tout dans les params
+      expect('bypassPermissions' in (runTurnParams(sdk) as object)).toBe(false)
+    })
+
+    test('onConnect ré-émet les question_request pendants', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+      const first = makeSink()
+      stream.onConnect(first.send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      void runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      const second = makeSink()
+      stream.onConnect(second.send)
+
+      // snapshot status + LA MÊME requête pendante (même requestId)
+      expect(second.events[0]).toMatchObject({ type: 'status', sessionId: 's1' })
+      expect(ofType(second.events, 'question_request')).toEqual(ofType(first.events, 'question_request'))
+      expect(ofType(second.events, 'question_request')).toHaveLength(1)
+    })
+
+    test('abort deny les questions pendantes', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      const result = runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      stream.onMessage(clientMessage({ type: 'abort' }))
+
+      await expect(result).resolves.toEqual({ behavior: 'deny', message: 'Session aborted' })
+    })
+
+    test('dispose deny les questions pendantes', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      const result = runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      registry.dispose('s1')
+
+      await expect(result).resolves.toEqual({ behavior: 'deny', message: 'Session aborted' })
+    })
   })
 
   // 1ter. Plan rate limits — broadcast live + persisted for the REST snapshot

@@ -35,13 +35,7 @@ describe('buildQueryOptions', () => {
     expect(options.abortController).toBe(abortController)
   })
 
-  test('bypassPermissions: true maps to permissionMode bypassPermissions + allowDangerouslySkipPermissions (SDK safety flag is REQUIRED)', () => {
-    const options = buildQueryOptions(makeRunTurnParams({ bypassPermissions: true }), new AbortController())
-    expect(options.permissionMode).toBe('bypassPermissions')
-    expect(options.allowDangerouslySkipPermissions).toBe(true)
-  })
-
-  test('without bypassPermissions the options carry neither permissionMode nor the dangerous flag', () => {
+  test('the options never carry permissionMode nor the dangerous flag — skip-permissions is a selective auto-allow inside canUseTool', () => {
     const options = buildQueryOptions(makeRunTurnParams(), new AbortController())
     expect(options.permissionMode).toBeUndefined()
     expect(options.allowDangerouslySkipPermissions).toBeUndefined()

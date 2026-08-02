@@ -40,8 +40,6 @@ export type RunTurnParams = {
   resumeSessionId?: string
   canUseTool: CanUseTool
   signal: AbortSignal
-  /** Session-level « dangerously skip permissions » answer — maps to the SDK's bypassPermissions mode. */
-  bypassPermissions?: boolean
 }
 
 export interface SdkClient {
@@ -251,9 +249,9 @@ export function buildQueryOptions(params: RunTurnParams, abortController: AbortC
     resume: params.resumeSessionId,
     abortController,
     includePartialMessages: true,
-    // sdk.d.ts: permissionMode 'bypassPermissions' REQUIRES allowDangerouslySkipPermissions: true
-    // (intentionality safety flag) — and short-circuits canUseTool entirely.
-    ...(params.bypassPermissions === true ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true } : {}),
+    // Le mode SDK 'bypassPermissions' n'est plus utilisé : il court-circuitait
+    // canUseTool et avalait les QCM AskUserQuestion. Le skip-permissions est
+    // désormais un auto-allow sélectif DANS le callback (session-stream.ts).
     // SDK CanUseTool: (toolName, input: Record<string, unknown>, options) → PermissionResult
     canUseTool: async (toolName, input) => {
       const result = await params.canUseTool(toolName, input)

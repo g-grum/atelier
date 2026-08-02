@@ -4,6 +4,7 @@ import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
 import { describeToolUse } from './describe-tool-use'
 import { PermissionBroker } from './permission-broker'
+import { QuestionBroker } from './question-broker'
 
 export type EventSink = (event: ServerEvent) => void
 
@@ -29,6 +30,7 @@ export class SessionStream {
   private readonly sdk: SdkClient
   private readonly onRekey?: (from: string, to: string) => void
   private readonly broker: PermissionBroker
+  private readonly questions: QuestionBroker
 
   private readonly sinks = new Set<EventSink>()
   private state: 'idle' | 'streaming' | 'error' = 'idle'
@@ -49,6 +51,9 @@ export class SessionStream {
     this.broker = new PermissionBroker(data, projectId, projectDir, (request) => {
       this.broadcast(this.toPermissionEvent(request))
     })
+    this.questions = new QuestionBroker((request) => {
+      this.broadcast({ ...request, sessionId: this.sessionId() })
+    })
   }
 
   onConnect(send: EventSink): void {
@@ -56,6 +61,7 @@ export class SessionStream {
     send(this.snapshot())
     // Broker state is not history — reconnect recovery depends on this re-emit.
     for (const request of this.broker.pending()) send(this.toPermissionEvent(request))
+    for (const request of this.questions.pending()) send({ ...request, sessionId: this.sessionId() })
   }
 
   onMessage(raw: string): void {
@@ -70,9 +76,13 @@ export class SessionStream {
       case 'permission_response':
         this.broker.resolve(message.requestId, message.decision)
         return
+      case 'question_response':
+        this.questions.resolve(message.requestId, message.answers)
+        return
       case 'abort':
         this.turnAbort?.abort()
         this.broker.abort()
+        this.questions.abort()
         return
     }
   }
@@ -92,6 +102,7 @@ export class SessionStream {
   dispose(): void {
     this.turnAbort?.abort()
     this.broker.abort()
+    this.questions.abort()
     this.sinks.clear()
   }
 
@@ -125,9 +136,15 @@ export class SessionStream {
         model,
         prompt,
         resumeSessionId: draft ? undefined : resolvedId,
-        canUseTool: (toolName, input) => this.broker.request(toolName, input),
+        // Routage canUseTool (spec QCM) : le QCM va au QuestionBroker — jamais aux
+        // règles « always » ; le mode skip-permissions est un auto-allow sélectif
+        // (plus de bypassPermissions SDK : il court-circuitait canUseTool et avalait le QCM).
+        canUseTool: (toolName, input) => {
+          if (toolName === 'AskUserQuestion') return this.questions.request(input)
+          if (permissionMode === 'bypassPermissions') return Promise.resolve({ behavior: 'allow' as const })
+          return this.broker.request(toolName, input)
+        },
         signal: abort.signal,
-        bypassPermissions: permissionMode === 'bypassPermissions',
       })
       // Owner-only event handling (drain-gap race, event flavor): the real
       // AgentSdkClient keeps draining the SDK stream AFTER yielding turn_done,
