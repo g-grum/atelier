@@ -9,6 +9,7 @@ import { sessionsRoutes } from './sessions/sessions-routes'
 import { settingsRoutes } from './routes/settings-routes'
 import type { SessionStreamRegistry } from './stream/session-stream'
 import { githubRoutes } from './github/github-routes'
+import { commandsRoutes } from './commands/commands-routes'
 import type { GithubService } from './github/github-service'
 
 // Security model: same-origin serving + loopback binding + token auth.
@@ -37,6 +38,7 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
   api.route('/', sessionsRoutes(data, sessions))
   api.route('/', settingsRoutes(data, sessions))
   api.route('/', githubRoutes(github, data))
+  api.route('/', commandsRoutes(data, sdk))
 
   // Update detection: read version.json from DISK on every request — the
   // server process was loaded at app launch, but the repo may have moved on
