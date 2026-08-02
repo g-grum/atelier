@@ -416,7 +416,9 @@ describe('App session deletion', () => {
     // mounted through this delete, some effect settles very slowly under happy-dom
     // — real but env-specific, and the extra widgets query/mount per App render
     // tips it past the 5s default. Generous headroom, not a correctness signal.
-    15000,
+    // 15s → 45s (2026-07-31) : sous charge machine (sessions parallèles), le même
+    // test met ~25s À LA BASE DE BRANCHE (e65a07c, vérifié) — pas un signal produit.
+    45000,
   )
 
   test('cancelling the dialog deletes nothing', async () => {
