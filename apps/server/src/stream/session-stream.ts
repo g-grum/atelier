@@ -378,9 +378,19 @@ export class SessionStreamRegistry {
 
   /** Abonne un sink au flux d'état global : snapshot immédiat de toutes les sessions vivantes, puis transitions. */
   onStatusConnect(send: (event: SessionStatusEvent) => void): void {
-    this.statusSinks.add(send)
+    // Snapshot construit AVANT l'abonnement : un sink qui lève ne doit pas rester
+    // abonné avec un snapshot partiel, ni faire échouer la glue WS de l'appelant.
+    const snapshot: SessionStatusEvent[] = []
     for (const [sessionId, stream] of this.streams) {
-      send({ type: 'session_status', sessionId, state: stream.currentState })
+      snapshot.push({ type: 'session_status', sessionId, state: stream.currentState })
+    }
+    this.statusSinks.add(send)
+    for (const event of snapshot) {
+      try {
+        send(event)
+      } catch (err) {
+        console.error('[session-stream] status sink a levé au snapshot (ignoré):', err)
+      }
     }
   }
 
@@ -390,7 +400,15 @@ export class SessionStreamRegistry {
 
   private publishStatus(sessionId: string, state: SessionState): void {
     const event: SessionStatusEvent = { type: 'session_status', sessionId, state }
-    for (const send of this.statusSinks) send(event)
+    // Garde par-sink : un sink qui lève (ex. ws.send sur un socket en teardown) ne
+    // doit pas interrompre le for...of et priver les sinks suivants de la transition.
+    for (const send of this.statusSinks) {
+      try {
+        send(event)
+      } catch (err) {
+        console.error('[session-stream] status sink a levé (ignoré):', err)
+      }
+    }
   }
 
   /**

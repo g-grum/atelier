@@ -965,6 +965,29 @@ describe('SessionStream', () => {
     expect(seen).toContainEqual({ sessionId: 's1', state: 'idle' })
   })
 
+  test('un sink de statut qui lève ne prive pas les autres sinks des transitions', async () => {
+    const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
+    // le sink fautif est enregistré EN PREMIER pour rendre l'échec déterministe
+    registry.onStatusConnect(() => {
+      throw new Error('sink boom')
+    })
+    const seen: Array<{ sessionId: string; state: string }> = []
+    registry.onStatusConnect((e) => seen.push({ sessionId: e.sessionId, state: e.state }))
+
+    const errorLog = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const s = registry.get('s1', 'p1')
+      s.onMessage(clientMessage({ type: 'user_message', text: 'hi' })) // → streaming
+      await tick() // drain the turn → idle
+    } finally {
+      errorLog.mockRestore()
+    }
+
+    // le bon sink reçoit les transitions malgré le sink fautif
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'streaming' })
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'idle' })
+  })
+
   test('onStatusClose retire le sink', () => {
     const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
     const seen: unknown[] = []
