@@ -49,6 +49,13 @@ describe('describeToolUse', () => {
     expect(describeToolUse('mcp__github__create_pr', { title: 'x' }))
       .toEqual({ kind: 'Other', summary: 'mcp__github__create_pr' })
   })
+  test('AskUserQuestion → résumé QCM avec les headers', () => {
+    const input = { questions: [{ question: 'q1', header: 'Approche', options: [], multiSelect: false }, { question: 'q2', header: 'Scope', options: [], multiSelect: false }] }
+    expect(describeToolUse('AskUserQuestion', input)).toEqual({ kind: 'Other', summary: 'QCM : Approche, Scope' })
+  })
+  test('AskUserQuestion input malformé → résumé générique', () => {
+    expect(describeToolUse('AskUserQuestion', {})).toEqual({ kind: 'Other', summary: 'QCM' })
+  })
 })
 
 describe('renderForPermission', () => {

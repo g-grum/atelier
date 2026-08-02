@@ -194,6 +194,59 @@ describe('SessionStream', () => {
 
       await expect(result).resolves.toEqual({ behavior: 'deny', message: 'Session aborted' })
     })
+
+    test('tool_use/tool_result AskUserQuestion ne sont pas broadcastés (la carte QCM représente le tour)', async () => {
+      const { registry } = setup({
+        turns: [[
+          { type: 'tool_use', toolUseId: 't1', toolName: 'AskUserQuestion', input: VALID_INPUT },
+          { type: 'tool_result', toolUseId: 't1', ok: true, summary: 'ok' },
+          { type: 'tool_use', toolUseId: 't2', toolName: 'Bash', input: { command: 'ls' } },
+          { type: 'tool_result', toolUseId: 't2', ok: true, summary: 'ok' },
+          { type: 'turn_done' },
+        ]],
+      })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      // ni le tool_use t1 ni le tool_result t1 ne sortent — la carte QCM suffit
+      expect(ofType(events, 'tool_use').map((event) => event.toolUseId)).toEqual(['t2'])
+      expect(ofType(events, 'tool_result').map((event) => event.toolUseId)).toEqual(['t2'])
+    })
+
+    test('le reset de partialText au tool_use AskUserQuestion est conservé', async () => {
+      const { registry } = setup({
+        turns: [[
+          { type: 'text_delta', text: 'avant' },
+          { type: 'tool_use', toolUseId: 't1', toolName: 'AskUserQuestion', input: VALID_INPUT },
+          // tient le tour ouvert pour qu'une reconnexion observe le snapshot streaming
+          { type: 'needs_permission', toolName: 'Bash', input: { command: 'sleep 999' } },
+          { type: 'turn_done' },
+        ]],
+      })
+      const stream = registry.get('s1', 'p1')
+      const first = makeSink()
+      stream.onConnect(first.send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      // le tool_use QCM (même supprimé du broadcast) clôt le run de texte :
+      // le snapshot de reconnexion ne re-sert PAS 'avant' comme run en cours
+      const second = makeSink()
+      stream.onConnect(second.send)
+      expect(second.events[0]).toEqual({ type: 'status', sessionId: 's1', state: 'streaming', partialText: '' })
+
+      // libère la permission bloquante pour que le tour settle
+      const pending = ofType(second.events, 'permission_request')
+      expect(pending).toHaveLength(1)
+      stream.onMessage(clientMessage({ type: 'permission_response', requestId: pending[0]!.requestId, decision: 'allow' }))
+      await tick()
+      expect(second.events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+    })
   })
 
   // 1ter. Plan rate limits — broadcast live + persisted for the REST snapshot

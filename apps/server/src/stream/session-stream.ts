@@ -36,6 +36,8 @@ export class SessionStream {
   private state: 'idle' | 'streaming' | 'error' = 'idle'
   /** Buffer of the current in-flight assistant text run — snapshot fodder for reconnects. */
   private partialText = ''
+  /** tool_use supprimés du broadcast (QCM) — leurs tool_result doivent l'être aussi. */
+  private readonly suppressedToolUseIds = new Set<string>()
   private lastError?: { reason: string; resetAt?: string }
   private turnAbort: AbortController | null = null
   /** Draft name awaiting renameSession — applied at turn end, once the SDK CLI has flushed the session JSONL. */
@@ -126,6 +128,8 @@ export class SessionStream {
 
     this.state = 'streaming'
     this.partialText = ''
+    // Un tool_use avorté sans tool_result ne doit pas s'accumuler d'un tour à l'autre.
+    this.suppressedToolUseIds.clear()
     this.lastError = undefined
     const abort = new AbortController()
     this.turnAbort = abort
@@ -199,7 +203,14 @@ export class SessionStream {
         return
       case 'tool_use':
         // A tool_use closes the current text run — the buffer tracks only the in-flight run.
+        // Ce reset reste MÊME quand le broadcast est supprimé (QCM) : sinon le snapshot
+        // de reconnexion re-servirait le texte pré-QCM comme run en cours.
         this.partialText = ''
+        if (event.toolName === 'AskUserQuestion') {
+          // La carte QCM est la représentation du tour — une ligne outil doublonnerait.
+          this.suppressedToolUseIds.add(event.toolUseId)
+          return
+        }
         this.broadcast({
           type: 'tool_use',
           sessionId: this.sessionId(),
@@ -208,6 +219,7 @@ export class SessionStream {
         })
         return
       case 'tool_result':
+        if (this.suppressedToolUseIds.delete(event.toolUseId)) return
         this.broadcast({
           type: 'tool_result',
           sessionId: this.sessionId(),

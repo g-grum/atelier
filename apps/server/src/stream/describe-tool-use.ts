@@ -33,6 +33,13 @@ export function describeToolUse(toolName: string, input: unknown): ToolUseDescri
     return description
   }
 
+  if (toolName === 'AskUserQuestion') {
+    // Résumé historique du QCM (mapSessionMessages) : une ligne sobre avec les headers.
+    const questions = Array.isArray(record.questions) ? record.questions : []
+    const headers = questions.map((q) => str(asRecord(q).header)).filter((h) => h !== '')
+    return { kind: ToolKinds.Other, summary: truncate(headers.length > 0 ? `QCM : ${headers.join(', ')}` : 'QCM') }
+  }
+
   return { kind: ToolKinds.Other, summary: toolName }
 }
 
