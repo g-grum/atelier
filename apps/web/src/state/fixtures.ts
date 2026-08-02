@@ -82,7 +82,7 @@ export const fixtureMessages: Record<string, ChatMessage[]> = {
 /**
  * One realistic live turn for FIXTURE_SESSION_ID: connect snapshot, streamed
  * text, a Bash tool call with its result, a permission prompt, more text,
- * usage, then idle.
+ * usage, a question prompt (QCM), then idle.
  */
 export const fixtureTurn: ServerEvent[] = [
   { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'streaming' },
