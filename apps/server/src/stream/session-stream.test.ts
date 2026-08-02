@@ -79,7 +79,41 @@ describe('SessionStream', () => {
     stream.onMessage(clientMessage({ type: 'user_message', text: 'hi' }))
     await tick()
 
-    expect(states.map((s) => s.state)).toEqual(['streaming', 'idle'])
+    expect(states).toEqual([
+      { sessionId: 's1', state: 'streaming' },
+      { sessionId: 's1', state: 'idle' },
+    ])
+  })
+
+  // 1bis-b. A throwing subscriber must NOT corrupt the session's own turn state:
+  // the turn_done → setState('idle') notify runs inside runTurn's try; an escaping
+  // throw would bubble into the catch and flip a successful turn to 'error'.
+  test('un onStatusChange qui lève ne corrompt pas l’état du tour (reste idle, pas error)', async () => {
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new MockSdkClient({ turns: [[{ type: 'turn_done' }]] })
+    const stream = new SessionStream({
+      id: 's1',
+      projectId: 'p1',
+      data,
+      sdk,
+      onStatusChange: () => {
+        throw new Error('sink boom')
+      },
+    })
+
+    const errorLog = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'hi' }))
+      await tick()
+    } finally {
+      errorLog.mockRestore()
+    }
+
+    expect(stream.currentState).toBe('idle')
   })
 
   // 1bis. Per-session permission mode → SDK bypass flag

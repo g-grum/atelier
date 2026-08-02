@@ -315,7 +315,13 @@ export class SessionStream {
   /** Unique point de mutation de `state` : notifie le hub à chaque transition. */
   private setState(next: SessionState): void {
     this.state = next
-    this.onStatusChange?.(this.sessionId(), next)
+    // Les échecs d'un abonné (hub/socket) ne doivent JAMAIS affecter l'état du tour :
+    // une exception ici, propagée dans le catch de runTurn, basculerait un tour réussi en 'error'.
+    try {
+      this.onStatusChange?.(this.sessionId(), next)
+    } catch (err) {
+      console.error('[session-stream] onStatusChange a levé une exception (ignorée):', err)
+    }
   }
 
   private snapshot(): ServerEvent {
