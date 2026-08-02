@@ -83,9 +83,12 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
         const chosen = item.answers?.[q.question]
         return (
           <fieldset key={q.question} className="q-block" disabled={disabled}>
-            <div className="q-chip">{q.header}</div>
-            {/* legend : associe programmatiquement la question à son groupe d'options. */}
-            <legend className="q-text">{q.question}</legend>
+            {/* legend en PREMIER enfant du fieldset (validité HTML) : elle porte le chip
+                et la question, et les associe programmatiquement au groupe d'options. */}
+            <legend className="q-legend">
+              <span className="q-chip">{q.header}</span>
+              <span className="q-text">{q.question}</span>
+            </legend>
             <div className="q-options">
               {q.options.map((option) => {
                 // Résolu : match exact en single-select (la valeur n'est jamais jointe) ;
