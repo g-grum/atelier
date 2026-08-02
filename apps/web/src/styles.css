@@ -210,6 +210,7 @@
   .dot[data-state='run'] { background: var(--color-success); }
   .dot[data-state='idle'] { background: var(--color-faint); }
   .dot[data-state='done'] { background: transparent; border: 1.5px solid var(--color-faint); }
+  .dot[data-state='waiting'] { background: var(--color-blue); }
   .sess .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; font-size: 12px; }
   .sess.active .name { font-weight: 600; }
   .sess .when { font: 500 10px var(--font-mono); color: var(--color-faint); }
