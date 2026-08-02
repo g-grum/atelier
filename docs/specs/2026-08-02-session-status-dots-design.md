@@ -58,13 +58,28 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
    (`session-stream.ts:161-173`) pour les fins sans `turn_done`.
 
 3. **Le « bleu / en attente » est dérivé côté client.** Une session passe en
-   bleu quand elle transite `streaming → idle` **alors qu'elle n'est pas la
-   session focalisée**, et le reste jusqu'à ce qu'on la focus. C'est un état
-   relatif au focus (« a fini depuis la dernière fois que je l'ai regardée »),
-   donc intrinsèquement client. Le client maintient :
+   bleu quand elle **quitte l'état `streaming`** (vers `idle` **ou** `error`,
+   cf. décision 3bis) **alors qu'elle n'est pas la session focalisée**, et le
+   reste jusqu'à ce qu'on la focus. C'est un état relatif au focus (« a fini
+   depuis la dernière fois que je l'ai regardée »), donc intrinsèquement client.
+   Le client maintient :
    - `Map<sessionId, 'streaming' | 'idle' | 'error'>` alimentée par le hub ;
-   - un `Set<sessionId>` des complétions **non acquittées** (transition vers
-     `idle` observée hors focus).
+   - un `Set<sessionId>` des complétions **non acquittées**.
+   ⚠️ **Le bleu est déclenché par une *transition*, jamais par un état absolu.**
+   Le hub émet un snapshot initial listant potentiellement beaucoup de sessions
+   déjà `idle` (`session-stream.ts:296-301`) : celles-ci **ne doivent pas**
+   s'allumer en bleu. Condition stricte : l'état **précédemment connu** de la
+   session était `streaming`, et le nouveau ne l'est plus. Le snapshot initial
+   pose l'état de base sans jamais alimenter `waiting`.
+
+3bis. **Une erreur de tour en fond compte aussi comme « t'attend » (bleu).** Un
+   tour de session non focalisée qui échoue (`turn_error`,
+   `session-stream.ts:244-252`, `state='error'`) est terminé et requiert
+   l'utilisateur autant qu'un `turn_done` : il allume donc le bleu. Sans cette
+   règle, la pseudo-dérivation tomberait sur `done`/`idle` et une session de
+   fond en échec ne donnerait **aucun** signal (footgun). Une pastille rouge
+   distincte reste hors périmètre (cf. YAGNI) — le bleu « à traiter » suffit au
+   besoin exprimé.
 
 4. **Vidage au focus.** `selectSession` (`App.tsx:195-203`) retire la session
    du set des non-acquittées. ⚠️ Le garde de ré-entrée `App.tsx:197`
@@ -88,7 +103,11 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
 ### Serveur — le status hub
 
 - **Nouvelle surface** : un flux diffusant `{ type: 'session_status', sessionId, state }`
-  à chaque transition d'état d'un `SessionStream`, plus un **snapshot initial**
+  à chaque transition d'état d'un `SessionStream`. Le hub **réutilise la forme du
+  payload `status` existant** (`state: 'idle' | 'streaming' | 'error'`,
+  `packages/shared/src/protocol.ts:112-119`) sous un nouvel événement/transport
+  dédié — le nom distinct (`session_status` vs `status`) marque juste qu'il ne
+  passe pas par le socket de session actif. Plus un **snapshot initial**
   à la connexion (état courant de toutes les sessions au registre — même patron
   que `onConnect` qui renvoie `snapshot()`, `session-stream.ts:54-59`).
 - **Source** : hooker les points où `state` change déjà et sont broadcastés —
@@ -99,9 +118,12 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
 - **Remap draft→réel** : le hub doit relayer le `mapping` (ou émettre sous le
   `sessionId` résolu) pour que le client ne garde pas une entrée fantôme sous
   l'id de draft.
-- **Choix de transport** (à trancher au plan) : un WebSocket dédié
-  `/api/sessions/status` (cohérent avec l'existant `/api/sessions/:id/stream`,
-  `ws.ts:68`) ou un SSE. Le WS est le défaut par cohérence.
+- **Choix de transport** (à trancher au plan) : un WebSocket **serveur** dédié
+  `/api/sessions/status`, à enregistrer à côté de la route de stream existante
+  `/api/sessions/:id/stream` (glue `upgradeWebSocket` dans
+  `apps/server/src/app.ts:58-89`) ; sa convention d'URL est construite côté
+  client en `apps/web/src/api/ws.ts:68`. Alternative : un SSE. Le WS est le
+  défaut par cohérence.
 
 ### Client — abonnement, store, dérivation
 
@@ -109,20 +131,36 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
   `SessionController`. Il alimente une petite source externe
   (`useSyncExternalStore`, comme `App.tsx:110-113`) exposant
   `statuses: Map<sessionId, state>` et `waiting: Set<sessionId>`.
-- **Dérivation du bleu** : à chaque `session_status` reçu, si la transition est
-  `→ idle` **et** `sessionId !== selected?.sessionId`, ajouter au set
-  `waiting`. Sur `→ streaming` (ou focus), retirer du set.
+- **Dérivation du bleu** : à chaque `session_status` reçu, comparer au
+  **dernier état connu** de la session. Si elle **quittait `streaming`** (nouvel
+  état `idle` ou `error`) **et** `sessionId !== selected?.sessionId`, l'ajouter
+  au set `waiting`. Sur `→ streaming` (ou focus), la retirer. Le snapshot
+  initial met à jour `statuses` sans jamais toucher `waiting`.
 - **Pastille** : étendre `SessionDotState` (`SessionListItem.tsx:9`) avec
   `'waiting'` et passer la nouvelle dérivation à `dotState()`
   (`SessionSidebar.tsx:146-150`) :
   ```
-  if (statuses.get(session.id) === 'streaming') return 'run'      // vert
+  // vert : hub dit streaming, OU la session active stream de façon optimiste
+  const activeStreaming = session.id === selected?.sessionId && stream.status === 'streaming'
+  if (statuses.get(session.id) === 'streaming' || activeStreaming) return 'run'
   if (waiting.has(session.id)) return 'waiting'                    // bleu
   if (session.isDraft || session.messageCount === 0) return 'idle'
   return 'done'
   ```
+  ⚠️ **Vert optimiste de la session active.** Aujourd'hui `stream.status`
+  bascule à `'streaming'` **optimistiquement** dès l'envoi, dans `pump()`
+  (`session-controller.ts:132`), avant confirmation serveur. Le hub, lui, ne
+  bascule qu'à la première transition serveur. Pour ne pas régresser la
+  réactivité du vert sur la session focalisée, on **combine** les deux sources
+  (`|| activeStreaming` ci-dessus) : la session active reste pilotée par son
+  `SessionController`, les sessions de fond par le hub.
   La pastille se rend déjà en `SessionListItem.tsx:32`
   (`<span className="dot" data-state={state} …/>`) — aucun nouveau markup.
+  ⚠️ **Recâblage du call-site** : `dotState()` prend aujourd'hui
+  `streamingSessionId` (prop threadée depuis `App.tsx:357`) ; la nouvelle
+  signature lit les maps `statuses` / `waiting`. Le plan doit expliciter le
+  remplacement de la prop `streamingSessionId` de `SessionSidebar` par ces
+  deux sources et le retrait de la dérivation `App.tsx:357`.
 - **CSS** : ajouter `.dot[data-state='waiting']` (bleu) dans
   `apps/web/src/styles.css` près des variantes existantes (209-212). Le vert
   garde son pulse (`styles.css:427-431`, respecte `prefers-reduced-motion`) ;
@@ -154,8 +192,12 @@ ne connaît que `'run' | 'idle' | 'done'` et dérive `'run'` uniquement de
 - Serveur : le hub émet un snapshot initial à la connexion ; émet
   `streaming` au démarrage de tour, `idle` sur `turn_done`, `error` sur
   `turn_error` ; relaie le remap draft→réel sous le bon id.
-- Client (dérivation) : `→ idle` hors focus ⇒ bleu ; `→ idle` **sur** la
-  session focalisée ⇒ pas de bleu ; `→ streaming` prime le bleu ; focus vide le
-  bleu ; déconnexion du hub ⇒ repli silencieux sur la dérivation actuelle.
+- Client (dérivation) : `streaming → idle` hors focus ⇒ bleu ;
+  `streaming → error` hors focus ⇒ bleu (règle 3bis) ; `→ idle` **sur** la
+  session focalisée ⇒ pas de bleu ; **snapshot initial de sessions déjà `idle`
+  ⇒ pas de bleu** (pas de transition depuis `streaming`) ; `→ streaming` prime
+  le bleu ; focus vide le bleu ; **session active qui stream (vert optimiste)
+  sans event hub** ⇒ vert ; déconnexion du hub ⇒ repli silencieux sur la
+  dérivation actuelle.
 - Composant : `SessionListItem` rend `data-state='waiting'` ; `dotState`
   respecte la priorité vert > bleu > idle/done.
