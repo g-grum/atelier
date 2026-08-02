@@ -21,6 +21,7 @@ import { clearLastSession, readLastSession, writeLastSession } from './lib/last-
 import { applyTheme, currentTheme } from './lib/theme'
 import { errorMessage } from './lib/utils'
 import { SessionController } from './state/session-controller'
+import { SessionStatusStore } from './state/session-status-store'
 
 export type AppProps = {
   /** Injectable for tests — defaults to the module backend (real REST+WS, or fixtures). */
@@ -92,6 +93,20 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     [backend, queryClient],
   )
   useEffect(() => () => controller.close(), [controller])
+
+  // Hub des pastilles de statut (spec 2026-08-02) : un socket receive-only
+  // séparé du flux de chat, dédié au fan-out multi-session.
+  const statusStore = useMemo(() => new SessionStatusStore(), [])
+  useEffect(() => {
+    const socket = backend.createStatusSocket((event) => statusStore.handle(event))
+    return () => socket.close()
+  }, [backend, statusStore])
+  const sessionStatuses = useSyncExternalStore(statusStore.subscribe, statusStore.getSnapshot)
+  // Le focus vide le bleu : une session qui redevient l'active session n'a
+  // plus besoin d'attirer l'attention.
+  useEffect(() => {
+    statusStore.setActive(selected?.sessionId ?? null)
+  }, [selected, statusStore])
 
   // Resync du thème depuis le serveur (source de vérité) au montage. Un flip
   // visible juste après le boot, quand le cache anti-flash diverge du disque,
