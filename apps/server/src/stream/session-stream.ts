@@ -230,6 +230,11 @@ export class SessionStream {
         this.broadcast({ type: 'rate_limit', sessionId: this.sessionId(), limit })
         return
       }
+      case 'commands':
+        // Le SDK a repoussé la liste complète (skill découvert en cours de
+        // session…) : on la relaie telle quelle, le client REMPLACE la sienne.
+        this.broadcast({ type: 'commands', sessionId: this.sessionId(), commands: event.commands })
+        return
       case 'session_started':
         if (draftId !== undefined) this.materializeDraft(draftId, event.sessionId)
         return

@@ -109,6 +109,20 @@ describe('SessionStream', () => {
     expect(data.get().rateLimits['five_hour']?.utilization).toBe(34)
   })
 
+  // 1quater. Slash commands — la liste peut changer en cours de session
+  test('diffuse l’événement commands avec le sessionId', async () => {
+    const CMD = { name: 'review', description: 'r', argumentHint: '', aliases: [] }
+    const { registry } = setup({ turns: [[{ type: 'commands', commands: [CMD] }, { type: 'turn_done' }]] })
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+
+    stream.onConnect(send)
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    expect(events).toContainEqual({ type: 'commands', sessionId: 's1', commands: [CMD] })
+  })
+
   // 2. Draft materialization
   test('user_message on a draft: mapping status, mapDraft + deferred rename, model kept, deltas, final idle', async () => {
     const draft: Draft = { id: 'd1', projectId: 'p1', name: 'refacto broker', model: 'claude-opus-4-8', createdAt: new Date().toISOString() }
