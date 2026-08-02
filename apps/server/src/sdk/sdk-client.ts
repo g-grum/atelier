@@ -10,8 +10,9 @@ import {
   type SDKMessage,
   type SDKRateLimitEvent,
   type SessionMessage,
+  type SlashCommand,
 } from '@anthropic-ai/claude-agent-sdk'
-import type { ChatMessage, RateLimitWindow } from '@atelier/shared'
+import type { ChatMessage, RateLimitWindow, SlashCommandInfo } from '@atelier/shared'
 import { describeToolUse } from '../stream/describe-tool-use'
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -368,6 +369,23 @@ export function mapRateLimitInfo(info: {
     event.resetsAt = new Date(info.resetsAt < 1e12 ? info.resetsAt * 1000 : info.resetsAt).toISOString()
   }
   return event
+}
+
+/**
+ * Mappe les SlashCommand du SDK vers notre DTO. Couture testable pour l'écart
+ * de frontière qui compte : `aliases` est OPTIONNEL côté SDK
+ * (`aliases?: string[]`) mais requis chez nous — un `undefined` casserait le
+ * filtrage du composer. `description`/`argumentHint` sont déclarés requis par
+ * le SDK ; les `??` ne sont qu'une ceinture (argumentHint est souvent la chaîne
+ * vide — renseigné sur ~20 des 68 commandes observées — mais jamais absent).
+ */
+export function toSlashCommandInfo(commands: readonly SlashCommand[]): SlashCommandInfo[] {
+  return commands.map((c) => ({
+    name: c.name,
+    description: c.description ?? '',
+    argumentHint: c.argumentHint ?? '',
+    aliases: c.aliases ?? [],
+  }))
 }
 
 /**
