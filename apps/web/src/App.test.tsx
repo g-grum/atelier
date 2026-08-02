@@ -215,9 +215,11 @@ describe('App question QCM (ask user question)', () => {
     // Socket façon FixtureSocket : chaque user_message rejoue le tour scripté
     // (qui contient le QCM), resynchronisé sur la session ouverte. Pas de
     // pacing REPLAY_STEP_MS ici — 10ms suffisent, findBy absorbe l'asynchrone.
+    const sent: ClientMessage[] = []
     const backend = fakeBackend({
       createSocket: (sessionId) => {
         const handlers = new Set<(event: ServerEvent) => void>()
+        const timers: ReturnType<typeof setTimeout>[] = []
         return {
           ...idleSocket,
           on: (handler: (event: ServerEvent) => void) => {
@@ -225,12 +227,19 @@ describe('App question QCM (ask user question)', () => {
             return () => handlers.delete(handler)
           },
           send: (message: ClientMessage) => {
+            sent.push(message)
             if (message.type !== 'user_message') return
             fixtureTurn.forEach((event, index) => {
-              setTimeout(() => {
-                for (const handler of handlers) handler({ ...event, sessionId })
-              }, (index + 1) * 10)
+              timers.push(
+                setTimeout(() => {
+                  for (const handler of handlers) handler({ ...event, sessionId })
+                }, (index + 1) * 10),
+              )
             })
+          },
+          // Un échec de findBy ne doit pas laisser 14 timers tirer dans une App démontée.
+          close: () => {
+            for (const timer of timers) clearTimeout(timer)
           },
         }
       },
@@ -249,6 +258,12 @@ describe('App question QCM (ask user question)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^macOS/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer les réponses' }))
     await screen.findByText('Répondu')
+    // Le contrat wire est aussi parti : answers complet, jointure virgule du multiSelect.
+    expect(sent).toContainEqual({
+      type: 'question_response',
+      requestId: 'fixture-q-1',
+      answers: { 'Quelle approche préfères-tu ?': 'Broker dédié', 'Quelles plateformes cibler ?': 'macOS' },
+    })
   })
 })
 
