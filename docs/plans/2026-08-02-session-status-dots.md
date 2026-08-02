@@ -781,6 +781,8 @@ Dans le JSX `<SessionSidebar … />` (ouverture vers la ligne 364), ajouter :
   })
 
   test('bleu (waiting) quand la session est en attente hors focus', () => {
+    // NB : `dotState` ignore volontairement le focus — le vidage au focus vit dans
+    // le store (setActive), pas ici. Le défaut activeSessionId='s1' n'affecte donc rien.
     renderSidebar({ waiting: new Set(['s1']) })
     expect(dotState('Refresh token expiré')).toBe('waiting')
   })
