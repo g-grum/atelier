@@ -61,6 +61,9 @@ function startServer(): void {
     String(SERVER_PORT),
     '--token',
     token,
+    // Garde anti-orphelin : le serveur surveille le pipe stdin et s'éteint si
+    // le shell meurt sans passer par quit (SIGKILL, crash) — voir stdin-watchdog.
+    '--watch-stdin',
   ]
   // Packaged mode: the server serves the built web app. In dev, Vite does.
   if (!DEV) args.push('--web-dist', join(repoRoot, 'apps', 'web', 'dist'))
@@ -68,7 +71,8 @@ function startServer(): void {
   // explicit override is provided (used by smoke runs to isolate real data).
   if (process.env.ATELIER_DATA) args.push('--data', process.env.ATELIER_DATA)
 
-  serverProc = spawn(bunPath, args, { cwd: repoRoot, stdio: ['ignore', 'ignore', 'pipe'] })
+  // stdin en pipe (pas 'ignore') : c'est le canal de vie du watchdog côté serveur.
+  serverProc = spawn(bunPath, args, { cwd: repoRoot, stdio: ['pipe', 'ignore', 'pipe'] })
   serverProc.stderr?.on('data', (chunk: Buffer) => {
     serverStderr = (serverStderr + chunk.toString()).slice(-8192)
   })

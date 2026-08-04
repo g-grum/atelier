@@ -8,13 +8,21 @@ import { SessionStreamRegistry } from './stream/session-stream'
 import { GithubService } from './github/github-service'
 import { createGhRunner } from './github/gh-runner'
 import { createApp } from './app'
+import { watchStdin } from './stdin-watchdog'
 
-function parseArgs(): { port: number; token: string; dataPath: string; webDist?: string } {
+function parseArgs(): {
+  port: number
+  token: string
+  dataPath: string
+  webDist?: string
+  watchStdin: boolean
+} {
   const args = Bun.argv.slice(2)
   let port = 4517
   let token: string | undefined
   let dataPath = join(homedir(), '.atelier', 'app-data.json')
   let webDist: string | undefined
+  let watchStdin = false
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -27,6 +35,8 @@ function parseArgs(): { port: number; token: string; dataPath: string; webDist?:
       dataPath = raw.startsWith('~') ? join(homedir(), raw.slice(1)) : raw
     } else if (arg === '--web-dist' && args[i + 1]) {
       webDist = args[++i] as string
+    } else if (arg === '--watch-stdin') {
+      watchStdin = true
     }
   }
 
@@ -35,10 +45,17 @@ function parseArgs(): { port: number; token: string; dataPath: string; webDist?:
     process.exit(1)
   }
 
-  return { port, token, dataPath, webDist }
+  return { port, token, dataPath, webDist, watchStdin }
 }
 
-const { port, token, dataPath, webDist } = parseArgs()
+const { port, token, dataPath, webDist, watchStdin: shouldWatchStdin } = parseArgs()
+
+if (shouldWatchStdin) {
+  watchStdin(process.stdin, () => {
+    console.error('stdin fermé — shell parent disparu, arrêt du serveur')
+    process.exit(0)
+  })
+}
 
 const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
