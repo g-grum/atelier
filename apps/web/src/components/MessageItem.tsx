@@ -1,4 +1,7 @@
-import type { ReactNode } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
+import Markdown from 'react-markdown'
+import rehypeHighlight from 'rehype-highlight'
+import remarkGfm from 'remark-gfm'
 
 export type MessageItemProps = {
   role: 'user' | 'assistant'
@@ -9,9 +12,31 @@ export type MessageItemProps = {
   children?: ReactNode
 }
 
+/** Fenced code block with a copy button — plugged into react-markdown as `pre`. */
+function CodeBlock({ children }: { children?: ReactNode }) {
+  const ref = useRef<HTMLPreElement>(null)
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    const code = ref.current?.querySelector('code')?.textContent ?? ''
+    void navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+  return (
+    <div className="codeblock">
+      <button type="button" className="codeblock-copy" onClick={copy}>
+        {copied ? 'Copié' : 'Copier'}
+      </button>
+      <pre ref={ref}>{children}</pre>
+    </div>
+  )
+}
+
 /**
  * One chat message per mockup v5.0: user = neutral "G" avatar (surface-2 / muted)
- * + surface-2 bubble; assistant = solid accent avatar + plain text body.
+ * + surface-2 bubble; assistant = solid accent avatar + markdown-rendered body.
+ * User text stays raw (pre-wrap) — markdown is assistant-only, like claude.ai.
  */
 export function MessageItem({ role, text, queued = false, children }: MessageItemProps) {
   return (
@@ -24,7 +49,20 @@ export function MessageItem({ role, text, queued = false, children }: MessageIte
           <b>{role === 'user' ? 'Germain' : 'Claude'}</b>
           {queued && <span className="queued-tag">En attente</span>}
         </div>
-        {text !== '' && <div className="body">{text}</div>}
+        {text !== '' &&
+          (role === 'assistant' ? (
+            <div className="body markdown">
+              <Markdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+                components={{ pre: CodeBlock }}
+              >
+                {text}
+              </Markdown>
+            </div>
+          ) : (
+            <div className="body">{text}</div>
+          ))}
         {children}
       </div>
     </div>
