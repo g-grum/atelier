@@ -1,7 +1,8 @@
 {
-  "version": "0.1.11",
+  "version": "0.1.12",
   "notes": [
-    "Les questions à choix multiples de Claude (AskUserQuestion) sont maintenant répondables d'un clic : options avec descriptions, choix multiples, réponse libre « Autre »",
-    "Taper un message pendant une question = y répondre en texte ; et les questions remontent aussi dans les sessions en skip-permissions"
+    "Les réponses de Claude sont rendues en markdown : titres, listes, tables, code coloré avec bouton copier",
+    "Garde anti-orphelin : le serveur s'éteint tout seul si l'app meurt brutalement (plus de squat du port 4517)",
+    "Mode démo complet (Réglages et sélecteur de modèle inclus) + surlignage QCM corrigé pour les labels à virgule"
   ]
 }
