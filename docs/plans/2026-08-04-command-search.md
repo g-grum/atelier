@@ -195,14 +195,14 @@ Expected: PASS — 0 échec. (⚠️ flaky connu, indépendant de cette feature 
 Run: `/Users/demo/.bun/bin/bun run build:web`
 Expected: build OK sans erreur TypeScript. (Déploiement web : servi depuis `dist/` — un ⌘R dans l'app suffit ensuite, pas de repackage.)
 
-- [ ] **Step 3 : Vérification manuelle (vrai navigateur/app — non exécutable en headless)**
+- [x] **Step 3 : Vérification manuelle (vrai navigateur/app — non exécutable en headless)**
 
 Dans Atelier, ouvrir une session, taper `/` :
 - `/plan` liste `writing-plans` (P2) ; `/diff` liste une commande via sa description (P3) ; les résultats préfixe sortent en premier.
 - Survoler une option la surligne et déplie sa description (≤ 4 lignes) ; l'item actif au clavier fait pareil.
 - Navigation clavier ↓/↑ : le `scrollIntoView({block: 'nearest'})` reste confortable malgré la hauteur variable de l'item déplié ; le nudge de défilement au survol d'un item partiellement visible ne gêne pas (points de vigilance de la spec).
 
-- [ ] **Step 4 : Cocher le plan et commit final**
+- [x] **Step 4 : Cocher le plan et commit final**
 
 ```bash
 git add docs/plans/2026-08-04-command-search.md
