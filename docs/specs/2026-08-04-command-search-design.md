@@ -53,7 +53,7 @@ chaque commande dans son **meilleur** palier :
 Règles :
 
 - comparaison insensible à la casse (requête et champs passés en minuscules,
-  comme aujourd'hui) ;
+  comme aujourd'hui — **description comprise** pour P3) ;
 - chaque commande apparaît **une seule fois**, dans son meilleur palier ;
 - à l'intérieur d'un palier, l'**ordre d'origine** de la liste est préservé
   (tri stable — trois passes de `filter`, pas de `sort` avec score) ;
@@ -104,6 +104,10 @@ dernier geste gagne. Pas d'état séparé « hover ».
   rendu `line-clamp` n'est pas observable sous happy-dom — c'est la classe
   `active` (déjà testée pour le clavier) qui porte le dépliage, aucun test
   CSS supplémentaire.
+- Vérification manuelle (vrai navigateur) : le dépliage de l'item actif
+  change la hauteur de ligne — contrôler que `scrollIntoView({block:
+  'nearest'})` reste confortable en navigation clavier, et que le nudge de
+  défilement au survol d'un item partiellement visible ne gêne pas.
 
 ## 4. Gestion d'erreur
 
