@@ -95,7 +95,10 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
                 // re-split de la jointure virgule uniquement en multiSelect.
                 const active =
                   resolved === 'answered'
-                    ? chosen !== undefined && (q.multiSelect ? splitChoices(chosen).includes(option.label) : chosen === option.label)
+                    ? chosen !== undefined &&
+                      (q.multiSelect
+                        ? chosenLabels(chosen, q.options.map((o) => o.label)).includes(option.label)
+                        : chosen === option.label)
                     : draft.selected.includes(option.label)
                 return (
                   <button
@@ -149,7 +152,29 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
   )
 }
 
-/** Une réponse multi-select persistée est jointe par virgule — la re-splitter pour surligner. */
-function splitChoices(answer: string): string[] {
-  return answer.split(',').map((part) => part.trim())
+/**
+ * Reconstitue les labels choisis depuis la jointure ', ' du contrat SDK. Un label
+ * peut lui-même contenir ', ' — le split naïf est faux ; on cherche une décomposition
+ * exacte de la réponse sur les labels connus (plus long segment d'abord, mémoïsé).
+ * Pas de décomposition (réponse libre « Autre ») → rien de surligné.
+ */
+function chosenLabels(answer: string, labels: string[]): string[] {
+  const parts = answer.split(', ')
+  const known = new Set(labels)
+  const memo = new Map<number, string[] | null>()
+  const solve = (i: number): string[] | null => {
+    if (i === parts.length) return []
+    if (memo.has(i)) return memo.get(i) ?? null
+    let result: string[] | null = null
+    for (let j = parts.length; j > i && result === null; j--) {
+      const candidate = parts.slice(i, j).join(', ')
+      if (known.has(candidate)) {
+        const rest = solve(j)
+        if (rest !== null) result = [candidate, ...rest]
+      }
+    }
+    memo.set(i, result)
+    return result
+  }
+  return solve(0) ?? []
 }

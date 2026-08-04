@@ -89,6 +89,31 @@ describe('QuestionPrompt', () => {
     expect(screen.getByRole('button', { name: /la seconde/ }).getAttribute('aria-pressed')).toBe('false')
   })
 
+  test('résolu answered multiSelect : label contenant une virgule correctement surligné', () => {
+    const item: QuestionChatItem = {
+      ...MONO,
+      questions: [
+        {
+          question: 'Quels modes ?',
+          header: 'Modes',
+          options: [
+            { label: 'Oui, toujours', description: 'o' },
+            { label: 'toujours', description: 't' },
+            { label: 'Non', description: 'n' },
+          ],
+          multiSelect: true,
+        },
+      ],
+      resolved: 'answered',
+      answers: { 'Quels modes ?': 'Oui, toujours, Non' },
+    }
+    render(<QuestionPrompt item={item} onAnswer={mock()} />)
+    expect(screen.getByRole('button', { name: /Oui, toujours/ }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: /Non/ }).getAttribute('aria-pressed')).toBe('true')
+    // « toujours » seul n'a PAS été choisi — le split naïf par virgule le surlignerait à tort.
+    expect(screen.getByRole('button', { name: /^toujours/ }).getAttribute('aria-pressed')).toBe('false')
+  })
+
   test('résolu dismissed : mention « Répondu dans le chat »', () => {
     render(<QuestionPrompt item={{ ...MONO, resolved: 'dismissed' }} onAnswer={mock()} />)
     expect(screen.getByText('Répondu dans le chat')).toBeTruthy()
