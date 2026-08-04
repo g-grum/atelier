@@ -7,7 +7,7 @@
     "build:web": "bun run --cwd apps/web build",
     "dev:server": "bun run --cwd apps/server dev",
     "dev:web": "bun run --cwd apps/web dev",
-    "dev:desktop": "bun run --cwd apps/desktop dev",
+    "dev:desktop": "bun run build:web && bun run --cwd apps/desktop dev",
     "make:icons": "bun scripts/make-icons.ts",
     "package:mac": "bun scripts/package-mac.ts"
   },
