@@ -82,7 +82,7 @@ export const fixtureMessages: Record<string, ChatMessage[]> = {
 /**
  * One realistic live turn for FIXTURE_SESSION_ID: connect snapshot, streamed
  * text, a Bash tool call with its result, a permission prompt, more text,
- * usage, then idle.
+ * usage, a question prompt (QCM), then idle.
  */
 export const fixtureTurn: ServerEvent[] = [
   { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'streaming' },
@@ -113,6 +113,32 @@ export const fixtureTurn: ServerEvent[] = [
     outputTokens: 486,
     cacheReadTokens: 1820,
     cacheCreationTokens: 0,
+  },
+  {
+    type: 'question_request',
+    sessionId: FIXTURE_SESSION_ID,
+    requestId: 'fixture-q-1',
+    questions: [
+      {
+        question: 'Quelle approche préfères-tu ?',
+        header: 'Approche',
+        options: [
+          { label: 'Broker dédié', description: 'Un QuestionBroker séparé, sémantique claire' },
+          { label: 'Étendre le broker', description: 'Moins de fichiers, plus de gardes' },
+        ],
+        multiSelect: false,
+      },
+      {
+        question: 'Quelles plateformes cibler ?',
+        header: 'Plateformes',
+        options: [
+          { label: 'macOS', description: 'Le daily driver' },
+          { label: 'Linux', description: 'Un jour peut-être' },
+          { label: 'Windows', description: 'Non prioritaire' },
+        ],
+        multiSelect: true,
+      },
+    ],
   },
   { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'idle' },
 ]

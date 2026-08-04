@@ -30,7 +30,10 @@ export type SdkTurnEvent =
   | { type: 'turn_done' }
   | { type: 'turn_error'; reason: string; resetAt?: string }
 
-export type CanUseTool = (toolName: string, input: unknown) => Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }>
+export type CanUseTool = (
+  toolName: string,
+  input: unknown,
+) => Promise<{ behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string }>
 
 export type RunTurnParams = {
   cwd: string
@@ -39,8 +42,6 @@ export type RunTurnParams = {
   resumeSessionId?: string
   canUseTool: CanUseTool
   signal: AbortSignal
-  /** Session-level « dangerously skip permissions » answer — maps to the SDK's bypassPermissions mode. */
-  bypassPermissions?: boolean
 }
 
 export interface SdkClient {
@@ -287,7 +288,8 @@ type QueryOptions = NonNullable<Parameters<typeof query>[0]['options']>
  *   `behavior:literal("allow"),updatedInput:record(string(),unknown())` — a
  *   bare `{ behavior: 'allow' }` fails the whole permission request with
  *   "Tool permission request failed: ZodError" (observed live). Echo the
- *   original input back unchanged.
+ *   original input back unchanged — unless the callback supplied its own
+ *   updatedInput (e.g. les réponses d'un QCM AskUserQuestion).
  */
 export function buildQueryOptions(params: RunTurnParams, abortController: AbortController): QueryOptions {
   return {
@@ -296,13 +298,16 @@ export function buildQueryOptions(params: RunTurnParams, abortController: AbortC
     resume: params.resumeSessionId,
     abortController,
     includePartialMessages: true,
-    // sdk.d.ts: permissionMode 'bypassPermissions' REQUIRES allowDangerouslySkipPermissions: true
-    // (intentionality safety flag) — and short-circuits canUseTool entirely.
-    ...(params.bypassPermissions === true ? { permissionMode: 'bypassPermissions' as const, allowDangerouslySkipPermissions: true } : {}),
+    // Le mode SDK 'bypassPermissions' n'est plus utilisé : il court-circuitait
+    // canUseTool et avalait les QCM AskUserQuestion. Le skip-permissions est
+    // désormais un auto-allow sélectif DANS le callback (session-stream.ts).
+    // Repli documenté (spec QCM, « Risque principal ») : restaurer
+    // `permissionMode: 'bypassPermissions'` exige AUSSI
+    // `allowDangerouslySkipPermissions: true` (flag de sécurité Zod-requis).
     // SDK CanUseTool: (toolName, input: Record<string, unknown>, options) → PermissionResult
     canUseTool: async (toolName, input) => {
       const result = await params.canUseTool(toolName, input)
-      if (result.behavior === 'allow') return { behavior: 'allow', updatedInput: input }
+      if (result.behavior === 'allow') return { behavior: 'allow', updatedInput: result.updatedInput ?? input }
       return { behavior: 'deny', message: result.message }
     },
   }

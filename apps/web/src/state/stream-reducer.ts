@@ -1,4 +1,4 @@
-import type { ChatMessage, PermissionDecision, ProposedRule, ServerEvent, SlashCommandInfo, ToolKind } from '@atelier/shared'
+import type { ChatMessage, PermissionDecision, ProposedRule, QcmQuestion, ServerEvent, SlashCommandInfo, ToolKind } from '@atelier/shared'
 
 export type ChatItem =
   | { kind: 'user'; text: string; /** true while the message waits in the client-side queue (sent at next idle). */ queued?: boolean }
@@ -20,6 +20,13 @@ export type ChatItem =
       rendered: string
       proposedRule: ProposedRule | null
       resolved?: PermissionDecision
+    }
+  | {
+      kind: 'question'
+      requestId: string
+      questions: QcmQuestion[]
+      resolved?: 'answered' | 'dismissed'
+      answers?: Record<string, string>
     }
 
 export type StreamState = {
@@ -85,6 +92,8 @@ export function reduce(state: StreamState, event: ServerEvent): StreamState {
       return applyToolResult(state, event)
     case 'permission_request':
       return applyPermissionRequest(state, event)
+    case 'question_request':
+      return applyQuestionRequest(state, event)
     case 'usage':
       // Recorded server-side (usage history + plan gauges cover the need) —
       // the token cards were removed in 0.1.6, nothing displays this anymore.
@@ -107,6 +116,18 @@ export function resolvePermission(state: StreamState, requestId: string, decisio
     ...state,
     items: state.items.map((item) =>
       item.kind === 'permission' && item.requestId === requestId ? { ...item, resolved: decision } : item,
+    ),
+  }
+}
+
+/** Résolution locale (optimiste) — la résolution définitive est serveur-side. answers absent = dismiss. */
+export function resolveQuestion(state: StreamState, requestId: string, answers: Record<string, string> | undefined): StreamState {
+  return {
+    ...state,
+    items: state.items.map((item) =>
+      item.kind === 'question' && item.requestId === requestId
+        ? { ...item, resolved: answers !== undefined ? ('answered' as const) : ('dismissed' as const), answers }
+        : item,
     ),
   }
 }
@@ -165,6 +186,14 @@ function applyPermissionRequest(state: StreamState, event: Extract<ServerEvent, 
   return { ...state, status: 'streaming', items }
 }
 
+function applyQuestionRequest(state: StreamState, event: Extract<ServerEvent, { type: 'question_request' }>): StreamState {
+  // Ré-émission à chaque reconnexion — dédup par requestId (même règle que les permissions).
+  if (state.items.some((item) => item.kind === 'question' && item.requestId === event.requestId)) return state
+  const items = closeTextRun(state.items)
+  items.push({ kind: 'question', requestId: event.requestId, questions: event.questions })
+  return { ...state, status: 'streaming', items }
+}
+
 function applyStatus(state: StreamState, event: Extract<ServerEvent, { type: 'status' }>): StreamState {
   // event.mapping is deliberately ignored here: draft remap is handled by the
   // controller (onSessionRemapped), not by the view-model state.
@@ -187,7 +216,7 @@ function applyStatus(state: StreamState, event: Extract<ServerEvent, { type: 'st
   return next
 }
 
-/** A tool_use / permission_request ends the current assistant text run. */
+/** A tool_use / permission_request / question_request ends the current assistant text run. */
 function closeTextRun(items: ChatItem[]): ChatItem[] {
   return items.map((item) => (item.kind === 'assistant' && item.streaming ? { ...item, streaming: false } : item))
 }

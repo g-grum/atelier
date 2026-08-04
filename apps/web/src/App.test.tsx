@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { ChatMessage, ProjectSummary, ServerEvent, SessionSummary } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, ProjectSummary, ServerEvent, SessionSummary } from '@atelier/shared'
 import { DEFAULT_WIDGETS } from '@atelier/shared'
 import { DEFAULT_PREFERENCES, type Backend } from './api/backend'
 import App from './App'
+import { fixtureTurn } from './state/fixtures'
 import currentVersion from '../../../version.json'
 
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.
@@ -273,6 +274,63 @@ describe('App bypass indicator', () => {
   })
 })
 
+describe('App question QCM (ask user question)', () => {
+  test('le tour fixture affiche la carte QCM ; répondre la fige sur « Répondu »', async () => {
+    // Socket façon FixtureSocket : chaque user_message rejoue le tour scripté
+    // (qui contient le QCM), resynchronisé sur la session ouverte. Pas de
+    // pacing REPLAY_STEP_MS ici — 10ms suffisent, findBy absorbe l'asynchrone.
+    const sent: ClientMessage[] = []
+    const backend = fakeBackend({
+      createSocket: (sessionId) => {
+        const handlers = new Set<(event: ServerEvent) => void>()
+        const timers: ReturnType<typeof setTimeout>[] = []
+        return {
+          ...idleSocket,
+          on: (handler: (event: ServerEvent) => void) => {
+            handlers.add(handler)
+            return () => handlers.delete(handler)
+          },
+          send: (message: ClientMessage) => {
+            sent.push(message)
+            if (message.type !== 'user_message') return
+            fixtureTurn.forEach((event, index) => {
+              timers.push(
+                setTimeout(() => {
+                  for (const handler of handlers) handler({ ...event, sessionId })
+                }, (index + 1) * 10),
+              )
+            })
+          },
+          // Un échec de findBy ne doit pas laisser 14 timers tirer dans une App démontée.
+          close: () => {
+            for (const timer of timers) clearTimeout(timer)
+          },
+        }
+      },
+    })
+    renderApp(backend)
+
+    await screen.findByRole('button', { name: /renommer la session « session un »/i })
+    const textarea = screen.getByLabelText('Répondre à Claude')
+    fireEvent.change(textarea, { target: { value: 'Quelle est la suite ?' } })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    // Le replay est pacé — timeout généreux pour laisser tout le tour arriver.
+    await screen.findByText('Quelle approche préfères-tu ?', undefined, { timeout: 5000 })
+    // Deux questions → pas d'envoi direct : une option par question, puis Envoyer.
+    fireEvent.click(screen.getByRole('button', { name: /Broker dédié/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^macOS/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer les réponses' }))
+    await screen.findByText('Répondu')
+    // Le contrat wire est aussi parti : answers complet, jointure virgule du multiSelect.
+    expect(sent).toContainEqual({
+      type: 'question_response',
+      requestId: 'fixture-q-1',
+      answers: { 'Quelle approche préfères-tu ?': 'Broker dédié', 'Quelles plateformes cibler ?': 'macOS' },
+    })
+  })
+})
+
 describe('App plan limits panel', () => {
   test('the right panel shows the plan gauges fetched from the backend', async () => {
     renderApp(
@@ -480,7 +538,9 @@ describe('App session deletion', () => {
     // mounted through this delete, some effect settles very slowly under happy-dom
     // — real but env-specific, and the extra widgets query/mount per App render
     // tips it past the 5s default. Generous headroom, not a correctness signal.
-    15000,
+    // 15s → 45s (2026-07-31) : sous charge machine (sessions parallèles), le même
+    // test met ~25s À LA BASE DE BRANCHE (e65a07c, vérifié) — pas un signal produit.
+    45000,
   )
 
   test('cancelling the dialog deletes nothing', async () => {

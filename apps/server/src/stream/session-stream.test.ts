@@ -116,31 +116,195 @@ describe('SessionStream', () => {
     expect(stream.currentState).toBe('idle')
   })
 
-  // 1bis. Per-session permission mode → SDK bypass flag
-  test('runTurn passes bypassPermissions when the session has a recorded bypassPermissions mode', async () => {
-    const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
-    data.update((d) => {
-      d.permissionModes['s1'] = 'bypassPermissions'
+  // 1ter. Routage QCM (spec AskUserQuestion) + skip-permissions en auto-allow sélectif
+  // (remplace les anciens tests « bypass flag » : le mode SDK bypassPermissions n'existe plus)
+  describe('routage QCM', () => {
+    const VALID_INPUT = {
+      questions: [{
+        question: 'Quelle approche ?',
+        header: 'Approche',
+        options: [{ label: 'A', description: 'a' }, { label: 'B', description: 'b' }],
+        multiSelect: false,
+      }],
+    }
+
+    test('AskUserQuestion publie question_request (pas permission_request) et la réponse settle allow+answers', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      const result = runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      const requests = ofType(events, 'question_request')
+      expect(requests).toEqual([{
+        type: 'question_request',
+        sessionId: 's1',
+        requestId: expect.any(String),
+        questions: VALID_INPUT.questions,
+      }])
+      expect(ofType(events, 'permission_request')).toHaveLength(0)
+
+      stream.onMessage(clientMessage({ type: 'question_response', requestId: requests[0]!.requestId, answers: { 'Quelle approche ?': 'A' } }))
+
+      await expect(result).resolves.toEqual({
+        behavior: 'allow',
+        updatedInput: { ...VALID_INPUT, answers: { 'Quelle approche ?': 'A' } },
+      })
     })
-    const stream = registry.get('s1', 'p1')
 
-    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
-    await tick()
+    test('bypassPermissions : tout est auto-allow SAUF AskUserQuestion', async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'bypassPermissions'
+      })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
 
-    expect(runTurnParams(sdk).bypassPermissions).toBe(true)
-  })
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      const canUseTool = runTurnParams(sdk).canUseTool
 
-  test('runTurn on a bypass draft passes bypassPermissions; default/undecided sessions do not', async () => {
-    const draft: Draft = { id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString(), permissionMode: 'bypassPermissions' }
-    const { registry, sdk } = setup({ draft, turns: [[{ type: 'turn_done' }], [{ type: 'turn_done' }]] })
+      // auto-allow immédiat, sans jamais consulter l'utilisateur
+      await expect(canUseTool('Bash', { command: 'ls' })).resolves.toEqual({ behavior: 'allow' })
+      expect(ofType(events, 'permission_request')).toHaveLength(0)
 
-    registry.get('d1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
-    await tick()
-    expect(runTurnParams(sdk).bypassPermissions).toBe(true)
+      // ... mais le QCM remonte toujours à la UI (reste pendant)
+      const qcm = canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+      expect(ofType(events, 'question_request')).toHaveLength(1)
+      // pendant = la promesse n'a PAS settle sans réponse de la UI
+      await expect(Promise.race([qcm.then(() => 'settled'), Promise.resolve('pending')])).resolves.toBe('pending')
+    })
 
-    registry.get('s2', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
-    await tick()
-    expect(runTurnParams(sdk, 1).bypassPermissions).toBeFalsy()
+    test('un draft bypassPermissions auto-allow aussi (résolution draft-first)', async () => {
+      const draft: Draft = { id: 'd1', projectId: 'p1', name: null, model: 'claude-fable-5', createdAt: new Date().toISOString(), permissionMode: 'bypassPermissions' }
+      const { registry, sdk } = setup({ draft, turns: [[{ type: 'turn_done' }]] })
+
+      registry.get('d1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      await expect(runTurnParams(sdk).canUseTool('Bash', { command: 'ls' })).resolves.toEqual({ behavior: 'allow' })
+    })
+
+    test("bypassPermissions n'est plus transmis au SDK", async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'bypassPermissions'
+      })
+
+      registry.get('s1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      // assertion runtime : la clé ne doit plus exister du tout dans les params
+      expect('bypassPermissions' in (runTurnParams(sdk) as object)).toBe(false)
+    })
+
+    test('onConnect ré-émet les question_request pendants', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+      const first = makeSink()
+      stream.onConnect(first.send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      void runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      const second = makeSink()
+      stream.onConnect(second.send)
+
+      // snapshot status + LA MÊME requête pendante (même requestId)
+      expect(second.events[0]).toMatchObject({ type: 'status', sessionId: 's1' })
+      expect(ofType(second.events, 'question_request')).toEqual(ofType(first.events, 'question_request'))
+      expect(ofType(second.events, 'question_request')).toHaveLength(1)
+    })
+
+    test('abort deny les questions pendantes', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      const result = runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      stream.onMessage(clientMessage({ type: 'abort' }))
+
+      await expect(result).resolves.toEqual({ behavior: 'deny', message: 'Session aborted' })
+    })
+
+    test('dispose deny les questions pendantes', async () => {
+      const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      const stream = registry.get('s1', 'p1')
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      const result = runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+      await tick()
+
+      registry.dispose('s1')
+
+      await expect(result).resolves.toEqual({ behavior: 'deny', message: 'Session aborted' })
+    })
+
+    test('tool_use/tool_result AskUserQuestion ne sont pas broadcastés (la carte QCM représente le tour)', async () => {
+      const { registry } = setup({
+        turns: [[
+          { type: 'tool_use', toolUseId: 't1', toolName: 'AskUserQuestion', input: VALID_INPUT },
+          { type: 'tool_result', toolUseId: 't1', ok: true, summary: 'ok' },
+          { type: 'tool_use', toolUseId: 't2', toolName: 'Bash', input: { command: 'ls' } },
+          { type: 'tool_result', toolUseId: 't2', ok: true, summary: 'ok' },
+          { type: 'turn_done' },
+        ]],
+      })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      // ni le tool_use t1 ni le tool_result t1 ne sortent — la carte QCM suffit
+      expect(ofType(events, 'tool_use').map((event) => event.toolUseId)).toEqual(['t2'])
+      expect(ofType(events, 'tool_result').map((event) => event.toolUseId)).toEqual(['t2'])
+    })
+
+    test('le reset de partialText au tool_use AskUserQuestion est conservé', async () => {
+      const { registry } = setup({
+        turns: [[
+          { type: 'text_delta', text: 'avant' },
+          { type: 'tool_use', toolUseId: 't1', toolName: 'AskUserQuestion', input: VALID_INPUT },
+          // tient le tour ouvert pour qu'une reconnexion observe le snapshot streaming
+          { type: 'needs_permission', toolName: 'Bash', input: { command: 'sleep 999' } },
+          { type: 'turn_done' },
+        ]],
+      })
+      const stream = registry.get('s1', 'p1')
+      const first = makeSink()
+      stream.onConnect(first.send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      // le tool_use QCM (même supprimé du broadcast) clôt le run de texte :
+      // le snapshot de reconnexion ne re-sert PAS 'avant' comme run en cours
+      const second = makeSink()
+      stream.onConnect(second.send)
+      expect(second.events[0]).toEqual({ type: 'status', sessionId: 's1', state: 'streaming', partialText: '' })
+
+      // libère la permission bloquante pour que le tour settle
+      const pending = ofType(second.events, 'permission_request')
+      expect(pending).toHaveLength(1)
+      stream.onMessage(clientMessage({ type: 'permission_response', requestId: pending[0]!.requestId, decision: 'allow' }))
+      await tick()
+      expect(second.events.at(-1)).toEqual({ type: 'status', sessionId: 's1', state: 'idle' })
+    })
   })
 
   // 1ter. Plan rate limits — broadcast live + persisted for the REST snapshot

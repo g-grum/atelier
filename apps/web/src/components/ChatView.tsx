@@ -3,6 +3,7 @@ import type { PermissionDecision } from '@atelier/shared'
 import type { ChatItem, StreamState } from '../state/stream-reducer'
 import { MessageItem, TypingIndicator } from './MessageItem'
 import { PermissionPrompt, type PermissionChatItem } from './PermissionPrompt'
+import { QuestionPrompt, type QuestionChatItem } from './QuestionPrompt'
 import { ToolCallItem, type ToolChatItem } from './ToolCallItem'
 
 export type ChatViewProps = {
@@ -10,6 +11,7 @@ export type ChatViewProps = {
   status: StreamState['status']
   onOpenInIde: (file: string, line?: number) => void
   onPermissionDecision: (requestId: string, decision: PermissionDecision) => void
+  onQuestionAnswer: (requestId: string, answers: Record<string, string>) => void
 }
 
 /**
@@ -20,6 +22,7 @@ type Block =
   | { type: 'user'; text: string; queued: boolean }
   | { type: 'assistant'; text: string; streaming: boolean; tools: ToolChatItem[] }
   | { type: 'permission'; item: PermissionChatItem }
+  | { type: 'question'; item: QuestionChatItem }
 
 function toBlocks(items: ChatItem[]): Block[] {
   const blocks: Block[] = []
@@ -40,6 +43,9 @@ function toBlocks(items: ChatItem[]): Block[] {
       case 'permission':
         blocks.push({ type: 'permission', item })
         break
+      case 'question':
+        blocks.push({ type: 'question', item })
+        break
     }
   }
   return blocks
@@ -48,7 +54,7 @@ function toBlocks(items: ChatItem[]): Block[] {
 /** How close to the bottom (px) still counts as "pinned" — trackpad slack. */
 const PIN_THRESHOLD_PX = 48
 
-export function ChatView({ items, status, onOpenInIde, onPermissionDecision }: ChatViewProps) {
+export function ChatView({ items, status, onOpenInIde, onPermissionDecision, onQuestionAnswer }: ChatViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Follow-the-stream pin. Only a user scroll can unpin (see onScroll): while
   // unpinned, new deltas must NOT yank the view back down — the user is
@@ -72,12 +78,13 @@ export function ChatView({ items, status, onOpenInIde, onPermissionDecision }: C
   const blocks = toBlocks(items)
   const last = items.at(-1)
   // Typing indicator: streaming but no text flowing yet (turn start, or the
-  // text run was closed by a tool call). An unresolved permission blocks the
-  // turn — showing "typing" there would lie.
+  // text run was closed by a tool call). An unresolved permission OR question
+  // blocks the turn — showing "typing" there would lie.
   const showTyping =
     status === 'streaming' &&
     !(last?.kind === 'assistant' && last.streaming) &&
-    !(last?.kind === 'permission' && last.resolved === undefined)
+    !(last?.kind === 'permission' && last.resolved === undefined) &&
+    !(last?.kind === 'question' && last.resolved === undefined)
   const typingInLastBlock = showTyping && blocks.at(-1)?.type === 'assistant'
 
   return (
@@ -103,6 +110,16 @@ export function ChatView({ items, status, onOpenInIde, onPermissionDecision }: C
                 key={item.requestId}
                 item={item}
                 onDecision={(decision) => onPermissionDecision(item.requestId, decision)}
+              />
+            )
+          }
+          case 'question': {
+            const { item } = block
+            return (
+              <QuestionPrompt
+                key={item.requestId}
+                item={item}
+                onAnswer={(answers) => onQuestionAnswer(item.requestId, answers)}
               />
             )
           }

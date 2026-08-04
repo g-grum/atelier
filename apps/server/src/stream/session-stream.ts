@@ -1,9 +1,10 @@
-import type { PermissionRequest, ServerEvent, SessionState, SessionStatusEvent } from '@atelier/shared'
+import type { PermissionRequest, QuestionRequest, ServerEvent, SessionState, SessionStatusEvent } from '@atelier/shared'
 import { parseClientMessage } from '@atelier/shared'
 import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
 import { describeToolUse } from './describe-tool-use'
 import { PermissionBroker } from './permission-broker'
+import { QuestionBroker } from './question-broker'
 
 export type EventSink = (event: ServerEvent) => void
 
@@ -32,11 +33,14 @@ export class SessionStream {
   private readonly onRekey?: (from: string, to: string) => void
   private readonly onStatusChange?: (sessionId: string, state: SessionState) => void
   private readonly broker: PermissionBroker
+  private readonly questions: QuestionBroker
 
   private readonly sinks = new Set<EventSink>()
   private state: SessionState = 'idle'
   /** Buffer of the current in-flight assistant text run — snapshot fodder for reconnects. */
   private partialText = ''
+  /** tool_use supprimés du broadcast (QCM) — leurs tool_result doivent l'être aussi. */
+  private readonly suppressedToolUseIds = new Set<string>()
   private lastError?: { reason: string; resetAt?: string }
   private turnAbort: AbortController | null = null
   /** Draft name awaiting renameSession — applied at turn end, once the SDK CLI has flushed the session JSONL. */
@@ -53,6 +57,9 @@ export class SessionStream {
     this.broker = new PermissionBroker(data, projectId, projectDir, (request) => {
       this.broadcast(this.toPermissionEvent(request))
     })
+    this.questions = new QuestionBroker((request) => {
+      this.broadcast(this.toQuestionEvent(request))
+    })
   }
 
   onConnect(send: EventSink): void {
@@ -60,6 +67,7 @@ export class SessionStream {
     send(this.snapshot())
     // Broker state is not history — reconnect recovery depends on this re-emit.
     for (const request of this.broker.pending()) send(this.toPermissionEvent(request))
+    for (const request of this.questions.pending()) send(this.toQuestionEvent(request))
   }
 
   onMessage(raw: string): void {
@@ -74,9 +82,13 @@ export class SessionStream {
       case 'permission_response':
         this.broker.resolve(message.requestId, message.decision)
         return
+      case 'question_response':
+        this.questions.resolve(message.requestId, message.answers)
+        return
       case 'abort':
         this.turnAbort?.abort()
         this.broker.abort()
+        this.questions.abort()
         return
     }
   }
@@ -96,6 +108,7 @@ export class SessionStream {
   dispose(): void {
     this.turnAbort?.abort()
     this.broker.abort()
+    this.questions.abort()
     this.sinks.clear()
   }
 
@@ -119,6 +132,8 @@ export class SessionStream {
 
     this.setState('streaming')
     this.partialText = ''
+    // Un tool_use avorté sans tool_result ne doit pas s'accumuler d'un tour à l'autre.
+    this.suppressedToolUseIds.clear()
     this.lastError = undefined
     const abort = new AbortController()
     this.turnAbort = abort
@@ -129,9 +144,15 @@ export class SessionStream {
         model,
         prompt,
         resumeSessionId: draft ? undefined : resolvedId,
-        canUseTool: (toolName, input) => this.broker.request(toolName, input),
+        // Routage canUseTool (spec QCM) : le QCM va au QuestionBroker — jamais aux
+        // règles « always » ; le mode skip-permissions est un auto-allow sélectif
+        // (plus de bypassPermissions SDK : il court-circuitait canUseTool et avalait le QCM).
+        canUseTool: (toolName, input) => {
+          if (toolName === 'AskUserQuestion') return this.questions.request(input)
+          if (permissionMode === 'bypassPermissions') return Promise.resolve({ behavior: 'allow' as const })
+          return this.broker.request(toolName, input)
+        },
         signal: abort.signal,
-        bypassPermissions: permissionMode === 'bypassPermissions',
       })
       // Owner-only event handling (drain-gap race, event flavor): the real
       // AgentSdkClient keeps draining the SDK stream AFTER yielding turn_done,
@@ -186,7 +207,14 @@ export class SessionStream {
         return
       case 'tool_use':
         // A tool_use closes the current text run — the buffer tracks only the in-flight run.
+        // Ce reset reste MÊME quand le broadcast est supprimé (QCM) : sinon le snapshot
+        // de reconnexion re-servirait le texte pré-QCM comme run en cours.
         this.partialText = ''
+        if (event.toolName === 'AskUserQuestion') {
+          // La carte QCM est la représentation du tour — une ligne outil doublonnerait.
+          this.suppressedToolUseIds.add(event.toolUseId)
+          return
+        }
         this.broadcast({
           type: 'tool_use',
           sessionId: this.sessionId(),
@@ -195,6 +223,7 @@ export class SessionStream {
         })
         return
       case 'tool_result':
+        if (this.suppressedToolUseIds.delete(event.toolUseId)) return
         this.broadcast({
           type: 'tool_result',
           sessionId: this.sessionId(),
@@ -332,6 +361,10 @@ export class SessionStream {
   }
 
   private toPermissionEvent(request: PermissionRequest): ServerEvent {
+    return { ...request, sessionId: this.sessionId() }
+  }
+
+  private toQuestionEvent(request: QuestionRequest): ServerEvent {
     return { ...request, sessionId: this.sessionId() }
   }
 

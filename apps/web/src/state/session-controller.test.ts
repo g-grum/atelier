@@ -341,6 +341,78 @@ describe('SessionController actions', () => {
   })
 })
 
+describe('SessionController questions (QCM)', () => {
+  const questionRequest: ServerEvent = {
+    type: 'question_request',
+    sessionId: 's1',
+    requestId: 'q1',
+    questions: [
+      {
+        question: 'Quelle approche ?',
+        header: 'Approche',
+        options: [
+          { label: 'A', description: 'a' },
+          { label: 'B', description: 'b' },
+        ],
+        multiSelect: false,
+      },
+    ],
+  }
+
+  test('answerQuestion envoie question_response et fige l’item', async () => {
+    const { controller, socket, open } = makeHarness()
+    await open(history)
+    socket().emit(questionRequest)
+
+    controller.answerQuestion('q1', { 'Quelle approche ?': 'A' })
+
+    expect(socket().sent).toEqual([
+      { type: 'question_response', requestId: 'q1', answers: { 'Quelle approche ?': 'A' } },
+    ])
+    const item = controller.getState().items.at(-1)
+    expect(item).toMatchObject({ kind: 'question', requestId: 'q1', resolved: 'answered', answers: { 'Quelle approche ?': 'A' } })
+  })
+
+  test('sendMessage pendant un QCM pendant : dismiss d’abord, message en file ensuite', async () => {
+    const { controller, socket, open } = makeHarness()
+    await open(history)
+    socket().emit(delta('je réfléchis')) // le QCM arrive mid-turn — status streaming
+    socket().emit(questionRequest)
+    expect(controller.getState().status).toBe('streaming')
+
+    expect(controller.sendMessage('réponse libre')).toBe(true)
+
+    // Le dismiss part AVANT tout user_message — et SANS clé answers du tout.
+    expect(socket().sent).toEqual([{ type: 'question_response', requestId: 'q1' }])
+    const dismiss = socket().sent[0]
+    if (dismiss === undefined) throw new Error('aucun message envoyé')
+    expect(Object.hasOwn(dismiss, 'answers')).toBe(false)
+
+    const questionItem = controller.getState().items.find((item) => item.kind === 'question')
+    expect(questionItem).toMatchObject({ kind: 'question', requestId: 'q1', resolved: 'dismissed' })
+    // Le tour n'est pas idle — le message reste en file.
+    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'réponse libre', queued: true })
+
+    // Le deny dénoue le tour côté serveur — l'idle qui suit pompe la file.
+    socket().emit({ type: 'status', sessionId: 's1', state: 'idle' })
+    expect(socket().sent).toEqual([
+      { type: 'question_response', requestId: 'q1' },
+      { type: 'user_message', text: 'réponse libre' },
+    ])
+    expect(controller.getState().items.at(-1)).toEqual({ kind: 'user', text: 'réponse libre' })
+  })
+
+  test('sendMessage sans QCM pendant : comportement inchangé', async () => {
+    const { controller, socket, open } = makeHarness()
+    await open(history)
+
+    expect(controller.sendMessage('rien à dénouer')).toBe(true)
+
+    // Non-régression : aucun question_response émis.
+    expect(socket().sent).toEqual([{ type: 'user_message', text: 'rien à dénouer' }])
+  })
+})
+
 describe('SessionController rate limits', () => {
   test('a rate_limit event fires the onRateLimit callback (app-global data, not chat state)', async () => {
     const limits: unknown[] = []
@@ -477,6 +549,7 @@ describe('fixtures', () => {
     expect(state.status).toBe('idle')
     expect(state.items.some((item) => item.kind === 'tool' && item.tool === 'Bash' && item.result?.ok === true)).toBe(true)
     expect(state.items.some((item) => item.kind === 'permission')).toBe(true)
+    expect(state.items.some((item) => item.kind === 'question')).toBe(true)
     // The turn ended — no assistant item is left streaming.
     expect(state.items.some((item) => item.kind === 'assistant' && item.streaming)).toBe(false)
   })

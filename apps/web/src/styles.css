@@ -299,6 +299,33 @@
   .permission .p-actions button:disabled { opacity: 0.55; cursor: default; }
   .permission .p-outcome { margin-top: 10px; font: 600 11px var(--font-mono); color: var(--color-muted); }
 
+  /* Carte QCM (AskUserQuestion) — même gabarit que .permission mais accent
+     STANDARD (indigo) : l'ambre reste réservé aux permissions. */
+  .question { border: 1px solid color-mix(in srgb, var(--color-indigo) 40%, transparent); border-left: 3px solid var(--color-indigo); border-radius: 11px; background: var(--color-surface); padding: 14px 17px; max-width: 48rem; margin-left: 40px; }
+  .question .q-head { display: flex; gap: 9px; align-items: center; font-weight: 600; font-size: 12.5px; margin-bottom: 8px; }
+  .question .q-head .k { color: var(--color-indigo); font: 700 10px var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; }
+  .question .q-block { border: 0; margin: 0 0 12px; padding: 0; min-width: 0; }
+  .question .q-block:last-of-type { margin-bottom: 0; }
+  .question .q-legend { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0; margin-bottom: 8px; }
+  .question .q-chip { display: inline-block; font: 700 10px var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-indigo); background: color-mix(in srgb, var(--color-indigo) 10%, transparent); border: 1px solid color-mix(in srgb, var(--color-indigo) 32%, transparent); border-radius: 999px; padding: 2px 9px; }
+  .question .q-text { font: 600 13px var(--font-sans); color: var(--color-text); }
+  .question .q-options { display: flex; flex-direction: column; gap: 6px; }
+  .question .q-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left; font: 12px var(--font-sans); border: 1px solid var(--color-line); border-radius: 8px; background: var(--color-surface-2); color: var(--color-text); padding: 8px 12px; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+  .question .q-option:hover:not(:disabled) { border-color: var(--color-indigo); }
+  .question .q-option.active { border-color: var(--color-indigo); background: color-mix(in srgb, var(--color-indigo) 10%, transparent); }
+  .question .q-option:disabled { opacity: 0.55; cursor: default; }
+  .question .q-option:disabled.active { opacity: 1; }
+  .question .q-label { font-weight: 700; }
+  .question .q-desc { color: var(--color-muted); }
+  .question .q-preview { display: block; width: 100%; font: 11px var(--font-mono); color: var(--color-text); background: var(--color-ground); border: 1px solid var(--color-line-soft); border-radius: 6px; padding: 6px 9px; margin-top: 6px; overflow-x: auto; white-space: pre; }
+  .question .q-other { display: block; width: 100%; margin-top: 8px; font: 13px var(--font-sans); color: var(--color-text); background: var(--color-ground); border: 1px solid var(--color-line); border-radius: 8px; padding: 8px 12px; outline: 0; }
+  .question .q-other:focus { border-color: var(--color-indigo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-indigo) 18%, transparent); }
+  .question .q-other::placeholder { color: var(--color-faint); }
+  .question .q-actions { display: flex; margin-top: 12px; }
+  .question .q-submit { font: 700 12px var(--font-sans); color: var(--color-ground); background: var(--color-indigo); border: 1px solid transparent; border-radius: 8px; padding: 7px 14px; cursor: pointer; }
+  .question .q-submit:disabled { opacity: 0.55; cursor: default; }
+  .question .q-outcome { margin-top: 10px; font: 600 11px var(--font-mono); color: var(--color-muted); }
+
   /* Failure banners: mutation notices + failed session open (with retry).
      Red is the critical color — amber stays reserved for permissions. */
   .banner { display: flex; align-items: center; gap: 10px; margin: 12px 28px 0; padding: 9px 13px; max-width: 48rem; border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent); border-left: 3px solid var(--color-red); border-radius: 9px; background: var(--color-surface); font-size: 12px; }

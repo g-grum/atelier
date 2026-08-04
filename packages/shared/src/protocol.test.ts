@@ -28,6 +28,24 @@ describe('protocol guards', () => {
   })
 })
 
+describe('question protocol', () => {
+  test('parseClientMessage accepte question_response avec answers', () => {
+    const raw = JSON.stringify({ type: 'question_response', requestId: 'q1', answers: { 'Quelle lib ?': 'React' } })
+    expect(parseClientMessage(raw)).toEqual({ type: 'question_response', requestId: 'q1', answers: { 'Quelle lib ?': 'React' } })
+  })
+
+  test('parseClientMessage accepte question_response sans answers (dismiss)', () => {
+    const raw = JSON.stringify({ type: 'question_response', requestId: 'q1' })
+    expect(parseClientMessage(raw)).toEqual({ type: 'question_response', requestId: 'q1' })
+  })
+
+  test('isServerEvent accepte question_request', () => {
+    expect(
+      isServerEvent({ type: 'question_request', sessionId: 's1', requestId: 'q1', questions: [] }),
+    ).toBe(true)
+  })
+})
+
 describe('isServerEvent', () => {
   test('accepte un événement commands', () => {
     expect(isServerEvent({ type: 'commands', sessionId: 's1', commands: [] })).toBe(true)

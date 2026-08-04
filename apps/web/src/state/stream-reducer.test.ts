@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 import { describe, expect, test } from 'bun:test'
 import type { ChatMessage, ServerEvent } from '@atelier/shared'
-import { initialState, reduce, reset, resolvePermission, type StreamState } from './stream-reducer'
+import { initialState, reduce, reset, resolvePermission, resolveQuestion, type StreamState } from './stream-reducer'
 
 const S = 's1'
 const AT = '2026-07-15T10:00:00.000Z'
@@ -121,6 +121,39 @@ describe('permission_request', () => {
     expect(state.items[0]).toMatchObject({ requestId: 'req1' })
     expect(state.items[0]).not.toMatchObject({ resolved: expect.anything() })
     expect(state.items[1]).toMatchObject({ requestId: 'req2', resolved: 'always' })
+  })
+})
+
+describe('question_request', () => {
+  const QUESTION_EVENT = {
+    type: 'question_request' as const,
+    sessionId: S,
+    requestId: 'q1',
+    questions: [{ question: 'Quelle approche ?', header: 'Approche', options: [{ label: 'A', description: 'a' }, { label: 'B', description: 'b' }], multiSelect: false }],
+  }
+
+  test('question_request insère un item question et clôt le run de texte', () => {
+    let state = reduce(initialState(), delta('hmm'))
+    state = reduce(state, QUESTION_EVENT)
+    expect(state.items.at(-1)).toMatchObject({ kind: 'question', requestId: 'q1' })
+    expect(state.items.at(-2)).toMatchObject({ kind: 'assistant', streaming: false })
+    expect(state.status).toBe('streaming')
+  })
+
+  test('question_request est dédupliqué par requestId (ré-émission reconnexion)', () => {
+    let state = reduce(initialState(), QUESTION_EVENT)
+    state = reduce(state, QUESTION_EVENT)
+    expect(state.items).toHaveLength(1)
+  })
+
+  test('resolveQuestion marque answered avec les réponses', () => {
+    const state = resolveQuestion(reduce(initialState(), QUESTION_EVENT), 'q1', { 'Quelle approche ?': 'A' })
+    expect(state.items[0]).toMatchObject({ kind: 'question', resolved: 'answered', answers: { 'Quelle approche ?': 'A' } })
+  })
+
+  test('resolveQuestion sans answers marque dismissed', () => {
+    const state = resolveQuestion(reduce(initialState(), QUESTION_EVENT), 'q1', undefined)
+    expect(state.items[0]).toMatchObject({ kind: 'question', resolved: 'dismissed' })
   })
 })
 

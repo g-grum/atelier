@@ -1,7 +1,7 @@
 {
-  "version": "0.1.10",
+  "version": "0.1.11",
   "notes": [
-    "Fini le clic à chaque session : coche « Se souvenir de ce choix » dans la question de permissions, ou règle le défaut dans Réglages → Permissions des nouvelles sessions",
-    "Une puce rouge « Skip permissions » rappelle quand la session active ignore les permissions d'outils"
+    "Les questions à choix multiples de Claude (AskUserQuestion) sont maintenant répondables d'un clic : options avec descriptions, choix multiples, réponse libre « Autre »",
+    "Taper un message pendant une question = y répondre en texte ; et les questions remontent aussi dans les sessions en skip-permissions"
   ]
 }

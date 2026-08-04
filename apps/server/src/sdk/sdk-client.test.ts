@@ -35,13 +35,7 @@ describe('buildQueryOptions', () => {
     expect(options.abortController).toBe(abortController)
   })
 
-  test('bypassPermissions: true maps to permissionMode bypassPermissions + allowDangerouslySkipPermissions (SDK safety flag is REQUIRED)', () => {
-    const options = buildQueryOptions(makeRunTurnParams({ bypassPermissions: true }), new AbortController())
-    expect(options.permissionMode).toBe('bypassPermissions')
-    expect(options.allowDangerouslySkipPermissions).toBe(true)
-  })
-
-  test('without bypassPermissions the options carry neither permissionMode nor the dangerous flag', () => {
+  test('the options never carry permissionMode nor the dangerous flag — skip-permissions is a selective auto-allow inside canUseTool', () => {
     const options = buildQueryOptions(makeRunTurnParams(), new AbortController())
     expect(options.permissionMode).toBeUndefined()
     expect(options.allowDangerouslySkipPermissions).toBeUndefined()
@@ -73,6 +67,17 @@ describe('buildQueryOptions', () => {
     const result = await options.canUseTool!('Bash', { command: 'rm -rf /' }, sdkCanUseToolOptions)
 
     expect(result).toEqual({ behavior: 'deny', message: 'refusé par la règle' })
+  })
+
+  test('canUseTool fait transiter updatedInput du résultat', async () => {
+    const options = buildQueryOptions(
+      makeRunTurnParams({
+        canUseTool: async () => ({ behavior: 'allow', updatedInput: { questions: [], answers: { Q: 'R' } } }),
+      }),
+      new AbortController(),
+    )
+    const result = await options.canUseTool!('AskUserQuestion', { questions: [] }, sdkCanUseToolOptions)
+    expect(result).toEqual({ behavior: 'allow', updatedInput: { questions: [], answers: { Q: 'R' } } })
   })
 })
 
