@@ -50,8 +50,11 @@ describe('matchCommands', () => {
   test('P2 : sous-chaîne du nom — plan trouve writing-plans', () => {
     expect(matchCommands(SEARCH, 'plan').map((c) => c.name)).toEqual(['writing-plans'])
   })
-  test('P2 : sous-chaîne d’un ALIAS — storm trouve la commande namespacée', () => {
-    expect(matchCommands(CMDS, 'storm').map((c) => c.name)).toEqual(['superpowers:brainstorming'])
+  test('P2 : sous-chaîne d’un ALIAS SEUL — storm ne matche que par l’alias', () => {
+    // Le nom ne contient PAS la requête : seul l'alias la porte — verrouille
+    // que P2 lit bien les alias, pas seulement le nom.
+    const cmds = [{ name: 'superpowers:remue-meninges', description: '', argumentHint: '', aliases: ['brainstorming'] }]
+    expect(matchCommands(cmds, 'storm').map((c) => c.name)).toEqual(['superpowers:remue-meninges'])
   })
   test('P3 : sous-chaîne de la description — diff trouve code-review', () => {
     expect(matchCommands(SEARCH, 'diff').map((c) => c.name)).toEqual(['code-review'])

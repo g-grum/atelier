@@ -26,7 +26,7 @@
 - Modify: `apps/web/src/lib/slash-commands.ts:17-23` (la fonction `matchCommands` seule ; `commandPrefix` et `completeCommand` inchangées)
 - Test: `apps/web/src/lib/slash-commands.test.ts`
 
-- [ ] **Step 1 : Écrire les tests qui échouent**
+- [x] **Step 1 : Écrire les tests qui échouent**
 
 Dans `slash-commands.test.ts`, ajouter une fixture dédiée à la recherche (APRÈS le `const CMDS` existant, sans le modifier — les tests existants s'appuient dessus) :
 
@@ -75,12 +75,12 @@ Puis, DANS le `describe('matchCommands', …)` existant, ajouter :
   })
 ```
 
-- [ ] **Step 2 : Vérifier qu'ils échouent**
+- [x] **Step 2 : Vérifier qu'ils échouent**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/lib/slash-commands.test.ts`
 Expected: FAIL — au moins « P2 », « P3 », « ordre des paliers » échouent (le filtre actuel par préfixe renvoie `[]` pour `plan` et `diff`). Les tests existants passent toujours.
 
-- [ ] **Step 3 : Implémenter la recherche par paliers**
+- [x] **Step 3 : Implémenter la recherche par paliers**
 
 Remplacer la fonction `matchCommands` (et son commentaire) dans `slash-commands.ts` par :
 
@@ -108,12 +108,12 @@ export function matchCommands(commands: readonly SlashCommandInfo[], prefix: str
 }
 ```
 
-- [ ] **Step 4 : Vérifier que tout passe**
+- [x] **Step 4 : Vérifier que tout passe**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/lib/slash-commands.test.ts`
 Expected: PASS — tous les tests du fichier (anciens + nouveaux).
 
-- [ ] **Step 5 : Commit**
+- [x] **Step 5 : Commit**
 
 ```bash
 git add apps/web/src/lib/slash-commands.ts apps/web/src/lib/slash-commands.test.ts
@@ -127,7 +127,7 @@ git commit -m "feat(web): recherche par paliers dans matchCommands (nom/alias pu
 - Modify: `apps/web/src/styles.css:361` (ajout d'une règle après `.cmd-desc`)
 - Test: `apps/web/src/components/Composer.test.tsx`
 
-- [ ] **Step 1 : Écrire le test qui échoue**
+- [x] **Step 1 : Écrire le test qui échoue**
 
 Dans `Composer.test.tsx`, DANS le `describe` qui contient les tests du popover (celui des tests « ↓ puis Enter… », « un clic sur une option complète »), ajouter :
 
@@ -145,12 +145,12 @@ Dans `Composer.test.tsx`, DANS le `describe` qui contient les tests du popover (
 
 (Le dépliage lui-même est du CSS pur porté par la classe `active`/`aria-selected` — non observable sous happy-dom, on teste l'activation.)
 
-- [ ] **Step 2 : Vérifier qu'il échoue**
+- [x] **Step 2 : Vérifier qu'il échoue**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/components/Composer.test.tsx`
 Expected: FAIL — `aria-selected` de l'option 1 reste `"false"` après `mouseMove` (aucun handler souris ne pilote `active` aujourd'hui).
 
-- [ ] **Step 3 : Implémenter**
+- [x] **Step 3 : Implémenter**
 
 Dans `Composer.tsx`, sur le `<li>` du popover (juste au-dessus du `onMouseDown` existant), ajouter :
 
@@ -169,12 +169,12 @@ Dans `styles.css`, juste après la règle `.command-popover .cmd-desc` (ligne 36
 
 (Le `li` reste en flex row `align-items: baseline` : la description multiligne — `flex: 1; min-width: 0` — s'aligne sur sa première ligne, nom et hint restent dessus. Aucun changement d'état React.)
 
-- [ ] **Step 4 : Vérifier que tout passe**
+- [x] **Step 4 : Vérifier que tout passe**
 
 Run: `/Users/demo/.bun/bin/bun test apps/web/src/components/Composer.test.tsx`
 Expected: PASS — le nouveau test et tous les tests existants du fichier (notamment « ↓ puis Enter sélectionne la DEUXIÈME option » : la sélection clavier ne doit pas être cassée).
 
-- [ ] **Step 5 : Commit**
+- [x] **Step 5 : Commit**
 
 ```bash
 git add apps/web/src/components/Composer.tsx apps/web/src/components/Composer.test.tsx apps/web/src/styles.css
@@ -185,12 +185,12 @@ git commit -m "feat(web): item actif au survol + description dépliée (line-cla
 
 **Files:** aucun nouveau — vérification.
 
-- [ ] **Step 1 : Suite complète**
+- [x] **Step 1 : Suite complète**
 
 Run: `/Users/demo/.bun/bin/bun test`
 Expected: PASS — 0 échec. (⚠️ flaky connu, indépendant de cette feature : `App session deletion > deleting a NON-selected session leaves the selection alone` peut dépasser son timeout sous charge machine — le relancer seul avant de conclure, cf. mémoire projet.)
 
-- [ ] **Step 2 : Build web**
+- [x] **Step 2 : Build web**
 
 Run: `/Users/demo/.bun/bin/bun run build:web`
 Expected: build OK sans erreur TypeScript. (Déploiement web : servi depuis `dist/` — un ⌘R dans l'app suffit ensuite, pas de repackage.)
