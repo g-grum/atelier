@@ -1,7 +1,7 @@
 import { join, resolve, sep } from 'node:path'
 import { Hono } from 'hono'
 import { upgradeWebSocket } from 'hono/bun'
-import type { ServerEvent } from '@atelier/shared'
+import type { ServerEvent, SessionStatusEvent } from '@atelier/shared'
 import type { AppData } from './store/app-data'
 import type { SdkClient } from './sdk/sdk-client'
 import type { SessionsService } from './sessions/sessions-service'
@@ -9,6 +9,7 @@ import { sessionsRoutes } from './sessions/sessions-routes'
 import { settingsRoutes } from './routes/settings-routes'
 import type { SessionStreamRegistry } from './stream/session-stream'
 import { githubRoutes } from './github/github-routes'
+import { commandsRoutes } from './commands/commands-routes'
 import type { GithubService } from './github/github-service'
 
 // Security model: same-origin serving + loopback binding + token auth.
@@ -37,6 +38,7 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
   api.route('/', sessionsRoutes(data, sessions))
   api.route('/', settingsRoutes(data, sessions))
   api.route('/', githubRoutes(github, data))
+  api.route('/', commandsRoutes(data, sdk))
 
   // Update detection: read version.json from DISK on every request — the
   // server process was loaded at app launch, but the repo may have moved on
@@ -83,6 +85,25 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
         },
         onClose() {
           if (sink) stream.onClose(sink)
+        },
+      }
+    })
+  )
+
+  // Status hub (spec 2026-08-02) : flux d'état de TOUTES les sessions, receive-only.
+  // Canal séparé du socket de session (single-socket) pour piloter les pastilles
+  // des sessions de fond. La glue est minimale — toute la logique est dans le registre.
+  api.get(
+    '/sessions-status',
+    upgradeWebSocket(() => {
+      let sink: ((event: SessionStatusEvent) => void) | null = null
+      return {
+        onOpen(_evt, ws) {
+          sink = (event) => ws.send(JSON.stringify(event))
+          streams.onStatusConnect(sink)
+        },
+        onClose() {
+          if (sink) streams.onStatusClose(sink)
         },
       }
     })

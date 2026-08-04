@@ -1,4 +1,4 @@
-import type { PermissionRequest, QuestionRequest, ServerEvent } from '@atelier/shared'
+import type { PermissionRequest, QuestionRequest, ServerEvent, SessionState, SessionStatusEvent } from '@atelier/shared'
 import { parseClientMessage } from '@atelier/shared'
 import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
@@ -16,6 +16,8 @@ type SessionStreamParams = {
   sdk: SdkClient
   /** Called when a draft materializes so the registry can re-key its singleton. */
   onRekey?: (from: string, to: string) => void
+  /** Notifié à CHAQUE transition d'état (démarrage de tour inclus) — alimente le status hub. */
+  onStatusChange?: (sessionId: string, state: SessionState) => void
 }
 
 /**
@@ -29,11 +31,12 @@ export class SessionStream {
   private readonly data: AppData
   private readonly sdk: SdkClient
   private readonly onRekey?: (from: string, to: string) => void
+  private readonly onStatusChange?: (sessionId: string, state: SessionState) => void
   private readonly broker: PermissionBroker
   private readonly questions: QuestionBroker
 
   private readonly sinks = new Set<EventSink>()
-  private state: 'idle' | 'streaming' | 'error' = 'idle'
+  private state: SessionState = 'idle'
   /** Buffer of the current in-flight assistant text run — snapshot fodder for reconnects. */
   private partialText = ''
   /** tool_use supprimés du broadcast (QCM) — leurs tool_result doivent l'être aussi. */
@@ -43,12 +46,13 @@ export class SessionStream {
   /** Draft name awaiting renameSession — applied at turn end, once the SDK CLI has flushed the session JSONL. */
   private pendingRename: { sessionId: string; name: string } | null = null
 
-  constructor({ id, projectId, data, sdk, onRekey }: SessionStreamParams) {
+  constructor({ id, projectId, data, sdk, onRekey, onStatusChange }: SessionStreamParams) {
     this.id = id
     this.projectId = projectId
     this.data = data
     this.sdk = sdk
     this.onRekey = onRekey
+    this.onStatusChange = onStatusChange
     const projectDir = data.get().projects.find((p) => p.id === projectId)?.path ?? ''
     this.broker = new PermissionBroker(data, projectId, projectDir, (request) => {
       this.broadcast(this.toPermissionEvent(request))
@@ -112,7 +116,7 @@ export class SessionStream {
     const { projects, drafts, modelOverrides, permissionModes, preferences } = this.data.get()
     const project = projects.find((p) => p.id === this.projectId)
     if (!project) {
-      this.state = 'error'
+      this.setState('error')
       this.lastError = { reason: `unknown project: ${this.projectId}` }
       this.broadcast(this.snapshot())
       return
@@ -126,7 +130,7 @@ export class SessionStream {
     // Unanswered (null/absent) runs as 'default' — never silently dangerous.
     const permissionMode = draft?.permissionMode ?? permissionModes[resolvedId] ?? 'default'
 
-    this.state = 'streaming'
+    this.setState('streaming')
     this.partialText = ''
     // Un tool_use avorté sans tool_result ne doit pas s'accumuler d'un tour à l'autre.
     this.suppressedToolUseIds.clear()
@@ -175,7 +179,7 @@ export class SessionStream {
       // (state already 'idle'), so a user_message in that gap starts the next
       // turn — a late rejection from the drained turn must not clobber it.
       if (!abort.signal.aborted && this.turnAbort === abort) {
-        this.state = 'error'
+        this.setState('error')
         this.lastError = { reason: err instanceof Error ? err.message : String(err) }
         this.broadcast(this.snapshot())
       }
@@ -188,7 +192,7 @@ export class SessionStream {
         this.turnAbort = null
         if (this.state === 'streaming') {
           // Aborted, or the turn ended without turn_done/turn_error — settle to idle.
-          this.state = 'idle'
+          this.setState('idle')
           this.broadcast(this.snapshot())
         }
       }
@@ -259,6 +263,11 @@ export class SessionStream {
         this.broadcast({ type: 'rate_limit', sessionId: this.sessionId(), limit })
         return
       }
+      case 'commands':
+        // Le SDK a repoussé la liste complète (skill découvert en cours de
+        // session…) : on la relaie telle quelle, le client REMPLACE la sienne.
+        this.broadcast({ type: 'commands', sessionId: this.sessionId(), commands: event.commands })
+        return
       case 'session_started':
         if (draftId !== undefined) this.materializeDraft(draftId, event.sessionId)
         return
@@ -267,7 +276,7 @@ export class SessionStream {
         // deferred rename now, before the idle settle, so a sessions-list
         // refetch triggered by the idle status already sees the new name.
         await this.applyPendingRename()
-        this.state = 'idle'
+        this.setState('idle')
         this.broadcast(this.snapshot())
         return
       case 'turn_error':
@@ -275,7 +284,7 @@ export class SessionStream {
         // (the SDK query rejects with an AbortError, converted downstream) —
         // that is a normal Stop, not an error; finally settles the state to idle.
         if (signal.aborted) return
-        this.state = 'error'
+        this.setState('error')
         this.lastError = event.resetAt !== undefined ? { reason: event.reason, resetAt: event.resetAt } : { reason: event.reason }
         this.broadcast(this.snapshot())
         return
@@ -289,6 +298,11 @@ export class SessionStream {
     // both ids resolve to sdkSessionId, so a stale draft-id key would make every
     // future lookup miss and mint a duplicate stream.
     this.onRekey?.(draftId, sdkSessionId)
+    // Re-emits under the SDK id. NB: the `streaming` emission under the DRAFT id (line ~120)
+    // is not retracted → a stale `draftId → streaming` entry may linger in the client's `statuses`.
+    // Harmless: the `mapping` remap removes the draft from the session list, so it never renders
+    // nor transitions to `waiting`; any new hub connection snapshots the re-keyed `streams` map cleanly.
+    this.onStatusChange?.(sdkSessionId, this.state)
     // The rename itself must WAIT for turn end: at session_started the SDK CLI
     // has not yet flushed the session JSONL to ~/.claude/projects, so renaming
     // here throws "Session not found in any project directory" (observed live).
@@ -322,6 +336,23 @@ export class SessionStream {
     return this.data.resolveSessionId(this.id)
   }
 
+  /** État live courant — lu par le registre pour le snapshot du hub. */
+  get currentState(): SessionState {
+    return this.state
+  }
+
+  /** Unique point de mutation de `state` : notifie le hub à chaque transition. */
+  private setState(next: SessionState): void {
+    this.state = next
+    // Les échecs d'un abonné (hub/socket) ne doivent JAMAIS affecter l'état du tour :
+    // une exception ici, propagée dans le catch de runTurn, basculerait un tour réussi en 'error'.
+    try {
+      this.onStatusChange?.(this.sessionId(), next)
+    } catch (err) {
+      console.error('[session-stream] onStatusChange a levé une exception (ignorée):', err)
+    }
+  }
+
   private snapshot(): ServerEvent {
     const base = { type: 'status' as const, sessionId: this.sessionId(), state: this.state }
     if (this.state === 'streaming') return { ...base, partialText: this.partialText }
@@ -348,6 +379,7 @@ export class SessionStream {
  */
 export class SessionStreamRegistry {
   private readonly streams = new Map<string, SessionStream>()
+  private readonly statusSinks = new Set<(event: SessionStatusEvent) => void>()
 
   constructor(
     private readonly data: AppData,
@@ -370,10 +402,46 @@ export class SessionStreamRegistry {
             this.streams.set(to, entry)
           }
         },
+        onStatusChange: (sessionId, state) => this.publishStatus(sessionId, state),
       })
       this.streams.set(key, stream)
     }
     return stream
+  }
+
+  /** Abonne un sink au flux d'état global : snapshot immédiat de toutes les sessions vivantes, puis transitions. */
+  onStatusConnect(send: (event: SessionStatusEvent) => void): void {
+    // Snapshot construit AVANT l'abonnement : un sink qui lève ne doit pas rester
+    // abonné avec un snapshot partiel, ni faire échouer la glue WS de l'appelant.
+    const snapshot: SessionStatusEvent[] = []
+    for (const [sessionId, stream] of this.streams) {
+      snapshot.push({ type: 'session_status', sessionId, state: stream.currentState })
+    }
+    this.statusSinks.add(send)
+    for (const event of snapshot) {
+      try {
+        send(event)
+      } catch (err) {
+        console.error('[session-stream] status sink a levé au snapshot (ignoré):', err)
+      }
+    }
+  }
+
+  onStatusClose(send: (event: SessionStatusEvent) => void): void {
+    this.statusSinks.delete(send)
+  }
+
+  private publishStatus(sessionId: string, state: SessionState): void {
+    const event: SessionStatusEvent = { type: 'session_status', sessionId, state }
+    // Garde par-sink : un sink qui lève (ex. ws.send sur un socket en teardown) ne
+    // doit pas interrompre le for...of et priver les sinks suivants de la transition.
+    for (const send of this.statusSinks) {
+      try {
+        send(event)
+      } catch (err) {
+        console.error('[session-stream] status sink a levé (ignoré):', err)
+      }
+    }
   }
 
   /**

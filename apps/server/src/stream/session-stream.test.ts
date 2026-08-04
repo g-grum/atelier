@@ -6,7 +6,7 @@ import type { ServerEvent } from '@atelier/shared'
 import type { RunTurnParams, SdkTurnEvent } from '../sdk/sdk-client'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
 import { AppData, type Draft } from '../store/app-data'
-import { SessionStreamRegistry } from './session-stream'
+import { SessionStream, SessionStreamRegistry } from './session-stream'
 
 type Turns = NonNullable<ConstructorParameters<typeof MockSdkClient>[0]>['turns']
 
@@ -59,7 +59,65 @@ describe('SessionStream', () => {
     expect(Object.keys(events[0]!)).not.toContain('partialText')
   })
 
-  // 1bis. Routage QCM (spec AskUserQuestion) + skip-permissions en auto-allow sélectif
+  // 1bis-a. onStatusChange hook — feeds the future status hub
+  test('émet chaque transition d’état via onStatusChange (streaming au démarrage, idle en fin)', async () => {
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new MockSdkClient({ turns: [[{ type: 'turn_done' }]] })
+    const states: Array<{ sessionId: string; state: string }> = []
+    const stream = new SessionStream({
+      id: 's1',
+      projectId: 'p1',
+      data,
+      sdk,
+      onStatusChange: (sessionId, state) => states.push({ sessionId, state }),
+    })
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'hi' }))
+    await tick()
+
+    expect(states).toEqual([
+      { sessionId: 's1', state: 'streaming' },
+      { sessionId: 's1', state: 'idle' },
+    ])
+  })
+
+  // 1bis-b. A throwing subscriber must NOT corrupt the session's own turn state:
+  // the turn_done → setState('idle') notify runs inside runTurn's try; an escaping
+  // throw would bubble into the catch and flip a successful turn to 'error'.
+  test('un onStatusChange qui lève ne corrompt pas l’état du tour (reste idle, pas error)', async () => {
+    const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
+    const data = new AppData(filePath)
+    data.update((d) => {
+      d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
+    })
+    const sdk = new MockSdkClient({ turns: [[{ type: 'turn_done' }]] })
+    const stream = new SessionStream({
+      id: 's1',
+      projectId: 'p1',
+      data,
+      sdk,
+      onStatusChange: () => {
+        throw new Error('sink boom')
+      },
+    })
+
+    const errorLog = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'hi' }))
+      await tick()
+    } finally {
+      errorLog.mockRestore()
+    }
+
+    expect(stream.currentState).toBe('idle')
+  })
+
+  // 1ter. Routage QCM (spec AskUserQuestion) + skip-permissions en auto-allow sélectif
+  // (remplace les anciens tests « bypass flag » : le mode SDK bypassPermissions n'existe plus)
   describe('routage QCM', () => {
     const VALID_INPUT = {
       questions: [{
@@ -270,6 +328,20 @@ describe('SessionStream', () => {
     expect(typeof broadcasts[0]?.limit.recordedAt).toBe('string')
 
     expect(data.get().rateLimits['five_hour']?.utilization).toBe(34)
+  })
+
+  // 1quater. Slash commands — la liste peut changer en cours de session
+  test('diffuse l’événement commands avec le sessionId', async () => {
+    const CMD = { name: 'review', description: 'r', argumentHint: '', aliases: [] }
+    const { registry } = setup({ turns: [[{ type: 'commands', commands: [CMD] }, { type: 'turn_done' }]] })
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+
+    stream.onConnect(send)
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    expect(events).toContainEqual({ type: 'commands', sessionId: 's1', commands: [CMD] })
   })
 
   // 2. Draft materialization
@@ -1038,6 +1110,57 @@ describe('SessionStream', () => {
   test('registry.dispose of an unknown id is a no-op', () => {
     const { registry } = setup()
     expect(() => registry.dispose('ghost')).not.toThrow()
+  })
+
+  // 9. Status hub — snapshot on connect + broadcast of transitions
+  test('le hub envoie un snapshot à la connexion puis diffuse les transitions', async () => {
+    const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
+    const s = registry.get('s1', 'p1')
+    s.onMessage(clientMessage({ type: 'user_message', text: 'hi' })) // → streaming
+
+    const seen: Array<{ sessionId: string; state: string }> = []
+    registry.onStatusConnect((e) => seen.push({ sessionId: e.sessionId, state: e.state }))
+    // initial snapshot: s1 already streaming
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'streaming' })
+
+    await tick() // drain the turn
+
+    // broadcast transition: s1 → idle
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'idle' })
+  })
+
+  test('un sink de statut qui lève ne prive pas les autres sinks des transitions', async () => {
+    const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
+    // le sink fautif est enregistré EN PREMIER pour rendre l'échec déterministe
+    registry.onStatusConnect(() => {
+      throw new Error('sink boom')
+    })
+    const seen: Array<{ sessionId: string; state: string }> = []
+    registry.onStatusConnect((e) => seen.push({ sessionId: e.sessionId, state: e.state }))
+
+    const errorLog = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const s = registry.get('s1', 'p1')
+      s.onMessage(clientMessage({ type: 'user_message', text: 'hi' })) // → streaming
+      await tick() // drain the turn → idle
+    } finally {
+      errorLog.mockRestore()
+    }
+
+    // le bon sink reçoit les transitions malgré le sink fautif
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'streaming' })
+    expect(seen).toContainEqual({ sessionId: 's1', state: 'idle' })
+  })
+
+  test('onStatusClose retire le sink', () => {
+    const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
+    const seen: unknown[] = []
+    const sink = (e: { sessionId: string }) => seen.push(e)
+    registry.onStatusConnect(sink)
+    const before = seen.length
+    registry.onStatusClose(sink)
+    registry.get('s2', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'x' }))
+    expect(seen.length).toBe(before) // nothing after close (beyond the snapshot already received)
   })
 
   test('registry.dispose accepts the draft id after materialization re-keyed the stream', async () => {

@@ -1,7 +1,7 @@
 {
-  "version": "0.1.9",
+  "version": "0.1.10",
   "notes": [
-    "La colonne de droite devient un tableau de bord : réorganise, redimensionne, ajoute ou retire les widgets à ta guise (le layout est mémorisé)",
-    "Nouveau widget Pull Requests : l'activité récente de tes repos GitHub, détails CI/review au clic, ouverture dans le navigateur — multi-repos via « + Widget »"
+    "Fini le clic à chaque session : coche « Se souvenir de ce choix » dans la question de permissions, ou règle le défaut dans Réglages → Permissions des nouvelles sessions",
+    "Une puce rouge « Skip permissions » rappelle quand la session active ignore les permissions d'outils"
   ]
 }

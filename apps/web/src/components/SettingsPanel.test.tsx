@@ -82,6 +82,23 @@ describe('SettingsPanel', () => {
     await waitFor(() => expect(calls.patches).toEqual([{ theme: 'light' }]))
   })
 
+  test('the permissions select shows the current default and PATCHes changes — null clears', async () => {
+    const calls = renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+
+    const select = (await screen.findByLabelText('Permissions des nouvelles sessions')) as HTMLSelectElement
+    // preferences fixture sans defaultPermissionMode → « demander à chaque session »
+    expect(select.value).toBe('')
+
+    fireEvent.change(select, { target: { value: 'bypassPermissions' } })
+    await waitFor(() => expect(calls.patches).toEqual([{ defaultPermissionMode: 'bypassPermissions' }]))
+
+    fireEvent.change(select, { target: { value: '' } })
+    await waitFor(() =>
+      expect(calls.patches).toEqual([{ defaultPermissionMode: 'bypassPermissions' }, { defaultPermissionMode: null }]),
+    )
+  })
+
   test('a rule row shows « toolName : matcher »; deleting it refreshes to the empty state', async () => {
     let rules: AlwaysRule[] = [rule]
     const deleted: string[] = []

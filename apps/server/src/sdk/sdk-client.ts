@@ -10,8 +10,9 @@ import {
   type SDKMessage,
   type SDKRateLimitEvent,
   type SessionMessage,
+  type SlashCommand,
 } from '@anthropic-ai/claude-agent-sdk'
-import type { ChatMessage, RateLimitWindow } from '@atelier/shared'
+import type { ChatMessage, RateLimitWindow, SlashCommandInfo } from '@atelier/shared'
 import { describeToolUse } from '../stream/describe-tool-use'
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export type SdkTurnEvent =
   | { type: 'tool_result'; toolUseId: string; ok: boolean; summary: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
   | { type: 'rate_limit'; window: RateLimitWindow; utilization: number; status: 'allowed' | 'allowed_warning' | 'rejected'; resetsAt?: string }
+  | { type: 'commands'; commands: SlashCommandInfo[] }
   | { type: 'session_started'; sessionId: string }
   | { type: 'turn_done' }
   | { type: 'turn_error'; reason: string; resetAt?: string }
@@ -47,6 +49,8 @@ export interface SdkClient {
   getSessionMessages(sessionId: string): Promise<ChatMessage[]>
   renameSession(sessionId: string, name: string): Promise<void>
   deleteSession(sessionId: string, dir: string): Promise<void>
+  /** Liste des slash commands du répertoire. Ne jette jamais — [] en cas d'échec. */
+  listCommands(cwd: string): Promise<SlashCommandInfo[]>
   runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent>
 }
 
@@ -85,6 +89,43 @@ export class AgentSdkClient implements SdkClient {
     await deleteSession(sessionId, { dir })
   }
 
+  /**
+   * Sonde jetable : `supportedCommands()` vit sur l'objet Query, qui n'existe
+   * que pendant un tour — on en ouvre donc un et on l'avorte sur `init`.
+   *
+   * Le `prompt` DOIT être une string non vide. Mesuré (spec § Spikes) : en mode
+   * streaming input, un itérable qui ne yield jamais bloque (>5 min) et un
+   * itérable vide ne produit que des `system/hook_*` — dans les deux cas
+   * l'`init` dont la sonde dépend n'arrive JAMAIS. L'abort sur `init` précède
+   * tout message assistant/result : aucun tour modèle n'aboutit et aucun
+   * transcript n'est créé.
+   *
+   * Coût ~3,8 s → le client met en cache (react-query), le serveur non.
+   */
+  async listCommands(cwd: string): Promise<SlashCommandInfo[]> {
+    const abortController = new AbortController()
+    try {
+      const q = query({
+        prompt: 'atelier: command discovery probe',
+        options: { cwd, abortController },
+      })
+      for await (const msg of q as AsyncIterable<SDKMessage>) {
+        if (msg.type === 'system' && msg.subtype === 'init') {
+          const commands = await q.supportedCommands()
+          abortController.abort()
+          return toSlashCommandInfo(commands)
+        }
+      }
+      return []
+    } catch {
+      // Ne jette jamais (politique deriveMessageCount) : l'autocomplétion est
+      // un confort, son échec ne doit rien casser.
+      return []
+    } finally {
+      abortController.abort()
+    }
+  }
+
   /** SDK: query({ prompt, options }) → Query (AsyncGenerator<SDKMessage>) */
   async *runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent> {
     const abortController = new AbortController()
@@ -118,6 +159,14 @@ export class AgentSdkClient implements SdkClient {
           } catch {
             // Never let a usage probe break the turn.
           }
+          continue
+        }
+
+        // SDKCommandsChangedMessage (sdk.d.ts:2782) : la liste a changé en cours
+        // de session (skills découverts dynamiquement…). Le contrat SDK est
+        // explicite — le client REMPLACE sa liste, il ne fusionne pas.
+        if (msg.type === 'system' && msg.subtype === 'commands_changed') {
+          yield { type: 'commands', commands: toSlashCommandInfo(msg.commands) }
           continue
         }
 
@@ -373,6 +422,23 @@ export function mapRateLimitInfo(info: {
     event.resetsAt = new Date(info.resetsAt < 1e12 ? info.resetsAt * 1000 : info.resetsAt).toISOString()
   }
   return event
+}
+
+/**
+ * Mappe les SlashCommand du SDK vers notre DTO. Couture testable pour l'écart
+ * de frontière qui compte : `aliases` est OPTIONNEL côté SDK
+ * (`aliases?: string[]`) mais requis chez nous — un `undefined` casserait le
+ * filtrage du composer. `description`/`argumentHint` sont déclarés requis par
+ * le SDK ; les `??` ne sont qu'une ceinture (argumentHint est souvent la chaîne
+ * vide — renseigné sur ~20 des 68 commandes observées — mais jamais absent).
+ */
+export function toSlashCommandInfo(commands: readonly SlashCommand[]): SlashCommandInfo[] {
+  return commands.map((c) => ({
+    name: c.name,
+    description: c.description ?? '',
+    argumentHint: c.argumentHint ?? '',
+    aliases: c.aliases ?? [],
+  }))
 }
 
 /**

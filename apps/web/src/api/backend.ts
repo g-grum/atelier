@@ -1,9 +1,13 @@
-import type { ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionStatusEvent, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
+import { StatusSocket } from './status-socket'
 import { SessionSocket } from './ws'
 import currentVersion from '../../../../version.json'
+
+/** Public surface a status-hub socket must expose — StatusSocket's shape (receive-only, no send). */
+export type StatusSocketLike = { close: () => void }
 
 /**
  * Everything the app needs from a data source. `VITE_USE_FIXTURES` swaps the
@@ -36,6 +40,16 @@ export type Backend = {
   getPreferences: () => Promise<Preferences>
   /** Partial update of the preferences store — resolves to the merged result. */
   patchPreferences: (patch: Partial<Preferences>) => Promise<Preferences>
+  /** Slash commands du projet — alimente l'autocomplétion du composer. */
+  listCommands: (projectId: string) => Promise<SlashCommandInfo[]>
+  /**
+   * Status-hub socket (spec 2026-08-02) — a real WebSocket in production, a
+   * closeable no-op under fixtures/tests. Kept behind this seam (like
+   * `createSocket` above) so App never constructs `new StatusSocket(...)`
+   * itself: a real WS in a jsdom/happy-dom test environment throws on an
+   * unreachable connection (no server), crashing the whole suite.
+   */
+  createStatusSocket: (onEvent: (event: SessionStatusEvent) => void) => StatusSocketLike
 }
 
 const realBackend: Backend = {
@@ -58,6 +72,8 @@ const realBackend: Backend = {
   getProjectGithubAccount: client.getProjectGithubAccount,
   getPreferences: client.getPreferences,
   patchPreferences: client.patchPreferences,
+  listCommands: client.listCommands,
+  createStatusSocket: (onEvent) => new StatusSocket(onEvent),
 }
 
 /** Baseline préférences (sans clé `theme` → dark) — partagé par le fixture et les tests, façon DEFAULT_WIDGETS. */
@@ -139,6 +155,11 @@ function createFixtureBackend(): Backend {
     // No `theme` key → demo mode defaults to dark (spec: clé absente = dark).
     getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
+    // Demo mode: aucune sonde SDK à disposition → pas d'autocomplétion.
+    listCommands: async () => [],
+    // Demo mode: no server-side status hub to connect to — a no-op keeps the
+    // sidebar dots at their default (idle/done) derivation.
+    createStatusSocket: () => ({ close: () => {} }),
   }
 }
 

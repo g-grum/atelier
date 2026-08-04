@@ -24,7 +24,7 @@ export type ProposedRule = Pick<AlwaysRule, 'toolName' | 'matcher'>
 export type QcmOption = { label: string; description: string; preview?: string }
 export type QcmQuestion = { question: string; header: string; options: QcmOption[]; multiSelect: boolean }
 
-export const MODELS = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-4-6'] as const
+export const MODELS = ['claude-fable-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-4-6'] as const
 
 export type Project = { id: string; path: string; color: string }
 /** GET /api/projects/:id/github-account — the GitHub account a project pushes as (derived from its `origin` remote), with its owner/repo. Both null when the project has no GitHub origin. */
@@ -96,6 +96,14 @@ export type ChatMessage =
   | { role: 'assistant'; text: string; at: string }
   | { role: 'tool'; toolUseId: string; kind: ToolKind; summary: string; ok: boolean; file?: string; line?: number; diffstat?: { added: number; removed: number }; at: string }
 
+/**
+ * Une slash command proposée à l'autocomplétion. `name` est SANS le slash
+ * initial (contrat SDK). `aliases` porte les noms courts des commandes
+ * namespacées (`superpowers:brainstorming` → `brainstorming`) : le filtrage
+ * DOIT les inclure, sinon les commandes de plugins sont introuvables.
+ */
+export type SlashCommandInfo = { name: string; description: string; argumentHint: string; aliases: string[] }
+
 // ── WS client → server ──
 /** The three answers to a permission_request — 'always' also persists an AlwaysRule. */
 export type PermissionDecision = 'allow' | 'deny' | 'always'
@@ -132,8 +140,9 @@ export type ServerEvent =
   | { type: 'usage'; sessionId: string; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number }
   | { type: 'rate_limit'; sessionId: string; limit: RateLimitSnapshot }
   | { type: 'status'; sessionId: string; state: 'idle' | 'streaming' | 'error'; error?: { reason: string; resetAt?: string }; partialText?: string; mapping?: { draftId: string; sessionId: string } }
+  | { type: 'commands'; sessionId: string; commands: SlashCommandInfo[] }
 
-const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'question_request', 'usage', 'rate_limit', 'status'])
+const SERVER_EVENT_TYPES = new Set(['assistant_delta', 'tool_use', 'tool_result', 'permission_request', 'question_request', 'usage', 'rate_limit', 'status', 'commands'])
 const CLIENT_MESSAGE_TYPES = new Set(['user_message', 'permission_response', 'abort', 'question_response'])
 
 export function isServerEvent(value: unknown): value is ServerEvent {
@@ -151,6 +160,23 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 
 function isRecordWithType(value: unknown, types: Set<string>): boolean {
   return typeof value === 'object' && value !== null && 'type' in value && types.has((value as { type: string }).type)
+}
+
+// ── Status hub (spec 2026-08-02) : canal WS séparé /api/sessions-status ──
+export type SessionState = 'idle' | 'streaming' | 'error'
+/** Diffusé par le hub à chaque transition d'état d'une session (et en snapshot à la connexion). Volontairement HORS de ServerEvent : le socket de session et son réducteur ne le voient jamais. */
+export type SessionStatusEvent = { type: 'session_status'; sessionId: string; state: SessionState }
+
+const SESSION_STATES = new Set<SessionState>(['idle', 'streaming', 'error'])
+
+export function parseSessionStatus(raw: string): SessionStatusEvent | null {
+  try {
+    const v = JSON.parse(raw) as Record<string, unknown>
+    if (v?.type !== 'session_status' || typeof v.sessionId !== 'string' || !SESSION_STATES.has(v.state as SessionState)) return null
+    return { type: 'session_status', sessionId: v.sessionId, state: v.state as SessionState }
+  } catch {
+    return null
+  }
 }
 
 // ── Widget dashboard (spec 2026-07-21) ──

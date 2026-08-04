@@ -59,6 +59,10 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     // No `theme` key → the boot resync applies dark (spec: clé absente = dark).
     getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
+    listCommands: async () => [],
+    // No real WS in tests (an unreachable connection crashes happy-dom's
+    // `ws`-backed WebSocket shim) — a closeable no-op mirrors idleSocket above.
+    createStatusSocket: () => ({ close: () => {} }),
     ...overrides,
   }
 }
@@ -207,6 +211,66 @@ describe('App per-session permissions gate', () => {
     renderApp(fakeBackend())
     await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
     expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
+  })
+
+  test('checking « Se souvenir » patches the session AND the preference default', async () => {
+    let mode: SessionSummary['permissionMode'] = null
+    const prefPatches: unknown[] = []
+    const backend = fakeBackend({
+      listSessions: async () => [{ ...session, permissionMode: mode }],
+      patchSession: async (_id, patch) => {
+        if (patch.permissionMode !== undefined) mode = patch.permissionMode
+      },
+      patchPreferences: async (patch) => {
+        prefPatches.push(patch)
+        return { ...DEFAULT_PREFERENCES, ...patch }
+      },
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByLabelText(/Se souvenir de ce choix/))
+    fireEvent.click(screen.getByRole('button', { name: /dangereux/i }))
+
+    await waitFor(() => expect(prefPatches).toEqual([{ defaultPermissionMode: 'bypassPermissions' }]))
+  })
+
+  test('choosing WITHOUT the checkbox never patches the preferences', async () => {
+    let mode: SessionSummary['permissionMode'] = null
+    const prefPatches: unknown[] = []
+    const backend = fakeBackend({
+      listSessions: async () => [{ ...session, permissionMode: mode }],
+      patchSession: async (_id, patch) => {
+        if (patch.permissionMode !== undefined) mode = patch.permissionMode
+      },
+      patchPreferences: async (patch) => {
+        prefPatches.push(patch)
+        return { ...DEFAULT_PREFERENCES, ...patch }
+      },
+    })
+    renderApp(backend)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Permissions normales' }))
+
+    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(prefPatches).toEqual([])
+  })
+})
+
+describe('App bypass indicator', () => {
+  test('a bypassPermissions session shows the red chip near the composer', async () => {
+    renderApp(fakeBackend({ listSessions: async () => [{ ...session, permissionMode: 'bypassPermissions' }] }))
+    // findByText EXACT (pas findByRole('status') : dnd-kit monte déjà une LiveRegion
+    // role="status" via DashboardGrid — la requête par rôle matcherait deux éléments).
+    // Le match exact ne touche pas le bouton du gate « Skip permissions (dangereux) »,
+    // qui de toute façon ne se rend pas pour une session décidée.
+    const chip = await screen.findByText('Skip permissions')
+    expect(chip.title).toContain('le défaut se gère dans les réglages')
+  })
+
+  test('a default-mode session shows no chip', async () => {
+    renderApp(fakeBackend())
+    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(screen.queryByText('Skip permissions')).toBeNull()
   })
 })
 

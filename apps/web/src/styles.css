@@ -210,6 +210,7 @@
   .dot[data-state='run'] { background: var(--color-success); }
   .dot[data-state='idle'] { background: var(--color-faint); }
   .dot[data-state='done'] { background: transparent; border: 1.5px solid var(--color-faint); }
+  .dot[data-state='waiting'] { background: var(--color-blue); }
   .sess .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; font-size: 12px; }
   .sess.active .name { font-weight: 600; }
   .sess .when { font: 500 10px var(--font-mono); color: var(--color-faint); }
@@ -333,7 +334,7 @@
   .banner .banner-btn:hover { border-color: var(--color-red); color: var(--color-red); }
 
   /* ── Composer ───────────────────────── */
-  .composer { flex-shrink: 0; padding: 14px 28px 18px; border-top: 1px solid var(--color-line); }
+  .composer { position: relative; flex-shrink: 0; padding: 14px 28px 18px; border-top: 1px solid var(--color-line); }
   .composer .box { display: flex; align-items: center; gap: 10px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; padding: 11px 14px; }
   .composer .box:focus-within { border-color: var(--color-indigo); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-indigo) 18%, transparent); }
   .composer .box.disabled { opacity: 0.5; }
@@ -350,6 +351,15 @@
   .composer .action.stop:hover { border-color: var(--color-red); }
   .composer .action:disabled { cursor: default; }
 
+  /* Autocomplétion des slash commands — popover AU-DESSUS du champ (le composer
+     est collé en bas de la fenêtre, une liste vers le bas sortirait de l'écran). */
+  .command-popover { position: absolute; bottom: calc(100% - 6px); left: 28px; right: 28px; z-index: 20; margin: 0; padding: 4px; list-style: none; max-height: 260px; overflow-y: auto; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; box-shadow: 0 10px 30px color-mix(in srgb, black 22%, transparent); }
+  .command-popover li { display: flex; align-items: baseline; gap: 8px; padding: 5px 9px; border-radius: 7px; cursor: pointer; font-size: 12.5px; }
+  .command-popover li.active { background: color-mix(in srgb, var(--color-indigo) 16%, transparent); }
+  .command-popover .cmd-name { font: 600 12.5px var(--font-mono); color: var(--color-text); white-space: nowrap; }
+  .command-popover .cmd-hint { font: 11px var(--font-mono); color: var(--color-indigo); white-space: nowrap; }
+  .command-popover .cmd-desc { flex: 1; min-width: 0; color: var(--color-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   /* Per-session permissions question — asked once, above the composer. The
      dangerous choice is red (amber stays reserved for tool permissions). */
   .perm-gate { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 28px 0; padding: 10px 14px; max-width: 48rem; border: 1px solid var(--color-line); border-left: 3px solid var(--color-indigo); border-radius: 9px; background: var(--color-surface); font-size: 12px; }
@@ -360,6 +370,11 @@
   .perm-gate .perm-gate-btn.danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
   .perm-gate .perm-gate-btn.danger:hover { border-color: var(--color-red); background: color-mix(in srgb, var(--color-red) 8%, transparent); }
   .perm-gate .perm-gate-btn:disabled { opacity: 0.5; cursor: default; }
+  .perm-gate .perm-gate-remember { flex-basis: 100%; display: flex; align-items: center; gap: 6px; color: var(--color-faint); font-size: 11.5px; cursor: pointer; }
+  .perm-gate .perm-gate-remember input { accent-color: var(--color-indigo); cursor: pointer; }
+
+  /* Rappel discret qu'une session tourne SANS garde-fou — rouge (état dangereux), jamais ambre. */
+  .perm-bypass-chip { align-self: flex-start; margin: 8px 28px 0; padding: 2px 9px; font: 700 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-red); border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-red) 8%, transparent); }
 
   /* Confirmation dialog actions (delete session) — perm-gate button grammar:
      neutral surface button, red for the destructive choice. */

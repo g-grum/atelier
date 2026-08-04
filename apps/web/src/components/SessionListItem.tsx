@@ -1,12 +1,13 @@
 import type { SessionSummary } from '@atelier/shared'
 
 /**
- * Sidebar state dots (mockup v5.0 semantics):
- * - run: the session is streaming right now (success green)
- * - idle: nothing happened yet — drafts and empty sessions (faint, filled)
- * - done: the session has history and is not streaming (outlined)
+ * Sidebar state dots (spec 2026-08-02) :
+ * - run: la session stream (vert) — hub ou vert optimiste de la session active
+ * - waiting: un tour vient de finir/échouer hors focus, en attente (bleu)
+ * - idle: rien encore — drafts et sessions vides (faible, plein)
+ * - done: historique, pas de tour en cours (contour)
  */
-export type SessionDotState = 'run' | 'idle' | 'done'
+export type SessionDotState = 'run' | 'waiting' | 'idle' | 'done'
 
 export type SessionListItemProps = {
   session: SessionSummary

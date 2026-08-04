@@ -48,6 +48,8 @@ function renderSidebar(overrides: Partial<SessionSidebarProps> = {}) {
     openProjectId: 'p1',
     activeSessionId: 's1',
     streamingSessionId: null,
+    statuses: new Map(),
+    waiting: new Set(),
     onSelectProject: () => {},
     onSelect: (session) => calls.selected.push(session),
     onCreateDraft: () => {},
@@ -82,6 +84,23 @@ describe('SessionSidebar sessions', () => {
     cleanup()
     renderSidebar({ streamingSessionId: 's1' })
     // The streaming session gets the pulsing mint "run" dot.
+    expect(dotState('Refresh token expiré')).toBe('run')
+  })
+
+  test('vert (run) quand le hub signale streaming pour la session', () => {
+    renderSidebar({ statuses: new Map([['s1', 'streaming']]) })
+    expect(dotState('Refresh token expiré')).toBe('run')
+  })
+
+  test('bleu (waiting) quand la session est en attente hors focus', () => {
+    // NB : `dotState` ignore volontairement le focus — le vidage au focus vit dans
+    // le store (setActive), pas ici. Le défaut activeSessionId='s1' n'affecte donc rien.
+    renderSidebar({ waiting: new Set(['s1']) })
+    expect(dotState('Refresh token expiré')).toBe('waiting')
+  })
+
+  test('le vert prime le bleu (priorité run > waiting)', () => {
+    renderSidebar({ statuses: new Map([['s1', 'streaming']]), waiting: new Set(['s1']) })
     expect(dotState('Refresh token expiré')).toBe('run')
   })
 
