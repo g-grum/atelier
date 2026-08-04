@@ -359,6 +359,7 @@
   .command-popover .cmd-name { font: 600 12.5px var(--font-mono); color: var(--color-text); white-space: nowrap; }
   .command-popover .cmd-hint { font: 11px var(--font-mono); color: var(--color-indigo); white-space: nowrap; }
   .command-popover .cmd-desc { flex: 1; min-width: 0; color: var(--color-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .command-popover li.active .cmd-desc { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 
   /* Per-session permissions question — asked once, above the composer. The
      dangerous choice is red (amber stays reserved for tool permissions). */

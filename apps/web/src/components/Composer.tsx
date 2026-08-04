@@ -89,6 +89,10 @@ export function Composer({ disabled, status, onSend, onAbort, commands }: Compos
               role="option"
               aria-selected={index === active}
               className={index === active ? 'active' : undefined}
+              // onMouseMove, pas onMouseEnter : quand la liste défile sous un
+              // curseur immobile (navigation clavier), onMouseEnter volerait la
+              // sélection ; onMouseMove n'active que si la souris bouge vraiment.
+              onMouseMove={() => setActive(index)}
               // onMouseDown, pas onClick : onClick arriverait APRÈS le blur de
               // la textarea, qui aurait déjà fermé le popover.
               onMouseDown={(event) => {

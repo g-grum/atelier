@@ -226,4 +226,14 @@ describe('Composer — autocomplétion des slash commands', () => {
     expect(sent).toEqual([])
     expect((textarea() as HTMLTextAreaElement).value).not.toBe('/review ')
   })
+
+  test('le survol souris rend une option active (déplie sa description)', () => {
+    renderComposer({ commands: CMDS })
+    type('/')
+    expect(options()).toHaveLength(2)
+    expect(options()[1]?.getAttribute('aria-selected')).toBe('false')
+    fireEvent.mouseMove(options()[1]!)
+    expect(options()[1]?.getAttribute('aria-selected')).toBe('true')
+    expect(options()[0]?.getAttribute('aria-selected')).toBe('false')
+  })
 })
