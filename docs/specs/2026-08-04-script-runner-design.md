@@ -237,7 +237,7 @@ la frontière de confiance : `package.json` est un fichier ordinaire du projet,
 donc **éditable par les outils de fichiers de l'agent**. Ces éditions passent par
 le `permission-broker` — mais une décision `'always'` **persiste une règle** qui
 auto-autorise silencieusement les éditions suivantes
-(`permission-broker.ts:59-67`). Une fois une telle règle accordée pour les
+(`permission-broker.ts:34-38` pour l'auto-autorisation silencieuse, `:63-67` pour la persistance de la règle). Une fois une telle règle accordée pour les
 fichiers du projet (grant courant et plausible), l'agent peut réécrire la
 commande d'un script, qui s'exécutera ensuite **sans aucun contrôle** au prochain
 clic humain.
@@ -283,7 +283,7 @@ L'essentiel est en unités **pures**, sans process ni SSE :
   `'cancelled'` ; troncature à 5 000 lignes ; binaire introuvable → `stderr` +
   `127`.
 - **`resolve-runner-binary.test.ts`** — `bun` → `process.execPath` ;
-  `npm`/`pnpm`/`yarn` → chemin trouvé ; introuvable → `null`.
+  `npm`/`pnpm`/`yarn` → chemin trouvé par `Bun.which` ; repli Homebrew quand `Bun.which` échoue ; introuvable partout → `null`.
 - **`scripts-routes.test.ts`** — `200` liste ; `404` projet inconnu ; `409` run
   en cours ; `404` `runId` inconnu ; le SSE émet bien `line` puis `end` ;
   `/projects/:id/runs/latest` renvoie le run en cours, puis le dernier terminé,
