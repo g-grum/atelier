@@ -57,7 +57,7 @@ Cette spec est le second volet d'une demande découpée en deux ; le premier
 - **Aucun précédent de streaming HTTP** côté serveur : le seul motif de
   subprocess est `gh-runner.ts`, **bufferisé** avec un timeout de 10 s
   (`gh-runner.ts:4`) — inutilisable tel quel pour un run de 38 s.
-- **Le WebSocket est par session** (`app.ts:73`, `/ws/:id?projectId=`), pas par
+- **Le WebSocket est par session** (`app.ts:73`, route réelle `/api/sessions/:id/stream`), pas par
   projet : un runner de scripts ne s'y branche pas naturellement.
 - **Piège PATH documenté** : `gh-runner.ts:10` résout `gh` via `Bun.which` avec
   un repli Homebrew, parce qu'un lancement depuis le Dock donne un PATH minimal.
@@ -92,6 +92,22 @@ export type RunEvent =
 Ajouter `'scripts'` à `WidgetType` et à `SINGLETON_WIDGET_TYPES` (un seul widget
 scripts par dashboard).
 
+**Deux pièges silencieux — le type partagé ne les force PAS :**
+
+1. `apps/web/src/components/widgets/widget-registry.ts` — `WIDGET_META` est un
+   `Partial<Record<WidgetType, WidgetMeta>>`. Le menu « + Widget » de
+   `DashboardGrid.tsx:52` et son `add(type)` (`:38`, qui no-op silencieusement sur
+   `undefined`) sont **entièrement** pilotés par cette map : sans entrée,
+   **aucun chemin UI ne permet jamais d'ajouter le widget**. Pas d'erreur, juste
+   impossible.
+2. `apps/server/src/routes/validate-widgets.ts` — `TYPES` est un
+   `Set<WidgetType>` **maintenu à la main**, pas dérivé de l'union. Sans ajout,
+   `PUT /api/widgets` renvoie `400 « type inconnu « scripts » »` alors que tout
+   le reste est câblé.
+
+Même classe de piège que le `Set` `SERVER_EVENT_TYPES` de la spec slash
+commands : un type ajouté sans son entrée de registre échoue sans bruit.
+
 `ServerEvent` et `ClientMessage` sont **inchangés** : le runner ne passe pas par
 le WebSocket de session.
 
@@ -110,7 +126,7 @@ genre de code. Gère `\n` et `\r\n` ; la dernière ligne sans `\n` final reste d
 
 `package.json` → `ScriptInfo[]`. Couture fs injectable (modèle `GhRun`).
 Contrat **ne-jette-jamais** (modèle `deriveMessageCount`,
-`sdk-client.ts:387-397`) : fichier absent, JSON malformé, `scripts` absent ou
+`sdk-client.ts:449-463`) : fichier absent, JSON malformé, `scripts` absent ou
 non-objet → `[]`.
 
 ### 4. Serveur — `scripts/detect-package-manager.ts` (PUR)
@@ -135,9 +151,18 @@ Possède les process en cours et les tampons de sortie.
 
 - **Couture de spawn injectable** (modèle `GhRun`, `gh-runner.ts:2`) pour que
   les tests ne lancent aucun process.
-- **Résolution du binaire** via `Bun.which` + repli, comme `gh-runner.ts:10`.
-  Introuvable → une ligne `stderr` explicite avec la commande d'installation et
-  `exitCode: 127`, exactement le motif de `gh-runner.ts:23`.
+- **Résolution du binaire** dans sa propre fonction pure (même discipline que
+  les trois autres unités, donc testable sans couture de spawn) :
+  - **`bun` → `process.execPath`.** Le serveur *est déjà* lancé par
+    `apps/desktop/src/main.ts` avec le `bunPath` correctement résolu par
+    `resolveRuntime()`, précisément pour survivre au PATH minimal du Dock.
+    Un repli devinant `/opt/homebrew/bin/bun` échouerait sur une installation via
+    l'installeur officiel (`~/.bun/bin/bun`, au moins aussi courante) — c'est-à-dire
+    dans le scénario même qu'il prétend couvrir.
+  - **`npm`/`pnpm`/`yarn` → `Bun.which` + repli Homebrew**, comme
+    `gh-runner.ts:10`.
+  - Introuvable → une ligne `stderr` explicite avec la commande d'installation et
+    `exitCode: 127`, exactement le motif de `gh-runner.ts:23`.
 - **Tampon borné aux 5 000 dernières lignes**, avec une ligne de marqueur de
   troncature — un run bavard ne doit pas faire fuir la mémoire.
 - **Pas de timeout.** Contrairement à `gh-runner` (10 s), un `test` légitime dure
@@ -153,6 +178,14 @@ Possède les process en cours et les tampons de sortie.
 | `GET` | `/runs/:runId/stream` | SSE des `RunEvent` |
 | `POST` | `/runs/:runId/cancel` | Annule |
 | `GET` | `/runs/:runId` | Résumé + tampon (modale, reconnexion) |
+| `GET` | `/projects/:id/runs/latest` | `RunSummary \| null` — dernier run de ce projet |
+
+**`/projects/:id/runs/latest` est indispensable, pas un confort :** sans elle, un
+rechargement de l'onglet pendant un run laisse le widget incapable de retrouver
+le `runId` en cours. Le badge « en cours » et l'invariant « boutons désactivés
+tant qu'un run tourne » (décision 6) ne seraient restaurables que dans la session
+de navigateur qui a lancé le run. Elle sert aussi le badge du **dernier** résultat
+au montage du widget.
 
 Résolution de l'id de projet : **aucun résolveur partagé n'existe au HEAD** —
 `sessions-routes.ts:12` et `github-routes.ts:17` inlinent chacun leur
@@ -167,8 +200,14 @@ atterri.
   désactivés tant qu'un run tourne.
 - Clic sur le badge → **modale** (`components/ui/dialog`) : sortie complète,
   `stderr` visuellement distinct de `stdout`, autoscroll en bas.
-- Le flux SSE est consommé via `EventSource` ; à l'ouverture de la modale après
-  un rechargement, `GET /runs/:runId` fournit le tampon.
+- Le flux SSE est consommé via `EventSource`, **avec le token en query string**
+  (`?token=`) : `/api/*` exige une authentification et un `EventSource` ne peut
+  pas poser d'en-tête. C'est exactement ce que font déjà les deux clients WS
+  (`api/ws.ts:68`, `status-socket.ts:35`) via `getToken()`. Sans ça, `401` au
+  premier essai.
+- Au montage, `GET /projects/:id/runs/latest` restaure le badge (et le `runId`
+  d'un run encore en cours après rechargement) ; à l'ouverture de la modale,
+  `GET /runs/:runId` fournit le tampon.
 - Couleurs : vert/rouge selon l'issue ; **l'ambre reste réservé aux
   permissions**.
 
@@ -181,19 +220,40 @@ atterri.
 5. Clic sur le badge → modale, tampon complet.
 6. **Stop** → `POST /runs/:runId/cancel` → `end` avec `status: 'cancelled'`.
 
-## Sécurité — un choix explicite
+## Sécurité — un choix explicite, avec un risque résiduel nommé
 
 Ce runner crée une **seconde voie d'exécution shell** dans Atelier, **non
-soumise au `permission-broker`**. C'est délibéré et borné :
+soumise au `permission-broker`**. C'est délibéré :
 
 - L'origine est **humaine** (un clic), pas un modèle proposant une commande.
-- Les commandes exécutables sont **exactement** celles du `package.json` du
-  projet enregistré — pas de saisie libre, pas d'arguments arbitraires.
+- Il n'y a **pas de saisie libre** : seules les entrées de `scripts` du
+  `package.json` sont lançables, sans arguments ajoutés.
 - Le `cwd` est le chemin du projet enregistré.
 
-Le `permission-broker` reste intégralement réservé aux outils de l'agent. Si un
-jour de la saisie libre est ajoutée (un vrai terminal), cette décision devra être
-rouverte — ce serait alors une surface d'exécution arbitraire.
+### Le chemin « confused deputy » — à ne pas cacher
+
+La borne « ce sont les commandes du `package.json` » ne suffit **pas** à fermer
+la frontière de confiance : `package.json` est un fichier ordinaire du projet,
+donc **éditable par les outils de fichiers de l'agent**. Ces éditions passent par
+le `permission-broker` — mais une décision `'always'` **persiste une règle** qui
+auto-autorise silencieusement les éditions suivantes
+(`permission-broker.ts:59-67`). Une fois une telle règle accordée pour les
+fichiers du projet (grant courant et plausible), l'agent peut réécrire la
+commande d'un script, qui s'exécutera ensuite **sans aucun contrôle** au prochain
+clic humain.
+
+**Mitigation retenue :** le widget **affiche la commande réelle** de chaque
+script (c'est la raison d'être de `ScriptInfo.command`), et non seulement son
+nom. L'humain voit donc ce qu'il lance : un `test` devenu `rm -rf …` est visible
+avant le clic. C'est une mitigation par **transparence**, pas un contrôle
+d'accès.
+
+**Risque résiduel assumé :** un humain qui clique sans lire reste exposé. Fermer
+réellement la frontière demanderait soit de faire passer les runs par le
+`permission-broker` (ce qui annule l'intérêt du « un clic »), soit d'épingler une
+empreinte des scripts et d'alerter au changement — reporté, non retenu pour cette
+version. Décision consciente, à rouvrir si de la saisie libre est ajoutée (un
+vrai terminal serait une surface d'exécution arbitraire, pas la même discussion).
 
 ## Gestion d'erreurs
 
@@ -222,11 +282,17 @@ L'essentiel est en unités **pures**, sans process ni SSE :
   `end` porte le bon `status`/`exitCode` ; second `start` refusé ; `cancel` →
   `'cancelled'` ; troncature à 5 000 lignes ; binaire introuvable → `stderr` +
   `127`.
+- **`resolve-runner-binary.test.ts`** — `bun` → `process.execPath` ;
+  `npm`/`pnpm`/`yarn` → chemin trouvé ; introuvable → `null`.
 - **`scripts-routes.test.ts`** — `200` liste ; `404` projet inconnu ; `409` run
-  en cours ; `404` `runId` inconnu ; le SSE émet bien `line` puis `end`.
-- **`ScriptsWidget.test.tsx`** — un bouton par script ; boutons désactivés
+  en cours ; `404` `runId` inconnu ; le SSE émet bien `line` puis `end` ;
+  `/projects/:id/runs/latest` renvoie le run en cours, puis le dernier terminé,
+  puis `null` quand il n'y en a jamais eu.
+- **`ScriptsWidget.test.tsx`** — un bouton par script ; **la commande réelle est
+  affichée** (mitigation de sécurité, pas seulement le nom) ; boutons désactivés
   pendant un run ; **Stop** visible seulement pendant ; clic sur le badge ouvre
-  la modale ; liste vide → message « aucun script ».
+  la modale ; liste vide → message « aucun script » ; au montage,
+  `runs/latest` restaure un badge « en cours » (cas du rechargement d'onglet).
 
 ## Hors périmètre
 
