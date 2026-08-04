@@ -1,6 +1,6 @@
-import type { ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionStatusEvent, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionStatusEvent, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
-import { fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
+import { fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
 import { StatusSocket } from './status-socket'
 import { SessionSocket } from './ws'
@@ -42,6 +42,11 @@ export type Backend = {
   patchPreferences: (patch: Partial<Preferences>) => Promise<Preferences>
   /** Slash commands du projet — alimente l'autocomplétion du composer. */
   listCommands: (projectId: string) => Promise<SlashCommandInfo[]>
+  /** Règles « toujours autoriser » persistées — la section permissions des Réglages. */
+  listRules: () => Promise<AlwaysRule[]>
+  deleteRule: (id: string) => Promise<void>
+  /** Désinscrit un projet (les sessions restent sur disque côté serveur). */
+  deleteProject: (id: string) => Promise<void>
   /**
    * Status-hub socket (spec 2026-08-02) — a real WebSocket in production, a
    * closeable no-op under fixtures/tests. Kept behind this seam (like
@@ -73,6 +78,9 @@ const realBackend: Backend = {
   getPreferences: client.getPreferences,
   patchPreferences: client.patchPreferences,
   listCommands: client.listCommands,
+  listRules: client.listRules,
+  deleteRule: client.deleteRule,
+  deleteProject: client.deleteProject,
   createStatusSocket: (onEvent) => new StatusSocket(onEvent),
 }
 
@@ -87,8 +95,14 @@ export const DEFAULT_PREFERENCES: Preferences = { ide: 'webstorm', defaultModel:
 
 const REPLAY_STEP_MS = 250
 
-function createFixtureBackend(): Backend {
+/** Exported for tests — the module-level `backend` picks real vs fixture once at load. */
+export function createFixtureBackend(): Backend {
   let projects: ProjectSummary[] = fixtureProjects.map((project) => ({ ...project }))
+  // Règles « toujours autoriser » plausibles pour le mode démo (section Réglages).
+  let rules: AlwaysRule[] = [
+    { id: 'rule-1', projectId: 'proj-atelier', toolName: 'Bash', matcher: 'bun test' },
+    { id: 'rule-2', projectId: 'proj-atelier', toolName: 'Read', matcher: null },
+  ]
   let sessions: SessionSummary[] = fixtureSessions.map((session) => ({ ...session }))
   const messages = new Map<string, ChatMessage[]>(Object.entries(fixtureMessages))
   let widgets: WidgetInstance[] = fixtureWidgets.map((w) => ({ ...w }))
@@ -157,6 +171,13 @@ function createFixtureBackend(): Backend {
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
     // Demo mode: aucune sonde SDK à disposition → pas d'autocomplétion.
     listCommands: async () => [],
+    listRules: async () => rules,
+    deleteRule: async (id) => {
+      rules = rules.filter((rule) => rule.id !== id)
+    },
+    deleteProject: async (id) => {
+      projects = projects.filter((project) => project.id !== id)
+    },
     // Demo mode: no server-side status hub to connect to — a no-op keeps the
     // sidebar dots at their default (idle/done) derivation.
     createStatusSocket: () => ({ close: () => {} }),
@@ -184,7 +205,10 @@ class FixtureSocket implements ControllerSocket {
 
   send(message: ClientMessage): void {
     if (message.type === 'user_message') {
-      fixtureTurn.forEach((event, index) => {
+      // Mode démo : un message contenant « erreur »/« error » rejoue le tour
+      // coupé par la limite d'usage (exerce l'ErrorBanner hors serveur réel).
+      const turn = /erreur|error/i.test(message.text) ? fixtureErrorTurn : fixtureTurn
+      turn.forEach((event, index) => {
         this.schedule(() => this.emit({ ...event, sessionId: this.sessionId }), (index + 1) * REPLAY_STEP_MS)
       })
     } else if (message.type === 'abort') {

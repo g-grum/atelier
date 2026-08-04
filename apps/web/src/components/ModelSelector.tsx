@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { MODELS, type SessionSummary } from '@atelier/shared'
-import * as client from '../api/client'
+import { type Backend, backend } from '../api/backend'
 import { modelLabel } from '../lib/models'
 import { errorMessage } from '../lib/utils'
 import {
@@ -13,12 +13,11 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu'
 
-/** The slice of the REST client the selector needs — injectable for tests. */
-export type ModelSelectorApi = {
-  patchSession: typeof client.patchSession
-}
+/** The slice of the Backend seam the selector needs — injectable for tests. */
+export type ModelSelectorApi = Pick<Backend, 'patchSession'>
 
-const defaultApi: ModelSelectorApi = { patchSession: client.patchSession }
+/** Exported for tests: proves the default wiring goes through the seam (fixtures included). */
+export const defaultApi: ModelSelectorApi = { patchSession: backend.patchSession }
 
 /** Toast seam — tests inject a spy here instead of asserting on sonner internals. */
 export type ToastFailure = (message: string) => void

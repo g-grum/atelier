@@ -60,6 +60,9 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
     listCommands: async () => [],
+    listRules: async () => [],
+    deleteRule: async () => {},
+    deleteProject: async () => {},
     // No real WS in tests (an unreachable connection crashes happy-dom's
     // `ws`-backed WebSocket shim) — a closeable no-op mirrors idleSocket above.
     createStatusSocket: () => ({ close: () => {} }),

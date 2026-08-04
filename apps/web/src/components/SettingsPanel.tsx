@@ -2,29 +2,26 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings } from 'lucide-react'
 import { useState } from 'react'
 import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary, type SessionPermissionMode, type Theme } from '@atelier/shared'
-import * as client from '../api/client'
+import { type Backend, backend } from '../api/backend'
 import { modelLabel } from '../lib/models'
 import { applyTheme } from '../lib/theme'
 import { basename, errorMessage } from '../lib/utils'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 
-/** The slice of the REST client the panel needs — injectable for tests. */
-export type SettingsApi = {
-  getPreferences: typeof client.getPreferences
-  patchPreferences: typeof client.patchPreferences
-  listRules: typeof client.listRules
-  deleteRule: typeof client.deleteRule
-  listProjects: typeof client.listProjects
-  deleteProject: typeof client.deleteProject
-}
+/** The slice of the Backend seam the panel needs — injectable for tests. */
+export type SettingsApi = Pick<
+  Backend,
+  'getPreferences' | 'patchPreferences' | 'listRules' | 'deleteRule' | 'listProjects' | 'deleteProject'
+>
 
-const defaultApi: SettingsApi = {
-  getPreferences: client.getPreferences,
-  patchPreferences: client.patchPreferences,
-  listRules: client.listRules,
-  deleteRule: client.deleteRule,
-  listProjects: client.listProjects,
-  deleteProject: client.deleteProject,
+/** Exported for tests: proves the default wiring goes through the seam (fixtures included). */
+export const defaultApi: SettingsApi = {
+  getPreferences: backend.getPreferences,
+  patchPreferences: backend.patchPreferences,
+  listRules: backend.listRules,
+  deleteRule: backend.deleteRule,
+  listProjects: backend.listProjects,
+  deleteProject: backend.deleteProject,
 }
 
 const IDE_LABELS: Record<Preferences['ide'], string> = {
