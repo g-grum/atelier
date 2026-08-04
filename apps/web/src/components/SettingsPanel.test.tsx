@@ -44,6 +44,32 @@ function renderPanel(overrides: Partial<SettingsApi> = {}) {
 }
 
 describe('SettingsPanel', () => {
+  // Régression : le dialog est centré en position fixed sans plafond de hauteur.
+  // Dès que les listes non bornées (règles « toujours autoriser », projets) font
+  // dépasser le contenu de la fenêtre, le centrage pousse le haut ET le bas hors
+  // du viewport — et rien n'est défilable, donc les deux extrémités deviennent
+  // définitivement inatteignables. jsdom ne fait pas de layout : on verrouille
+  // la présence du plafond + du conteneur de défilement, pas la géométrie.
+  test('le contenu du dialog est borné en hauteur et absorbe le débordement par un scroller', async () => {
+    renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    await screen.findByLabelText('IDE préféré')
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.className).toContain('max-h-')
+    // Sans piste de grille contrainte, la rangée reste en `auto` (dimensionnée par le
+    // contenu) et déborde du plafond : mesuré en vrai navigateur, le scroller affichait
+    // alors clientHeight == scrollHeight == 2952 et ne défilait pas. Vérifié corrigé :
+    // client 556 / scroll 2952. Ne pas retirer ce plafond de rangée.
+    expect(dialog.className).toContain('grid-rows-[minmax(0,1fr)]')
+
+    const scroller = dialog.querySelector('[data-dialog-scroll]')
+    expect(scroller).not.toBeNull()
+    expect(scroller?.className).toContain('overflow-y-auto')
+    // le scroller doit contenir le corps réglages, pas juste exister
+    expect(scroller?.contains(screen.getByLabelText('IDE préféré'))).toBe(true)
+  })
+
   test('the gear opens the dialog; selects show the preferences and PATCH on change', async () => {
     const calls = renderPanel()
     fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
