@@ -9,6 +9,8 @@ import { GithubService } from './github/github-service'
 import { createGhRunner } from './github/gh-runner'
 import { createApp } from './app'
 import { watchStdin } from './stdin-watchdog'
+import { AutopilotRunner } from './autopilot/autopilot-runner'
+import { createWorkspace } from './autopilot/workspace'
 
 function parseArgs(): {
   port: number
@@ -59,13 +61,17 @@ if (shouldWatchStdin) {
 
 const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
-const streams = new SessionStreamRegistry(data, sdk)
+// Prédicat data-driven « session autopilot ? » — pas de cycle registre↔runner (spec 2026-08-05).
+const streams = new SessionStreamRegistry(data, sdk, (sessionId) =>
+  data.get().autopilot.items.some((i) => i.sessionId !== '' && data.resolveSessionId(i.sessionId) === sessionId)
+)
 const sessions = new SessionsService(sdk, data, streams)
 const github = new GithubService(createGhRunner())
+const autopilot = new AutopilotRunner({ data, sessions, streams, github, workspace: createWorkspace })
 // Repo root — this file lives at apps/server/src/index.ts; the server runs
 // from repo sources (repo-tethered bundle), so the path holds in both modes.
 const versionFile = join(import.meta.dir, '..', '..', '..', 'version.json')
-const app = createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github })
+const app = createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github, autopilot })
 
 Bun.serve({
   hostname: '127.0.0.1',

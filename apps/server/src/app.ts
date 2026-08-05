@@ -11,13 +11,15 @@ import type { SessionStreamRegistry } from './stream/session-stream'
 import { githubRoutes } from './github/github-routes'
 import { commandsRoutes } from './commands/commands-routes'
 import type { GithubService } from './github/github-service'
+import { autopilotRoutes } from './autopilot/autopilot-routes'
+import type { AutopilotRunner } from './autopilot/autopilot-runner'
 
 // Security model: same-origin serving + loopback binding + token auth.
 // No CORS headers needed — the server only listens on 127.0.0.1 and the web
 // client is served from the same origin. The token covers WS upgrades too via
 // the ?token= query param (browsers cannot set headers on WS handshakes).
 
-export function createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github }: { data: AppData; sessions: SessionsService; sdk: SdkClient; streams: SessionStreamRegistry; token: string; webDist?: string; versionFile?: string; github: GithubService }): Hono {
+export function createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github, autopilot }: { data: AppData; sessions: SessionsService; sdk: SdkClient; streams: SessionStreamRegistry; token: string; webDist?: string; versionFile?: string; github: GithubService; autopilot?: AutopilotRunner }): Hono {
   const app = new Hono()
 
   // Token middleware scoped to /api/* so that /health and static assets stay open
@@ -39,6 +41,8 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
   api.route('/', settingsRoutes(data, sessions))
   api.route('/', githubRoutes(github, data))
   api.route('/', commandsRoutes(data, sdk))
+  // Optionnel : les tests d'app existants n'ont pas besoin de construire un runner.
+  if (autopilot !== undefined) api.route('/', autopilotRoutes(autopilot, data))
 
   // Update detection: read version.json from DISK on every request — the
   // server process was loaded at app launch, but the repo may have moved on
