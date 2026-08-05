@@ -1,4 +1,4 @@
-import type { PermissionRequest, QuestionRequest, ServerEvent, SessionState, SessionStatusEvent } from '@atelier/shared'
+import type { PermissionRequest, QuestionRequest, ServerEvent, SessionState, SessionStatusEvent, StatusHubEvent } from '@atelier/shared'
 import { parseClientMessage } from '@atelier/shared'
 import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
@@ -379,7 +379,7 @@ export class SessionStream {
  */
 export class SessionStreamRegistry {
   private readonly streams = new Map<string, SessionStream>()
-  private readonly statusSinks = new Set<(event: SessionStatusEvent) => void>()
+  private readonly statusSinks = new Set<(event: StatusHubEvent) => void>()
 
   constructor(
     private readonly data: AppData,
@@ -409,8 +409,8 @@ export class SessionStreamRegistry {
     return stream
   }
 
-  /** Abonne un sink au flux d'état global : snapshot immédiat de toutes les sessions vivantes, puis transitions. */
-  onStatusConnect(send: (event: SessionStatusEvent) => void): void {
+  /** Abonne un sink au flux d'état global : snapshot immédiat de toutes les sessions vivantes, puis transitions (et événements autopilot — spec 2026-08-05). */
+  onStatusConnect(send: (event: StatusHubEvent) => void): void {
     // Snapshot construit AVANT l'abonnement : un sink qui lève ne doit pas rester
     // abonné avec un snapshot partiel, ni faire échouer la glue WS de l'appelant.
     const snapshot: SessionStatusEvent[] = []
@@ -427,12 +427,12 @@ export class SessionStreamRegistry {
     }
   }
 
-  onStatusClose(send: (event: SessionStatusEvent) => void): void {
+  onStatusClose(send: (event: StatusHubEvent) => void): void {
     this.statusSinks.delete(send)
   }
 
-  private publishStatus(sessionId: string, state: SessionState): void {
-    const event: SessionStatusEvent = { type: 'session_status', sessionId, state }
+  /** Diffuse un événement du hub (transitions de session, état autopilot) à tous les sinks — garde par-sink. */
+  publish(event: StatusHubEvent): void {
     // Garde par-sink : un sink qui lève (ex. ws.send sur un socket en teardown) ne
     // doit pas interrompre le for...of et priver les sinks suivants de la transition.
     for (const send of this.statusSinks) {
@@ -442,6 +442,10 @@ export class SessionStreamRegistry {
         console.error('[session-stream] status sink a levé (ignoré):', err)
       }
     }
+  }
+
+  private publishStatus(sessionId: string, state: SessionState): void {
+    this.publish({ type: 'session_status', sessionId, state })
   }
 
   /**

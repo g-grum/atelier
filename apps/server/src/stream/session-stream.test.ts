@@ -1180,3 +1180,31 @@ describe('SessionStream', () => {
     expect(registry.get('sdk-1', 'p1')).not.toBe(stream)
   })
 })
+
+// 10. Hub élargi (spec 2026-08-05) : publication d'événements autopilot
+describe('status hub — publish', () => {
+  test('publish diffuse un événement arbitraire du hub à tous les sinks', () => {
+    const { registry } = setup()
+    const seen: unknown[] = []
+    registry.onStatusConnect((e) => seen.push(e))
+    const event = { type: 'autopilot_status' as const, autopilot: { run: null, items: [] } }
+    registry.publish(event)
+    expect(seen).toContainEqual(event)
+  })
+
+  test('un sink qui lève ne prive pas les suivants de publish', () => {
+    const { registry } = setup()
+    registry.onStatusConnect(() => {
+      throw new Error('sink boom')
+    })
+    const seen: unknown[] = []
+    registry.onStatusConnect((e) => seen.push(e))
+    const errorLog = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      registry.publish({ type: 'autopilot_status', autopilot: { run: null, items: [] } })
+    } finally {
+      errorLog.mockRestore()
+    }
+    expect(seen).toHaveLength(1)
+  })
+})

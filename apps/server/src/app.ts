@@ -1,7 +1,7 @@
 import { join, resolve, sep } from 'node:path'
 import { Hono } from 'hono'
 import { upgradeWebSocket } from 'hono/bun'
-import type { ServerEvent, SessionStatusEvent } from '@atelier/shared'
+import type { ServerEvent, StatusHubEvent } from '@atelier/shared'
 import type { AppData } from './store/app-data'
 import type { SdkClient } from './sdk/sdk-client'
 import type { SessionsService } from './sessions/sessions-service'
@@ -96,7 +96,7 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
   api.get(
     '/sessions-status',
     upgradeWebSocket(() => {
-      let sink: ((event: SessionStatusEvent) => void) | null = null
+      let sink: ((event: StatusHubEvent) => void) | null = null
       return {
         onOpen(_evt, ws) {
           sink = (event) => ws.send(JSON.stringify(event))
