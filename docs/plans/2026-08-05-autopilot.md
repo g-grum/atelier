@@ -1,6 +1,6 @@
 # Autopilot Implementation Plan
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Un bouton dans Atelier traite le backlog GitHub (issues labellisées `autopilot`) de façon autonome : un agent par issue, worktree isolé, PR à reviewer.
 
@@ -20,7 +20,7 @@
 - Modify: `packages/shared/src/protocol.ts` (fin de fichier, après la section GitHub PRs)
 - Test: `packages/shared/src/protocol.test.ts` (créer s'il n'existe pas ; sinon ajouter un describe)
 
-- [ ] **Step 1: Écrire le test qui échoue** — parsing du hub élargi
+- [x] **Step 1: Écrire le test qui échoue** — parsing du hub élargi
 
 ```ts
 import { describe, expect, test } from 'bun:test'
@@ -43,9 +43,9 @@ describe('parseStatusHubEvent', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer** — `/Users/demo/.bun/bin/bun test packages/shared/src/protocol.test.ts` → FAIL (`parseStatusHubEvent` n'existe pas)
+- [x] **Step 2: Lancer** — `/Users/demo/.bun/bin/bun test packages/shared/src/protocol.test.ts` → FAIL (`parseStatusHubEvent` n'existe pas)
 
-- [ ] **Step 3: Implémentation** — dans `protocol.ts`, nouvelle section après les PrSummary :
+- [x] **Step 3: Implémentation** — dans `protocol.ts`, nouvelle section après les PrSummary :
 
 ```ts
 // ── Autopilot (spec 2026-08-05) ──
@@ -92,8 +92,8 @@ export function parseStatusHubEvent(raw: string): StatusHubEvent | null {
 
 Ne PAS toucher `parseSessionStatus` ni `SessionStatusEvent` (les consommateurs session existants ne voient rien).
 
-- [ ] **Step 4: Relancer** → PASS. Puis gate complet : `/Users/demo/.bun/bin/bun test` → tout vert.
-- [ ] **Step 5: Commit** — `feat(shared): types autopilot + parseStatusHubEvent (hub élargi)`
+- [x] **Step 4: Relancer** → PASS. Puis gate complet : `/Users/demo/.bun/bin/bun test` → tout vert.
+- [x] **Step 5: Commit** — `feat(shared): types autopilot + parseStatusHubEvent (hub élargi)`
 
 ### Task 2: AppData.autopilot + assainissement au boot
 
@@ -101,7 +101,7 @@ Ne PAS toucher `parseSessionStatus` ni `SessionStatusEvent` (les consommateurs s
 - Modify: `apps/server/src/store/app-data.ts` (AppDataShape L12-26, EMPTY L28-49, constructeur L56-71)
 - Test: `apps/server/src/store/app-data.test.ts` (existant — ajouter un describe)
 
-- [ ] **Step 1: Test qui échoue** — persistance + failed-au-boot
+- [x] **Step 1: Test qui échoue** — persistance + failed-au-boot
 
 ```ts
 describe('autopilot state', () => {
@@ -132,13 +132,13 @@ describe('autopilot state', () => {
 
 (Réutiliser le helper de fichier temporaire du test existant — regarder comment les autres tests d'app-data créent leur chemin.)
 
-- [ ] **Step 2: Lancer** — `/Users/demo/.bun/bin/bun test apps/server/src/store/app-data.test.ts` → FAIL
-- [ ] **Step 3: Implémentation**
+- [x] **Step 2: Lancer** — `/Users/demo/.bun/bin/bun test apps/server/src/store/app-data.test.ts` → FAIL
+- [x] **Step 3: Implémentation**
   - `AppDataShape` : `autopilot: AutopilotState` (import depuis `@atelier/shared`)
   - `EMPTY` : `autopilot: { run: null, items: [] }`
   - Constructeur, après le merge : si `this.data.autopilot.run !== null` → `run = null` et tous les items dont le statut n'est ni `pr_opened` ni `failed` passent `failed` avec `error: 'interrompu par un redémarrage du serveur'` + `endedAt`. (La spec dit « run marqué failed » — `AutopilotRunState` n'a pas d'état failed : run=null + items failed EST la matérialisation de cette exigence, l'échec se lit sur les items.)
-- [ ] **Step 4: Relancer** → PASS. Gate complet `bun test`.
-- [ ] **Step 5: Commit** — `feat(server): état autopilot persisté + assainissement failed au boot`
+- [x] **Step 4: Relancer** → PASS. Gate complet `bun test`.
+- [x] **Step 5: Commit** — `feat(server): état autopilot persisté + assainissement failed au boot`
 
 ### Task 3: GithubService.listAutopilotIssues + prForBranch (sans cache)
 
@@ -146,7 +146,7 @@ describe('autopilot state', () => {
 - Modify: `apps/server/src/github/github-service.ts`
 - Test: `apps/server/src/github/github-service.test.ts` (copier le pattern fake GhRun existant)
 
-- [ ] **Step 1: Tests qui échouent**
+- [x] **Step 1: Tests qui échouent**
 
 ```ts
 describe('listAutopilotIssues', () => {
@@ -172,8 +172,8 @@ describe('prForBranch', () => {
 
 (⚠️ Le helper existant `fakeRunner` (github-service.test.ts:20-29) route par `args[0]` et ne sait PAS répondre différemment à deux appels successifs — écrire un nouveau helper séquentiel (file de réponses) pour le test « sans cache » de `prForBranch`.)
 
-- [ ] **Step 2: Lancer** → FAIL
-- [ ] **Step 3: Implémentation** — deux méthodes publiques, mêmes conventions d'erreur (`GithubError`, messages FR) et de token (`resolveToken`) que `listPrs` :
+- [x] **Step 2: Lancer** → FAIL
+- [x] **Step 3: Implémentation** — deux méthodes publiques, mêmes conventions d'erreur (`GithubError`, messages FR) et de token (`resolveToken`) que `listPrs` :
 
 ```ts
 /** Issues ouvertes labellisées autopilot, plus ancienne d'abord. AUCUN cache. */
@@ -205,8 +205,8 @@ async prForBranch(repo: string, branch: string, githubUser: string): Promise<{ n
 }
 ```
 
-- [ ] **Step 4: Relancer** → PASS. Gate `bun test`.
-- [ ] **Step 5: Commit** — `feat(server): GithubService.listAutopilotIssues + prForBranch sans cache`
+- [x] **Step 4: Relancer** → PASS. Gate `bun test`.
+- [x] **Step 5: Commit** — `feat(server): GithubService.listAutopilotIssues + prForBranch sans cache`
 
 ### Task 4: Workspace runner (worktree + bun install + nettoyage)
 
@@ -216,7 +216,7 @@ async prForBranch(repo: string, branch: string, githubUser: string): Promise<{ n
 
 Le `GitRun` partagé (git-remote.ts) a un timeout 5 s — trop court pour `worktree add` + `bun install`. Runner d'exécution dédié, même pattern Bun.spawn que `gh-runner.ts`, timeout 10 min, cwd paramétrable. `bun` = `process.execPath` (le serveur TOURNE sous bun — chemin absolu garanti, immune au PATH minimal).
 
-- [ ] **Step 1: Tests qui échouent** — sur un vrai repo git temporaire (pattern : `mkdtemp` + `git init` + commit initial, voir les tests de `git-remote.test.ts` s'ils font ça ; sinon fake exec injecté) :
+- [x] **Step 1: Tests qui échouent** — sur un vrai repo git temporaire (pattern : `mkdtemp` + `git init` + commit initial, voir les tests de `git-remote.test.ts` s'ils font ça ; sinon fake exec injecté) :
 
 ```ts
 describe('workspace', () => {
@@ -236,8 +236,8 @@ describe('workspace', () => {
 })
 ```
 
-- [ ] **Step 2: Lancer** → FAIL
-- [ ] **Step 3: Implémentation** — interface injectable :
+- [x] **Step 2: Lancer** → FAIL
+- [x] **Step 3: Implémentation** — interface injectable :
 
 ```ts
 type Exec = (cmd: string[], cwd: string) => Promise<{ stdout: string; stderr: string; exitCode: number }>
@@ -255,8 +255,8 @@ export function createWorkspace(repoRoot: string, exec: Exec = defaultExec): Wor
 
 `defaultExec` : `Bun.spawn(cmd, { cwd, stdout: 'pipe', stderr: 'pipe' })` + timeout 600 000 ms (pattern gh-runner). `prepare` : `git worktree add …` (cwd repoRoot, échec → `Error('création du worktree impossible : ' + stderr)`), puis `[process.execPath, 'install']` (cwd worktree, échec → message FR). `cleanup` : `git worktree remove --force .worktrees/autopilot-<n>` puis `git branch -D autopilot/<n>` — chaque échec loggé (console.error) mais non-fatal.
 
-- [ ] **Step 4: Relancer** → PASS. Gate `bun test`.
-- [ ] **Step 5: Commit** — `feat(server): workspace autopilot — worktree + bun install + nettoyage`
+- [x] **Step 4: Relancer** → PASS. Gate `bun test`.
+- [x] **Step 5: Commit** — `feat(server): workspace autopilot — worktree + bun install + nettoyage`
 
 ## Chunk 2: AutopilotRunner, hub, routes
 
@@ -267,7 +267,7 @@ export function createWorkspace(repoRoot: string, exec: Exec = defaultExec): Wor
 - Modify: `apps/server/src/app.ts` (glue WS `/api/sessions-status`, ~L96 — vérifier le typage du sink)
 - Test: `apps/server/src/stream/session-stream.test.ts` (describe registre existant)
 
-- [ ] **Step 1: Test qui échoue**
+- [x] **Step 1: Test qui échoue**
 
 ```ts
 test('publish diffuse un événement arbitraire du hub à tous les sinks', () => {
@@ -281,14 +281,14 @@ test('publish diffuse un événement arbitraire du hub à tous les sinks', () =>
 test('un sink qui lève n'empêche pas les suivants de recevoir publish', () => { /* pattern du test publishStatus existant */ })
 ```
 
-- [ ] **Step 2: Lancer** — `/Users/demo/.bun/bin/bun test apps/server/src/stream/session-stream.test.ts` → FAIL
-- [ ] **Step 3: Implémentation**
+- [x] **Step 2: Lancer** — `/Users/demo/.bun/bin/bun test apps/server/src/stream/session-stream.test.ts` → FAIL
+- [x] **Step 3: Implémentation**
   - `statusSinks` retypé `Set<(event: StatusHubEvent) => void>` (import `StatusHubEvent` de `@atelier/shared`)
   - Nouvelle méthode publique `publish(event: StatusHubEvent): void` avec la même garde par-sink que `publishStatus` ; `publishStatus` (privé, inchangé de signature) délègue à `publish`
   - `onStatusConnect`/`onStatusClose` : paramètre retypé `(event: StatusHubEvent) => void` — le snapshot existant reste fait de `session_status` uniquement (l'état autopilot se récupère par GET, pas par snapshot hub)
   - `app.ts` : retyper ICI la déclaration L99 `sink: ((event: SessionStatusEvent) => void) | null` → `StatusHubEvent` (+ import L4) — contravariance dès que `onStatusConnect` est élargi (aucun gate ne typecheck apps/server : ne pas compter sur tsc pour l'attraper)
-- [ ] **Step 4: Relancer** → PASS. Gate `bun test`.
-- [ ] **Step 5: Commit** — `feat(server): hub de statut élargi — publish public typé StatusHubEvent`
+- [x] **Step 4: Relancer** → PASS. Gate `bun test`.
+- [x] **Step 5: Commit** — `feat(server): hub de statut élargi — publish public typé StatusHubEvent`
 
 ### Task 6: Deny AskUserQuestion pour les sessions autopilot
 
@@ -297,7 +297,7 @@ test('un sink qui lève n'empêche pas les suivants de recevoir publish', () => 
 - Modify: `apps/server/src/index.ts` (construction du registre — brancher le prédicat sur AppData)
 - Test: `apps/server/src/stream/session-stream.test.ts`
 
-- [ ] **Step 1: Test qui échoue** — copier le pattern des tests canUseTool existants (fake SDK qui capture le callback) :
+- [x] **Step 1: Test qui échoue** — copier le pattern des tests canUseTool existants (fake SDK qui capture le callback) :
 
 ```ts
 test('AskUserQuestion est refusé net dans une session autopilot (pas de QuestionBroker)', async () => {
@@ -309,8 +309,8 @@ test('AskUserQuestion est refusé net dans une session autopilot (pas de Questio
 test('AskUserQuestion va au QuestionBroker pour une session normale', async () => { /* comportement historique préservé */ })
 ```
 
-- [ ] **Step 2: Lancer** → FAIL
-- [ ] **Step 3: Implémentation**
+- [x] **Step 2: Lancer** → FAIL
+- [x] **Step 3: Implémentation**
   - `SessionStreamParams` + `isAutopilot?: (sessionId: string) => boolean` ; le registre le reçoit dans son constructeur (`isAutopilot: (sessionId: string) => boolean = () => false`) et le transmet à chaque `SessionStream`
   - Dans `canUseTool` (runTurn), AVANT le routage QCM :
 
@@ -321,8 +321,8 @@ if (toolName === 'AskUserQuestion' && this.isAutopilot?.(this.sessionId()) === t
 ```
 
   - `index.ts` : `new SessionStreamRegistry(data, sdk, (sessionId) => data.get().autopilot.items.some((i) => data.resolveSessionId(i.sessionId) === sessionId))` — data-driven, pas de cycle registre↔runner
-- [ ] **Step 4: Relancer** → PASS. Gate `bun test`.
-- [ ] **Step 5: Commit** — `feat(server): deny AskUserQuestion pour les sessions autopilot`
+- [x] **Step 4: Relancer** → PASS. Gate `bun test`.
+- [x] **Step 5: Commit** — `feat(server): deny AskUserQuestion pour les sessions autopilot`
 
 ### Task 7: AutopilotRunner (cœur)
 
@@ -368,9 +368,9 @@ Comportement (chaque point = un test) :
 
 **Fakes de test** : fake SessionsService (createDraft → { id: 'd1', … }), fake registry (capture onMessage, expose un `emit(sessionId, state)` pour simuler le hub, `publish` accumulé), fake workspace, fake github. Utiliser des timers contrôlables (`itemTimeoutMs: 50` + attentes courtes) — PAS de vrais setTimeout de 30 min dans les tests.
 
-- [ ] **Step 1..N:** un cycle test-rouge → implémentation → test-vert PAR comportement listé (1 à 9), commits intermédiaires autorisés
-- [ ] **Step final: Gate** `bun test` complet → vert
-- [ ] **Commit** — `feat(server): AutopilotRunner — boucle séquentielle bornée, PR par item, stop/cleanup`
+- [x] **Step 1..N:** un cycle test-rouge → implémentation → test-vert PAR comportement listé (1 à 9), commits intermédiaires autorisés
+- [x] **Step final: Gate** `bun test` complet → vert
+- [x] **Commit** — `feat(server): AutopilotRunner — boucle séquentielle bornée, PR par item, stop/cleanup`
 
 ### Task 8: fetchIssueBody dans GithubService + routes autopilot + wiring
 
@@ -388,9 +388,9 @@ Routes (préfixe `/api` déjà géré par app.ts) :
 
 Tests de routes : 404/400/409/202/200 + le start passe bien repo/user au runner (runner fake injecté).
 
-- [ ] **Steps TDD par route** (rouge → vert), puis wiring app.ts/index.ts (le serveur démarre : lancer `bun test apps/server` en entier)
-- [ ] **Gate** `bun test` + tsc → vert
-- [ ] **Commit** — `feat(server): routes autopilot + issueBody + wiring`
+- [x] **Steps TDD par route** (rouge → vert), puis wiring app.ts/index.ts (le serveur démarre : lancer `bun test apps/server` en entier)
+- [x] **Gate** `bun test` + tsc → vert
+- [x] **Commit** — `feat(server): routes autopilot + issueBody + wiring`
 
 ## Chunk 3: Web (widget, Backend, fixtures)
 
@@ -400,13 +400,13 @@ Tests de routes : 404/400/409/202/200 + le start passe bien repo/user au runner 
 - Modify: `packages/shared/src/protocol.ts` (WidgetType L183, WidgetInstance.config L185-195, SINGLETON_WIDGET_TYPES L198)
 - Modify: `apps/server/src/routes/validate-widgets.ts` (+ test `validate-widgets.test.ts` existant)
 
-- [ ] **Step 1: Tests qui échouent** (validate-widgets.test.ts, copier les cas github-prs) : type `autopilot` accepté en singleton ; config `{ projectId: 'p1', maxItems: 3 }` acceptée ; `maxItems` hors 1-10 refusé ; config `repo` sur un widget autopilot refusée ; deux widgets autopilot refusés
-- [ ] **Step 2: Lancer** → FAIL
-- [ ] **Step 3: Implémentation**
+- [x] **Step 1: Tests qui échouent** (validate-widgets.test.ts, copier les cas github-prs) : type `autopilot` accepté en singleton ; config `{ projectId: 'p1', maxItems: 3 }` acceptée ; `maxItems` hors 1-10 refusé ; config `repo` sur un widget autopilot refusée ; deux widgets autopilot refusés
+- [x] **Step 2: Lancer** → FAIL
+- [x] **Step 3: Implémentation**
   - `protocol.ts` : `WidgetType = 'github-prs' | 'rate-limits' | 'modified-files' | 'autopilot'` ; `config?: { repo: string; limit?: number } | { projectId: string; maxItems?: number }` (union — les consommateurs discriminent par `type` du widget) ; `SINGLETON_WIDGET_TYPES` + `'autopilot'`
   - `validate-widgets.ts` : brancher la validation par type — `github-prs` → `{ repo, limit? }` (existant), `autopilot` → `{ projectId: string non vide, maxItems?: 1-10 }`, autres types → config absente
-- [ ] **Step 4: Relancer** → PASS. Gate `bun test` + tsc. ⚠️ L'union casse App.tsx:360 (`w.config?.repo/.limit`) et PrConfigDialog.tsx:28,31 sous strict — `w.type === 'github-prs'` ne narrowe PAS `w.config` (champs indépendants). Remède prescrit : narrowing STRUCTUREL — `const cfg = w.config && 'repo' in w.config ? w.config : undefined` (et symétriquement `'projectId' in config` côté autopilot). Pas de `as`. Ne pas oublier le Set `TYPES` codé en dur dans validate-widgets.ts:3.
-- [ ] **Step 5: Commit** — `feat(shared,server): widget autopilot — type, singleton, config validée par type`
+- [x] **Step 4: Relancer** → PASS. Gate `bun test` + tsc. ⚠️ L'union casse App.tsx:360 (`w.config?.repo/.limit`) et PrConfigDialog.tsx:28,31 sous strict — `w.type === 'github-prs'` ne narrowe PAS `w.config` (champs indépendants). Remède prescrit : narrowing STRUCTUREL — `const cfg = w.config && 'repo' in w.config ? w.config : undefined` (et symétriquement `'projectId' in config` côté autopilot). Pas de `as`. Ne pas oublier le Set `TYPES` codé en dur dans validate-widgets.ts:3.
+- [x] **Step 5: Commit** — `feat(shared,server): widget autopilot — type, singleton, config validée par type`
 
 ### Task 10: Seam Backend + client REST + fixtures
 
@@ -416,7 +416,7 @@ Tests de routes : 404/400/409/202/200 + le start passe bien repo/user au runner 
 - Modify: `apps/web/src/state/fixtures.ts` (état autopilot de démo)
 - Test: le fichier de test existant du backend fixture (chercher `backend.test` ou équivalent — sinon tester via le widget en Task 11)
 
-- [ ] **Step 1: Étendre le type** :
+- [x] **Step 1: Étendre le type** :
 
 ```ts
 getAutopilot(): Promise<AutopilotState>
@@ -433,8 +433,8 @@ cleanupAutopilot(): Promise<void>
   - `apps/server/src/app.ts` : L99 `sink: ((event: SessionStatusEvent) => void) | null` → retyper `StatusHubEvent` (+ import L4) — contravariance sinon
 - Fixtures : `fixtureAutopilot: AutopilotState` avec un run null et 3 items d'exemple (`pr_opened` avec prUrl, `failed` avec error, `running`) ; `createFixtureBackend` : start → bascule le run + premier item running (assez pour la démo), stop/cleanup → mutations simples
 - Le socket de statut fixture n'émet PAS d'autopilot_status (refetch au focus suffit en démo)
-- [ ] **Step 2: Gate** tsc → toutes les implémentations de Backend compilent
-- [ ] **Step 3: Commit** — `feat(web): seam Backend autopilot + fixtures démo`
+- [x] **Step 2: Gate** tsc → toutes les implémentations de Backend compilent
+- [x] **Step 3: Commit** — `feat(web): seam Backend autopilot + fixtures démo`
 
 ### Task 11: Widget Autopilot + dialog config + branchement App
 
@@ -453,13 +453,13 @@ Comportements du widget (un test chacun, Testing Library, backend fixture) :
 - erreur backend (throw) → message dans le widget (pattern PrListWidget)
 - accent visuel : réutiliser la palette existante (pas d'ambre — réservé aux permissions)
 
-- [ ] **Steps TDD par comportement**, puis gates complets : `bun test` + `bun node_modules/typescript/bin/tsc --noEmit -p apps/web`
-- [ ] **Commit** — `feat(web): widget Autopilot — run, items, PR, session, nettoyage`
+- [x] **Steps TDD par comportement**, puis gates complets : `bun test` + `bun node_modules/typescript/bin/tsc --noEmit -p apps/web`
+- [x] **Commit** — `feat(web): widget Autopilot — run, items, PR, session, nettoyage`
 
 ### Task 12: Vérification E2E réelle (MANUELLE / superviseur — pas de subagent)
 
-- [ ] `bun run build:web` (le widget est servi depuis dist/)
-- [ ] Serveur headless isolé : flags `--port <libre> --token <t> --data <tmp>` (index.ts:27-40 — il n'y a PAS de variable ATELIER_PORT côté serveur) ; créer une issue de test labellisée `autopilot` sur un repo jetable (ou g-grum/atelier avec une issue triviale, ex. « ajouter un fichier docs/test-autopilot.md ») ; `POST /api/autopilot/start` ; observer : worktree créé, bun install, session qui tourne, PR ouverte, item `pr_opened`, hub qui diffuse
-- [ ] Vérifier le deny AskUserQuestion (session autonome) et le stop propre
-- [ ] Nettoyage : `POST /api/autopilot/cleanup` + fermeture de l'issue de test
-- [ ] Commit final + push (CI verte attendue) + release : bumper `version.json` (notes FR)
+- [x] `bun run build:web` (le widget est servi depuis dist/)
+- [x] Serveur headless isolé : flags `--port <libre> --token <t> --data <tmp>` (index.ts:27-40 — il n'y a PAS de variable ATELIER_PORT côté serveur) ; créer une issue de test labellisée `autopilot` sur un repo jetable (ou g-grum/atelier avec une issue triviale, ex. « ajouter un fichier docs/test-autopilot.md ») ; `POST /api/autopilot/start` ; observer : worktree créé, bun install, session qui tourne, PR ouverte, item `pr_opened`, hub qui diffuse
+- [x] Vérifier le deny AskUserQuestion (session autonome) et le stop propre
+- [x] Nettoyage : `POST /api/autopilot/cleanup` + fermeture de l'issue de test
+- [x] Commit final + push (CI verte attendue) + release : bumper `version.json` (notes FR)

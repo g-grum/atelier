@@ -1,8 +1,8 @@
 {
-  "version": "0.1.12",
+  "version": "0.1.13",
   "notes": [
-    "Les réponses de Claude sont rendues en markdown : titres, listes, tables, code coloré avec bouton copier",
-    "Garde anti-orphelin : le serveur s'éteint tout seul si l'app meurt brutalement (plus de squat du port 4517)",
-    "Mode démo complet (Réglages et sélecteur de modèle inclus) + surlignage QCM corrigé pour les labels à virgule"
+    "Autopilot : un widget lance le traitement autonome du backlog — chaque issue GitHub labellisée « autopilot » est implémentée dans un worktree isolé et livrée en PR à reviewer",
+    "Les sessions autopilot sont observables en direct dans l'app (lien depuis le widget) ; Stop, relance unique et timeout 30 min par item",
+    "CI GitHub Actions : bun test + typecheck sur chaque push et chaque PR"
   ]
 }
