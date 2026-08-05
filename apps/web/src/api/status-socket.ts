@@ -1,4 +1,4 @@
-import { parseSessionStatus, type SessionStatusEvent } from '@atelier/shared'
+import { parseStatusHubEvent, type StatusHubEvent } from '@atelier/shared'
 import { getToken } from './client'
 import type { Schedule, SocketFactory, SocketLike } from './ws'
 
@@ -26,7 +26,7 @@ export class StatusSocket {
   private cancelReconnect: (() => void) | null = null
 
   constructor(
-    private readonly onEvent: (event: SessionStatusEvent) => void,
+    private readonly onEvent: (event: StatusHubEvent) => void,
     options: { createSocket?: SocketFactory; schedule?: Schedule } = {}
   ) {
     this.createSocket = options.createSocket ?? browserSocketFactory
@@ -52,7 +52,7 @@ export class StatusSocket {
     }
     socket.onmessage = (event) => {
       if (typeof event.data !== 'string') return
-      const parsed = parseSessionStatus(event.data)
+      const parsed = parseStatusHubEvent(event.data)
       if (parsed !== null) this.onEvent(parsed)
     }
     socket.onclose = () => {

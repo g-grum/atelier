@@ -1,6 +1,6 @@
-import type { AlwaysRule, ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionStatusEvent, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, AutopilotState, ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, SlashCommandInfo, StatusHubEvent, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
-import { fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
+import { fixtureAutopilot, fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
 import { StatusSocket } from './status-socket'
 import { SessionSocket } from './ws'
@@ -54,7 +54,14 @@ export type Backend = {
    * itself: a real WS in a jsdom/happy-dom test environment throws on an
    * unreachable connection (no server), crashing the whole suite.
    */
-  createStatusSocket: (onEvent: (event: SessionStatusEvent) => void) => StatusSocketLike
+  createStatusSocket: (onEvent: (event: StatusHubEvent) => void) => StatusSocketLike
+  /** État autopilot complet (run + items du dernier run). */
+  getAutopilot: () => Promise<AutopilotState>
+  /** Lance un run autopilot — rejette avec le message FR du serveur (400/404/409). */
+  startAutopilot: (projectId: string, maxItems?: number) => Promise<void>
+  stopAutopilot: () => Promise<void>
+  /** Nettoie worktrees/branches/projets temporaires des items terminaux. */
+  cleanupAutopilot: () => Promise<void>
 }
 
 const realBackend: Backend = {
@@ -82,6 +89,10 @@ const realBackend: Backend = {
   deleteRule: client.deleteRule,
   deleteProject: client.deleteProject,
   createStatusSocket: (onEvent) => new StatusSocket(onEvent),
+  getAutopilot: client.getAutopilot,
+  startAutopilot: client.startAutopilot,
+  stopAutopilot: client.stopAutopilot,
+  cleanupAutopilot: client.cleanupAutopilot,
 }
 
 /** Baseline préférences (sans clé `theme` → dark) — partagé par le fixture et les tests, façon DEFAULT_WIDGETS. */
@@ -106,6 +117,7 @@ export function createFixtureBackend(): Backend {
   let sessions: SessionSummary[] = fixtureSessions.map((session) => ({ ...session }))
   const messages = new Map<string, ChatMessage[]>(Object.entries(fixtureMessages))
   let widgets: WidgetInstance[] = fixtureWidgets.map((w) => ({ ...w }))
+  let autopilot: AutopilotState = structuredClone(fixtureAutopilot)
   let nextId = 1
 
   return {
@@ -181,6 +193,20 @@ export function createFixtureBackend(): Backend {
     // Demo mode: no server-side status hub to connect to — a no-op keeps the
     // sidebar dots at their default (idle/done) derivation.
     createStatusSocket: () => ({ close: () => {} }),
+    // Autopilot de démo : start bascule le premier item en running, assez pour montrer la UI.
+    getAutopilot: async () => structuredClone(autopilot),
+    startAutopilot: async (projectId) => {
+      autopilot = {
+        run: { state: 'running', startedAt: new Date().toISOString(), maxItems: 3, projectId },
+        items: fixtureAutopilot.items.map((item, i) => (i === 0 ? { ...item, status: 'running' as const, prUrl: undefined, endedAt: undefined } : { ...item })),
+      }
+    },
+    stopAutopilot: async () => {
+      autopilot = { run: null, items: autopilot.items.map((item) => ({ ...item })) }
+    },
+    cleanupAutopilot: async () => {
+      autopilot = { run: autopilot.run, items: autopilot.items.filter((i) => i.status !== 'pr_opened' && i.status !== 'failed') }
+    },
   }
 }
 

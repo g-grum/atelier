@@ -66,6 +66,10 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     // No real WS in tests (an unreachable connection crashes happy-dom's
     // `ws`-backed WebSocket shim) — a closeable no-op mirrors idleSocket above.
     createStatusSocket: () => ({ close: () => {} }),
+    getAutopilot: async () => ({ run: null, items: [] }),
+    startAutopilot: async () => {},
+    stopAutopilot: async () => {},
+    cleanupAutopilot: async () => {},
     ...overrides,
   }
 }

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import currentVersion from '../../../version.json'
-import { DEFAULT_WIDGETS, type RateLimitSnapshot, type SessionPermissionMode, type SessionSummary, type WidgetInstance } from '@atelier/shared'
+import { DEFAULT_WIDGETS, type AutopilotState, type RateLimitSnapshot, type SessionPermissionMode, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
@@ -97,8 +97,13 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   // Hub des pastilles de statut (spec 2026-08-02) : un socket receive-only
   // séparé du flux de chat, dédié au fan-out multi-session.
   const statusStore = useMemo(() => new SessionStatusStore(), [])
+  const [autopilot, setAutopilot] = useState<AutopilotState | null>(null)
   useEffect(() => {
-    const socket = backend.createStatusSocket((event) => statusStore.handle(event))
+    // Dispatch par type : le hub transporte les transitions de session ET l'état autopilot (spec 2026-08-05).
+    const socket = backend.createStatusSocket((event) => {
+      if (event.type === 'session_status') statusStore.handle(event)
+      else setAutopilot(event.autopilot)
+    })
     return () => socket.close()
   }, [backend, statusStore])
   const sessionStatuses = useSyncExternalStore(statusStore.subscribe, statusStore.getSnapshot)

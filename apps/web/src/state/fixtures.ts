@@ -1,4 +1,4 @@
-import { DEFAULT_WIDGETS, MODELS, type ChatMessage, type ProjectSummary, type PrSummary, type ServerEvent, type SessionSummary, type WidgetInstance } from '@atelier/shared'
+import { DEFAULT_WIDGETS, MODELS, type AutopilotState, type ChatMessage, type ProjectSummary, type PrSummary, type ServerEvent, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 
 /**
  * Scripted session data — production code, not test-only.
@@ -170,3 +170,12 @@ export const fixturePrs: PrSummary[] = [
 
 /** Demo layout: the default panels — the PR widget joins in chunk 3 (Task 13). */
 export const fixtureWidgets: WidgetInstance[] = [...DEFAULT_WIDGETS, { id: 'fixture-github-prs', type: 'github-prs', span: 2, height: 'M', config: { repo: 'acme-corp/demoapp-frontend', limit: 10 } }]
+
+/** État autopilot de démo (spec 2026-08-05) — un run passé avec les trois issues terminales/actives typiques. */
+export const fixtureAutopilot: AutopilotState = {
+  run: null,
+  items: [
+    { issue: 12, title: 'Ajouter le raccourci ⌘K', branch: 'autopilot/12', projectId: 'proj-atelier', repoRoot: '/work/atelier', sessionId: 'fixture-session-1', status: 'pr_opened', prUrl: 'https://github.com/g-grum/atelier/pull/91', startedAt: '2026-08-05T09:00:00Z', endedAt: '2026-08-05T09:18:00Z' },
+    { issue: 15, title: 'Corriger le scroll du composer', branch: 'autopilot/15', projectId: 'proj-atelier', repoRoot: '/work/atelier', sessionId: 'fixture-session-2', status: 'failed', error: 'le tour s’est terminé sans PR ouverte', startedAt: '2026-08-05T09:20:00Z', endedAt: '2026-08-05T09:50:00Z' },
+  ],
+}

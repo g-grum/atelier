@@ -1,4 +1,4 @@
-import type { AlwaysRule, ChatMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, AutopilotState, ChatMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -174,4 +174,22 @@ export function getProjectGithubAccount(projectId: string): Promise<ProjectGithu
  */
 export function listCommands(projectId: string): Promise<SlashCommandInfo[]> {
   return request<SlashCommandInfo[]>('GET', `/projects/${encodeURIComponent(projectId)}/commands`)
+}
+
+// ── Autopilot (spec 2026-08-05) ──
+
+export function getAutopilot(): Promise<AutopilotState> {
+  return request<AutopilotState>('GET', '/autopilot')
+}
+
+export function startAutopilot(projectId: string, maxItems?: number): Promise<void> {
+  return request<{ ok: true }>('POST', '/autopilot/start', { projectId, ...(maxItems !== undefined ? { maxItems } : {}) }).then(() => undefined)
+}
+
+export function stopAutopilot(): Promise<void> {
+  return request<{ ok: true }>('POST', '/autopilot/stop').then(() => undefined)
+}
+
+export function cleanupAutopilot(): Promise<void> {
+  return request<{ ok: true }>('POST', '/autopilot/cleanup').then(() => undefined)
 }
