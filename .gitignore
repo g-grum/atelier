@@ -10,3 +10,7 @@ runtime.json
 
 # Worktrees locaux (superpowers)
 .worktrees/
+
+# Config Claude locale (jamais versionnée)
+.claude/settings.local.json
+CLAUDE.local.md
