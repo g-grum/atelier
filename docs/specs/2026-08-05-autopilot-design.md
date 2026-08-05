@@ -22,13 +22,13 @@ Nouveau module serveur `apps/server/src/autopilot/` autour d'un service `Autopil
 
 Le `cwd` d'une session est toujours `project.path` (session-stream.ts → `sdk.runTurn({ cwd: project.path, … })`). Plutôt que d'introduire un override de cwd par session, chaque item crée :
 
-1. un worktree `git worktree add .worktrees/autopilot-<n> -b autopilot/<n>` (`.worktrees/` est déjà gitignoré) ;
-2. un **projet Atelier** nommé `Autopilot #<n>` pointant sur le worktree ;
+1. un worktree `git worktree add .worktrees/autopilot-<n> -b autopilot/<n>` (`.worktrees/` est déjà gitignoré), suivi d'un **`bun install`** dans le worktree (un worktree vierge n'a pas de `node_modules` — sans ça les gates échouent systématiquement) ;
+2. un **projet Atelier** pointant sur le worktree — `Project` n'a **pas** de champ `name` (`{ id, path, color }`, la UI affiche `basename(path)`) : le libellé affiché sera le nom du dossier `autopilot-<n>`, on n'ajoute PAS de champ `name` ;
 3. un **draft de session** dans ce projet, `permissionMode` stampé `bypassPermissions` — `createDraft` ne le permet pas (il fige `preferences.defaultPermissionMode`) : le runner appelle `SessionsService.setPermissionMode(draftId, 'bypassPermissions')` juste après la création (seam existant, pas de modif de `createDraft`).
 
 La session est une session Atelier normale : observable en live dans la UI, historique persistant, Stop existant fonctionnel. Aucun champ nouveau sur les sessions ; le lien item↔session vit dans l'état autopilot.
 
-**Remap draft→SDK id** : au premier message, le draft est re-keyé en id SDK réel (`AppData.mapDraft`) et les événements du hub de statut sont publiés sous l'id SDK. Le runner suit le remap (via `data.resolveSessionId` / l'événement de remap existant) et met à jour `item.sessionId` — sinon il n'observerait jamais « sa » transition et le lien « ouvrir la session » du widget pointerait sur un draft mort.
+**Remap draft→SDK id** : au premier message, le draft est re-keyé en id SDK réel (`AppData.mapDraft`) et les événements du hub de statut sont publiés sous l'id SDK. Le runner suit le remap **via `data.resolveSessionId` uniquement** (l'événement `mapping` ne part que vers les sockets de session, jamais vers le hub) et met à jour `item.sessionId` — sinon il n'observerait jamais « sa » transition et le lien « ouvrir la session » du widget pointerait sur un draft mort.
 
 ### AutopilotRunner
 
@@ -49,14 +49,14 @@ Gabarit avec le contexte de l'issue (numéro, titre, corps), et les consignes : 
 ### Permissions et questions
 
 - Session stampée `bypassPermissions` → auto-allow sélectif existant dans `canUseTool` (session-stream.ts).
-- `AskUserQuestion` dans une session autopilot : deny immédiat avec le message « Session autonome — décide seul et continue ». Le `SessionStream` reçoit un prédicat injecté `isAutopilot(sessionId)` (fourni par le runner via le registry) pour router ce cas avant le `QuestionBroker`.
+- `AskUserQuestion` dans une session autopilot : deny immédiat avec le message « Session autonome — décide seul et continue ». Le `SessionStream` reçoit un prédicat injecté `isAutopilot(sessionId)` **data-driven** (il lit `AppData.autopilot.items` — évite le cycle de construction registry↔runner) pour router ce cas avant le `QuestionBroker`.
 
 ### API
 
-- `POST /api/autopilot/start` `{ projectId, maxItems? }` → 202 ou 409 (run en cours). Le repo est dérivé du remote du projet (`git-remote.ts` existant).
+- `POST /api/autopilot/start` `{ projectId, maxItems? }` → 202 ou 409 (run en cours) ; projet sans remote GitHub (`projectGithubAccount` → null) → 400 avec message FR. Le repo est dérivé du remote du projet (`git-remote.ts` existant). Le module git utilise son propre runner (le `GitRun` partagé a un timeout 5 s — `worktree add` + `bun install` le dépassent : runner dédié à timeout large).
 - `POST /api/autopilot/stop` → passe en `stopping` : l'item courant termine son tour, pas de relance ni d'item suivant, puis `idle`. (Pas d'interrupt brutal en v1 : Stop de la session reste possible manuellement dans la UI.)
 - `GET /api/autopilot` → état complet (run + items).
-- Événement `autopilot_status` diffusé sur le hub WS de statut existant à chaque transition (le widget écoute au lieu de poller ; fallback refetch au focus comme le widget PRs). Nécessite d'élargir le type d'événement du hub et son parseur web (`parseSessionStatus` rejette strictement tout sauf `session_status`) — seam `protocol.ts` explicitement au périmètre.
+- Événement `autopilot_status` diffusé sur le hub WS de statut existant à chaque transition (le widget écoute au lieu de poller ; fallback refetch au focus comme le widget PRs). Nécessite d'élargir : le type d'événement du hub et son parseur web (`parseSessionStatus` rejette strictement tout sauf `session_status`) dans `protocol.ts`, ET le seam serveur de publication — `SessionStreamRegistry.publishStatus` est privé et ses sinks typés `SessionStatusEvent` (méthode publique de publication ou type de sink élargi, au choix du plan).
 
 ### Widget web « Autopilot »
 
@@ -70,8 +70,8 @@ Gabarit avec le contexte de l'issue (numéro, titre, corps), et les consignes : 
 - Échec git (worktree/branche existants, repo sale) → item `failed` avec message FR, run continue.
 - Timeout par item : 30 min sans transition terminale → stop de la session (message `{type:'abort'}` du stream — c'est le message existant, pas `stop`) → `failed`.
 - Transition → `error` de la session : item `failed` immédiat ; rate limit avec `resetAt` → arrêt propre du run entier (voir Boucle).
-- Crash/redémarrage serveur : au boot, un `autopilot.run` non-`idle` est marqué `failed` (items `running` aussi). Jamais de reprise aveugle.
-- Worktrees et branches des items terminés sont **conservés** pour autopsie. Un bouton « Nettoyer » dans le widget supprime worktree + branche locale + projet Atelier des items en état terminal (la session SDK reste dans `~/.claude/projects`). Ordre : `git worktree remove` d'abord, suppression du projet ensuite — et la suppression de projet doit tolérer un chemin déjà disparu.
+- Crash/redémarrage serveur : au boot, un `autopilot.run` non-`idle` est marqué `failed`, et **tous les items non-terminaux** (`queued` comme `running`) passent `failed`. Jamais de reprise aveugle.
+- Worktrees et branches des items terminés sont **conservés** pour autopsie. Un bouton « Nettoyer » dans le widget supprime worktree + branche locale + projet Atelier des items en état terminal (la session SDK reste dans `~/.claude/projects`). Ordre : `git worktree remove --force` d'abord (un worktree sale refuse sinon), `git branch -D` (branche non mergée), suppression du projet ensuite (elle ne touche pas au filesystem, donc tolère un chemin disparu).
 - Issue fermée entre le fetch et le traitement : l'item est traité quand même (fenêtre courte, YAGNI).
 
 ## Tests
