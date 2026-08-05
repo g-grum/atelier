@@ -25,10 +25,12 @@ function clampLimit(raw: string): number {
  * state, App owns that via `configuring`.
  */
 export function PrConfigDialog({ instance, onSave, onClose }: PrConfigDialogProps) {
-  const [repo, setRepo] = useState(instance.config?.repo ?? '')
+  // Narrowing structurel : le `type` du widget ne narrowe pas l'union de config.
+  const cfg = instance.config && 'repo' in instance.config ? instance.config : undefined
+  const [repo, setRepo] = useState(cfg?.repo ?? '')
   // Raw string, clamped only at save time: clamping on keystroke snaps an
   // emptied field back to 10, making clear-then-retype impossible.
-  const [limitRaw, setLimitRaw] = useState(String(instance.config?.limit ?? 10))
+  const [limitRaw, setLimitRaw] = useState(String(cfg?.limit ?? 10))
   const [error, setError] = useState<string | null>(null)
 
   const save = () => {

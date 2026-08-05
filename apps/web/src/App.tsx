@@ -356,8 +356,11 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         return <RateLimitsPanel limits={usageLimitsQuery.data ?? []} />
       case 'modified-files':
         return <ModifiedFilesPanel files={stream.modifiedFiles} api={{ openInIde: backend.openInIde }} />
-      case 'github-prs':
-        return <PrListWidget repo={w.config?.repo ?? ''} limit={w.config?.limit ?? 10} api={{ getGithubPrs: backend.getGithubPrs }} />
+      case 'github-prs': {
+        // Narrowing structurel : le `type` du widget ne narrowe pas l'union de config.
+        const cfg = w.config && 'repo' in w.config ? w.config : undefined
+        return <PrListWidget repo={cfg?.repo ?? ''} limit={cfg?.limit ?? 10} api={{ getGithubPrs: backend.getGithubPrs }} />
+      }
       default:
         return null
     }

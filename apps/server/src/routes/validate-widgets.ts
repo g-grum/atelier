@@ -1,6 +1,7 @@
 import { REPO_PATTERN, SINGLETON_WIDGET_TYPES, type WidgetInstance, type WidgetType } from '@atelier/shared'
 
-const TYPES: ReadonlySet<string> = new Set<WidgetType>(['github-prs', 'rate-limits', 'modified-files'])
+const TYPES: ReadonlySet<string> = new Set<WidgetType>(['github-prs', 'rate-limits', 'modified-files', 'autopilot'])
+const MAX_AUTOPILOT_ITEMS = 10
 const HEIGHTS: ReadonlySet<string> = new Set(['S', 'M', 'L'])
 const SINGLETONS: ReadonlySet<string> = new Set(SINGLETON_WIDGET_TYPES)
 
@@ -42,6 +43,18 @@ export function validateWidgets(value: unknown): { widgets: WidgetInstance[] } |
         return { error: 'requête invalide : « config.limit » doit être un entier entre 1 et 30' }
       }
       clean.config = { repo: config.repo, ...(config.limit !== undefined ? { limit: config.limit as number } : {}) }
+    } else if (w.type === 'autopilot') {
+      if (typeof w.config !== 'object' || w.config === null || Array.isArray(w.config)) {
+        return { error: 'requête invalide : « config » (avec projectId) est requis pour autopilot' }
+      }
+      const config = w.config as Record<string, unknown>
+      if (typeof config.projectId !== 'string' || config.projectId.length === 0) {
+        return { error: 'requête invalide : « config.projectId » est requis pour autopilot' }
+      }
+      if (config.maxItems !== undefined && (!Number.isInteger(config.maxItems) || (config.maxItems as number) < 1 || (config.maxItems as number) > MAX_AUTOPILOT_ITEMS)) {
+        return { error: `requête invalide : « config.maxItems » doit être un entier entre 1 et ${MAX_AUTOPILOT_ITEMS}` }
+      }
+      clean.config = { projectId: config.projectId, ...(config.maxItems !== undefined ? { maxItems: config.maxItems as number } : {}) }
     } else {
       if (w.config !== undefined) return { error: `requête invalide : « config » n’est pas accepté pour ${w.type}` }
     }

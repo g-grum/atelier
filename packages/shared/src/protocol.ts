@@ -221,8 +221,11 @@ export function parseStatusHubEvent(raw: string): StatusHubEvent | null {
 }
 
 // ── Widget dashboard (spec 2026-07-21) ──
-export type WidgetType = 'github-prs' | 'rate-limits' | 'modified-files'
+export type WidgetType = 'github-prs' | 'rate-limits' | 'modified-files' | 'autopilot'
 export type WidgetHeight = 'S' | 'M' | 'L'
+/** Union par type de widget — consommateurs : narrowing STRUCTUREL (`'repo' in config`), le `type` du widget ne narrowe pas `config`. */
+export type GithubPrsConfig = { repo: string; limit?: number }
+export type AutopilotConfig = { projectId: string; maxItems?: number }
 export type WidgetInstance = {
   /** uuid, unique in the array (array order = display order) */
   id: string
@@ -231,12 +234,12 @@ export type WidgetInstance = {
   span: 1 | 2
   /** fixed height tier — content scrolls internally */
   height: WidgetHeight
-  /** github-prs: REQUIRED (repo); other types: must be absent (PUT validation enforces both) */
-  config?: { repo: string; limit?: number }
+  /** github-prs: repo REQUIS ; autopilot: projectId REQUIS ; autres types: absente (validation PUT). */
+  config?: GithubPrsConfig | AutopilotConfig
 }
 
 /** Types that may appear at most once in a layout. */
-export const SINGLETON_WIDGET_TYPES: readonly WidgetType[] = ['rate-limits', 'modified-files']
+export const SINGLETON_WIDGET_TYPES: readonly WidgetType[] = ['rate-limits', 'modified-files', 'autopilot']
 
 /** owner/repo — shared by PUT /api/widgets, GET /api/github/prs and the config dialog. Anchored: no slashes inside segments, no query strings. */
 export const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/

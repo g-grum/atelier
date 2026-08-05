@@ -45,3 +45,40 @@ describe('validateWidgets', () => {
     if ('error' in result) throw new Error(result.error)
   })
 })
+
+describe('widget autopilot (spec 2026-08-05)', () => {
+  const base = { id: 'a1', type: 'autopilot', span: 2, height: 'M' }
+
+  test('accepté avec config { projectId, maxItems }', () => {
+    const result = validateWidgets([{ ...base, config: { projectId: 'p1', maxItems: 3 } }])
+    expect(result).toEqual({ widgets: [{ id: 'a1', type: 'autopilot', span: 2, height: 'M', config: { projectId: 'p1', maxItems: 3 } }] })
+  })
+
+  test('accepté sans maxItems', () => {
+    const result = validateWidgets([{ ...base, config: { projectId: 'p1' } }])
+    expect(result).toEqual({ widgets: [{ id: 'a1', type: 'autopilot', span: 2, height: 'M', config: { projectId: 'p1' } }] })
+  })
+
+  test('config absente refusée (projectId requis)', () => {
+    expect(validateWidgets([{ ...base }])).toHaveProperty('error')
+  })
+
+  test('maxItems hors bornes refusé', () => {
+    expect(validateWidgets([{ ...base, config: { projectId: 'p1', maxItems: 0 } }])).toHaveProperty('error')
+    expect(validateWidgets([{ ...base, config: { projectId: 'p1', maxItems: 11 } }])).toHaveProperty('error')
+  })
+
+  test('config repo sur un widget autopilot refusée (clés inconnues strippées ou rejet)', () => {
+    const result = validateWidgets([{ ...base, config: { projectId: 'p1', repo: 'o/r' } }])
+    // le contrat : jamais de repo persisté sur un widget autopilot
+    if ('widgets' in result) expect(result.widgets[0]!.config).toEqual({ projectId: 'p1' })
+    else expect(result).toHaveProperty('error')
+  })
+
+  test('singleton : deux widgets autopilot refusés', () => {
+    expect(validateWidgets([
+      { ...base, config: { projectId: 'p1' } },
+      { ...base, id: 'a2', config: { projectId: 'p1' } },
+    ])).toHaveProperty('error')
+  })
+})
