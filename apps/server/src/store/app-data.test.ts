@@ -165,3 +165,43 @@ describe('AppData.widgets', () => {
     expect(new AppData(file).get().widgets).toEqual([])
   })
 })
+
+describe('autopilot state', () => {
+  test('défaut : run null, items vides', () => {
+    const data = freshStore()
+    expect(data.get().autopilot).toEqual({ run: null, items: [] })
+  })
+
+  test('au chargement, un run non terminé est marqué failed (jamais de reprise aveugle)', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
+    writeFileSync(path, JSON.stringify({
+      autopilot: {
+        run: { state: 'running', startedAt: '2026-08-05T00:00:00Z', maxItems: 3, projectId: 'p1' },
+        items: [
+          { issue: 1, title: 'a', branch: 'autopilot/1', projectId: 'tp1', repoRoot: '/r', sessionId: 's1', status: 'running' },
+          { issue: 2, title: 'b', branch: 'autopilot/2', projectId: 'tp2', repoRoot: '/r', sessionId: 's2', status: 'queued' },
+          { issue: 3, title: 'c', branch: 'autopilot/3', projectId: 'tp3', repoRoot: '/r', sessionId: 's3', status: 'pr_opened' },
+        ],
+      },
+    }))
+    const data = new AppData(path)
+    expect(data.get().autopilot.run).toBeNull()
+    const items = data.get().autopilot.items
+    expect(items.map((i) => i.status)).toEqual(['failed', 'failed', 'pr_opened'])
+    expect(items[0]?.error).toContain('serveur')
+    expect(items[0]?.endedAt).toBeDefined()
+    expect(items[2]?.error).toBeUndefined()
+    // l'assainissement est persisté : une relecture ne voit plus de run
+    expect(new AppData(path).get().autopilot.run).toBeNull()
+  })
+
+  test('un run terminé (null) est chargé tel quel', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
+    writeFileSync(path, JSON.stringify({
+      autopilot: { run: null, items: [{ issue: 9, title: 'x', branch: 'autopilot/9', projectId: 'tp', repoRoot: '/r', sessionId: 's', status: 'failed', error: 'e' }] },
+    }))
+    const data = new AppData(path)
+    expect(data.get().autopilot.items).toHaveLength(1)
+    expect(data.get().autopilot.items[0]?.error).toBe('e')
+  })
+})

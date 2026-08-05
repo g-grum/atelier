@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AlwaysRule, Preferences, Project, RateLimitSnapshot, SessionPermissionMode, UsageEvent, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, AutopilotState, Preferences, Project, RateLimitSnapshot, SessionPermissionMode, UsageEvent, WidgetInstance } from '@atelier/shared'
 import { DEFAULT_WIDGETS } from '@atelier/shared'
 
 /** permissionMode is optional for on-disk backward compatibility — absent/undefined means "not chosen yet" (same as null). */
@@ -23,6 +23,8 @@ export type AppDataShape = {
   rateLimits: Record<string, RateLimitSnapshot>
   /** Dashboard layout — array order = display order. Spec 2026-07-21. */
   widgets: WidgetInstance[]
+  /** État autopilot (spec 2026-08-05). Assaini au boot : jamais de reprise aveugle d'un run. */
+  autopilot: AutopilotState
 }
 
 const EMPTY: AppDataShape = {
@@ -46,6 +48,7 @@ const EMPTY: AppDataShape = {
   usageEvents: [],
   rateLimits: {},
   widgets: [...DEFAULT_WIDGETS],
+  autopilot: { run: null, items: [] },
 }
 
 const USAGE_RETENTION_MS = 7 * 86400_000
@@ -65,9 +68,29 @@ export class AppData {
       // clone-guard test pins down).
       const base = structuredClone(EMPTY)
       this.data = { ...base, ...parsed, preferences: { ...base.preferences, ...parsed.preferences } }
+      this.sanitizeAutopilot()
     } else {
       this.data = structuredClone(EMPTY)
     }
+  }
+
+  /**
+   * Un run autopilot interrompu par un arrêt du serveur n'est JAMAIS repris à
+   * l'aveugle (spec 2026-08-05) : run remis à null, items non-terminaux → failed.
+   * Persisté immédiatement pour qu'une relecture ne revoie pas le run fantôme.
+   */
+  private sanitizeAutopilot(): void {
+    const autopilot = this.data.autopilot
+    if (autopilot.run === null) return
+    autopilot.run = null
+    const endedAt = new Date().toISOString()
+    for (const item of autopilot.items) {
+      if (item.status === 'pr_opened' || item.status === 'failed') continue
+      item.status = 'failed'
+      item.error = 'interrompu par un redémarrage du serveur'
+      item.endedAt = endedAt
+    }
+    this.flush()
   }
 
   get(): Readonly<AppDataShape> {
