@@ -15,6 +15,8 @@ import { SessionSidebar } from './components/SessionSidebar'
 import { Topbar } from './components/Topbar'
 import { Toaster } from './components/ui/sonner'
 import { DashboardGrid } from './components/widgets/DashboardGrid'
+import { AutopilotConfigDialog } from './components/widgets/AutopilotConfigDialog'
+import { AutopilotWidget } from './components/widgets/AutopilotWidget'
 import { PrConfigDialog } from './components/widgets/PrConfigDialog'
 import { PrListWidget } from './components/widgets/PrListWidget'
 import { clearLastSession, readLastSession, writeLastSession } from './lib/last-session'
@@ -366,6 +368,28 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         const cfg = w.config && 'repo' in w.config ? w.config : undefined
         return <PrListWidget repo={cfg?.repo ?? ''} limit={cfg?.limit ?? 10} api={{ getGithubPrs: backend.getGithubPrs }} />
       }
+      case 'autopilot': {
+        const cfg = w.config && 'projectId' in w.config ? w.config : undefined
+        return (
+          <AutopilotWidget
+            projectId={cfg?.projectId ?? ''}
+            maxItems={cfg?.maxItems}
+            hubState={autopilot}
+            api={{
+              getAutopilot: backend.getAutopilot,
+              startAutopilot: backend.startAutopilot,
+              stopAutopilot: backend.stopAutopilot,
+              cleanupAutopilot: backend.cleanupAutopilot,
+            }}
+            onOpenSession={(sessionId, projectId) => {
+              // Même parcours que selectSession, sans exiger un SessionSummary complet.
+              setSelected({ sessionId, projectId })
+              writeLastSession({ sessionId, projectId })
+              openSession(sessionId, projectId)
+            }}
+          />
+        )
+      }
       default:
         return null
     }
@@ -495,9 +519,17 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         }}
         onCancel={() => setConfirmDelete(null)}
       />
-      {configuring !== null && (
+      {configuring !== null && configuring.type === 'github-prs' && (
         <PrConfigDialog
           instance={configuring}
+          onSave={(next) => saveWidgets.mutate(widgets.map((w) => (w.id === next.id ? next : w)))}
+          onClose={() => setConfiguring(null)}
+        />
+      )}
+      {configuring !== null && configuring.type === 'autopilot' && (
+        <AutopilotConfigDialog
+          instance={configuring}
+          projects={projectsQuery.data ?? []}
           onSave={(next) => saveWidgets.mutate(widgets.map((w) => (w.id === next.id ? next : w)))}
           onClose={() => setConfiguring(null)}
         />

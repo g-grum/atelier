@@ -31,4 +31,10 @@ export const WIDGET_META: Partial<Record<WidgetType, WidgetMeta>> = {
       config: { repo: 'acme-corp/demoapp-frontend', limit: 10 },
     }),
   },
+  autopilot: {
+    title: 'Autopilot',
+    multiInstance: false,
+    // projectId vide = à configurer (le bouton Lancer reste désactivé tant que la config n'est pas faite).
+    create: () => ({ id: crypto.randomUUID(), type: 'autopilot', span: 2, height: 'M', config: { projectId: '', maxItems: 3 } }),
+  },
 }

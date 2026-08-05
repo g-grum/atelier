@@ -48,7 +48,9 @@ export function validateWidgets(value: unknown): { widgets: WidgetInstance[] } |
         return { error: 'requête invalide : « config » (avec projectId) est requis pour autopilot' }
       }
       const config = w.config as Record<string, unknown>
-      if (typeof config.projectId !== 'string' || config.projectId.length === 0) {
+      // Chaîne vide acceptée = « à configurer » (l'instance fraîche du registre) — le
+      // widget désactive Lancer et le serveur refuse un start sans projet valide.
+      if (typeof config.projectId !== 'string') {
         return { error: 'requête invalide : « config.projectId » est requis pour autopilot' }
       }
       if (config.maxItems !== undefined && (!Number.isInteger(config.maxItems) || (config.maxItems as number) < 1 || (config.maxItems as number) > MAX_AUTOPILOT_ITEMS)) {
