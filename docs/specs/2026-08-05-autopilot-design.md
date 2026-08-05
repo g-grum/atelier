@@ -24,9 +24,11 @@ Le `cwd` d'une session est toujours `project.path` (session-stream.ts → `sdk.r
 
 1. un worktree `git worktree add .worktrees/autopilot-<n> -b autopilot/<n>` (`.worktrees/` est déjà gitignoré) ;
 2. un **projet Atelier** nommé `Autopilot #<n>` pointant sur le worktree ;
-3. un **draft de session** dans ce projet (`SessionsService.createDraft`), `permissionMode` stampé `bypassPermissions`.
+3. un **draft de session** dans ce projet, `permissionMode` stampé `bypassPermissions` — `createDraft` ne le permet pas (il fige `preferences.defaultPermissionMode`) : le runner appelle `SessionsService.setPermissionMode(draftId, 'bypassPermissions')` juste après la création (seam existant, pas de modif de `createDraft`).
 
 La session est une session Atelier normale : observable en live dans la UI, historique persistant, Stop existant fonctionnel. Aucun champ nouveau sur les sessions ; le lien item↔session vit dans l'état autopilot.
+
+**Remap draft→SDK id** : au premier message, le draft est re-keyé en id SDK réel (`AppData.mapDraft`) et les événements du hub de statut sont publiés sous l'id SDK. Le runner suit le remap (via `data.resolveSessionId` / l'événement de remap existant) et met à jour `item.sessionId` — sinon il n'observerait jamais « sa » transition et le lien « ouvrir la session » du widget pointerait sur un draft mort.
 
 ### AutopilotRunner
 
@@ -34,9 +36,9 @@ La session est une session Atelier normale : observable en live dans la UI, hist
 - **État d'un item** : `queued → running → pr_opened | failed`.
 - **Boucle** : au start, fetch des issues (proxy `gh` existant, nouvelle méthode `listAutopilotIssues(repo, user)` dans `GithubService`), prend les `maxItems` premières, puis traite séquentiellement :
   1. créer worktree + branche + projet + draft ;
-  2. pousser le prompt d'item dans le `SessionStream` (`streams.get(id, projectId).onMessage({type:'user_message', text})`) ;
-  3. attendre la fin de tour via `SessionStreamRegistry.onStatusChange` (transition → `idle`) ;
-  4. vérifier la PR : `GithubService.prForBranch(repo, branch, user)` (nouvelle méthode, `gh pr list --head <branch>`) ;
+  2. pousser le prompt d'item dans le `SessionStream` (`streams.get(id, projectId).onMessage(JSON.stringify({type:'user_message', text}))` — `onMessage` prend une chaîne JSON ; le seam d'abonnement serveur est `onStatusConnect`, un typage dédié côté runner est acceptable) ;
+  3. attendre la fin de tour via le hub de statut : transition → `idle` (tour fini) **ou → `error`** (échec SDK : `turn_error` termine en `error` sans passer par `idle` → item `failed` immédiat, pas d'attente du timeout ; si l'erreur est un rate limit avec `resetAt`, le **run entier** s'arrête proprement — inutile d'enchaîner des items sans quota) ;
+  4. vérifier la PR : `GithubService.prForBranch(repo, branch, user)` (nouvelle méthode, `gh pr list --head <branch>`, **sans cache** — le cache 60 s de `listPrs` transformerait une PR fraîche en `failed`) ;
   5. PR trouvée → `pr_opened`, item suivant. Pas de PR → **une relance max** (« Termine : gates puis PR ») ; toujours rien après le tour suivant → `failed`, item suivant.
 - **Persistance** : nouveau champ `AppDataShape.autopilot` : `{ run: { state, startedAt, maxItems } | null, items: [{ issue, title, branch, projectId, sessionId, prUrl, status, error, startedAt, endedAt }] }` (historique remplacé à chaque run). Pattern `AppData.update` existant.
 
@@ -54,11 +56,11 @@ Gabarit avec le contexte de l'issue (numéro, titre, corps), et les consignes : 
 - `POST /api/autopilot/start` `{ projectId, maxItems? }` → 202 ou 409 (run en cours). Le repo est dérivé du remote du projet (`git-remote.ts` existant).
 - `POST /api/autopilot/stop` → passe en `stopping` : l'item courant termine son tour, pas de relance ni d'item suivant, puis `idle`. (Pas d'interrupt brutal en v1 : Stop de la session reste possible manuellement dans la UI.)
 - `GET /api/autopilot` → état complet (run + items).
-- Événement `autopilot_status` diffusé sur le hub WS de statut existant à chaque transition (le widget écoute au lieu de poller ; fallback refetch au focus comme le widget PRs).
+- Événement `autopilot_status` diffusé sur le hub WS de statut existant à chaque transition (le widget écoute au lieu de poller ; fallback refetch au focus comme le widget PRs). Nécessite d'élargir le type d'événement du hub et son parseur web (`parseSessionStatus` rejette strictement tout sauf `session_status`) — seam `protocol.ts` explicitement au périmètre.
 
 ### Widget web « Autopilot »
 
-- Nouveau `WidgetType 'autopilot'` (singleton) : seams identiques au widget PRs — `protocol.ts`, `validate-widgets.ts`, `widget-registry.ts`, `renderWidget` dans App.tsx, config `{ projectId, maxItems }` via dialog (pattern `PrConfigDialog`).
+- Nouveau `WidgetType 'autopilot'` (singleton) : seams identiques au widget PRs — `protocol.ts`, `validate-widgets.ts`, `widget-registry.ts`, `renderWidget` dans App.tsx, config `{ projectId, maxItems }` via dialog (pattern `PrConfigDialog`). Attention : `WidgetInstance.config` est aujourd'hui typé dur `{ repo; limit? }` avec validation « absent pour les autres types » — à élargir en union discriminée par type.
 - Affiche : état du run, liste des items (issue, titre, statut, lien PR ↗ navigateur système, lien « ouvrir la session » → sélection de la session dans l'app), boutons Lancer/Arrêter.
 - Erreurs `gh`/git en FR affichées dans le widget (pattern existant, 502 → message).
 - Seam `Backend` étendu (`getAutopilot`, `startAutopilot`, `stopAutopilot`) + fixtures pour le mode démo.
@@ -66,9 +68,10 @@ Gabarit avec le contexte de l'issue (numéro, titre, corps), et les consignes : 
 ## Gestion d'erreurs
 
 - Échec git (worktree/branche existants, repo sale) → item `failed` avec message FR, run continue.
-- Timeout par item : 30 min sans passage à `idle` → stop de la session (message `stop` du stream) → `failed`.
+- Timeout par item : 30 min sans transition terminale → stop de la session (message `{type:'abort'}` du stream — c'est le message existant, pas `stop`) → `failed`.
+- Transition → `error` de la session : item `failed` immédiat ; rate limit avec `resetAt` → arrêt propre du run entier (voir Boucle).
 - Crash/redémarrage serveur : au boot, un `autopilot.run` non-`idle` est marqué `failed` (items `running` aussi). Jamais de reprise aveugle.
-- Worktrees et branches des items terminés sont **conservés** pour autopsie. Un bouton « Nettoyer » dans le widget supprime worktree + branche locale + projet Atelier des items en état terminal (la session SDK reste dans `~/.claude/projects`).
+- Worktrees et branches des items terminés sont **conservés** pour autopsie. Un bouton « Nettoyer » dans le widget supprime worktree + branche locale + projet Atelier des items en état terminal (la session SDK reste dans `~/.claude/projects`). Ordre : `git worktree remove` d'abord, suppression du projet ensuite — et la suppression de projet doit tolérer un chemin déjà disparu.
 - Issue fermée entre le fetch et le traitement : l'item est traité quand même (fenêtre courte, YAGNI).
 
 ## Tests
