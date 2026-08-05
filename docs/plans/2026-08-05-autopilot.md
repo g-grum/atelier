@@ -65,10 +65,11 @@ export type AutopilotItem = {
   startedAt?: string
   endedAt?: string
 }
-/** run: null = idle. items = dernier run (remplacés au start suivant). */
+/** run: null = idle. items = dernier run (remplacés au start suivant). lastError = échec du démarrage de la boucle (fetch issues), effacé au start suivant. */
 export type AutopilotState = {
   run: { state: AutopilotRunState; startedAt: string; maxItems: number; projectId: string } | null
   items: AutopilotItem[]
+  lastError?: string
 }
 /** Diffusé sur le hub /api/sessions-status à chaque mutation d'état autopilot. */
 export type AutopilotStatusEvent = { type: 'autopilot_status'; autopilot: AutopilotState }
@@ -133,7 +134,7 @@ describe('autopilot state', () => {
 - [ ] **Step 3: Implémentation**
   - `AppDataShape` : `autopilot: AutopilotState` (import depuis `@atelier/shared`)
   - `EMPTY` : `autopilot: { run: null, items: [] }`
-  - Constructeur, après le merge : si `this.data.autopilot.run !== null` → `run = null` et tous les items dont le statut n'est ni `pr_opened` ni `failed` passent `failed` avec `error: 'interrompu par un redémarrage du serveur'` + `endedAt`.
+  - Constructeur, après le merge : si `this.data.autopilot.run !== null` → `run = null` et tous les items dont le statut n'est ni `pr_opened` ni `failed` passent `failed` avec `error: 'interrompu par un redémarrage du serveur'` + `endedAt`. (La spec dit « run marqué failed » — `AutopilotRunState` n'a pas d'état failed : run=null + items failed EST la matérialisation de cette exigence, l'échec se lit sur les items.)
 - [ ] **Step 4: Relancer** → PASS. Gate complet `bun test`.
 - [ ] **Step 5: Commit** — `feat(server): état autopilot persisté + assainissement failed au boot`
 
@@ -167,7 +168,7 @@ describe('prForBranch', () => {
 })
 ```
 
-(Adapter `fakeRun` au helper réel du fichier de test existant — il y en a déjà un pour `listPrs`.)
+(⚠️ Le helper existant `fakeRunner` (github-service.test.ts:20-29) route par `args[0]` et ne sait PAS répondre différemment à deux appels successifs — écrire un nouveau helper séquentiel (file de réponses) pour le test « sans cache » de `prForBranch`.)
 
 - [ ] **Step 2: Lancer** → FAIL
 - [ ] **Step 3: Implémentation** — deux méthodes publiques, mêmes conventions d'erreur (`GithubError`, messages FR) et de token (`resolveToken`) que `listPrs` :
@@ -243,6 +244,9 @@ export type Workspace = {
   prepare: (issue: number) => Promise<{ path: string; branch: string }>
   cleanup: (issue: number) => Promise<void>
 }
+
+/** FACTORY : le repoRoot n'est connu qu'au start (c'est le path du projet ciblé) — on ne fige rien au boot. */
+export type WorkspaceFactory = (repoRoot: string) => Workspace
 
 export function createWorkspace(repoRoot: string, exec: Exec = defaultExec): Workspace { … }
 ```
@@ -335,9 +339,9 @@ export type AutopilotDeps = {
   sessions: SessionsService
   streams: SessionStreamRegistry
   github: Pick<GithubService, 'listAutopilotIssues' | 'prForBranch'>
-  workspace: Workspace
-  /** owner/repo du projet cible — résolu par la route (git-remote), injecté ici. */
-  fetchIssueBody: (repo: number | string, issue: number, user: string) => Promise<string>  // gh issue view --json body — ajouter à GithubService (même pattern, sans cache)
+  /** Factory — le runner appelle workspace(project.path) au start (Task 4). */
+  workspace: WorkspaceFactory
+  fetchIssueBody: (repo: string, issue: number, user: string) => Promise<string>  // gh issue view --json body — ajouter à GithubService (même pattern, sans cache)
   itemTimeoutMs?: number   // défaut 30 * 60_000
   now?: () => number
 }
@@ -350,15 +354,15 @@ export class AutopilotRunner {
 ```
 
 Comportement (chaque point = un test) :
-1. `start` avec un run en cours → `throw new AutopilotConflictError()` ; sinon : persiste `run { state: 'running', … }` + items `queued` (issues slicées à maxItems), `publish({ type: 'autopilot_status', … })` à CHAQUE mutation d'état (helper privé `mutate(fn)` qui fait `data.update` + publish), et lance la boucle en fire-and-forget
+1. `start` avec un run en cours → `throw new AutopilotConflictError()` ; sinon : persiste `run { state: 'running', … }` (items vides, `lastError` effacé), `publish({ type: 'autopilot_status', … })` à CHAQUE mutation d'état (helper privé `mutate(fn)` qui fait `data.update` + publish), et lance la boucle en fire-and-forget. **Dans la boucle** : fetch des issues → items `queued` (slicés à maxItems). Fetch qui LÈVE ou 0 issue → `run = null` + publish, et le message FR va dans `AutopilotState.lastError?: string` (à ajouter au type en Task 1 — affiché par le widget ; effacé au start suivant). Test dédié : « le run ne reste jamais bloqué en running si le fetch échoue » — la route a déjà répondu 202, c'est le seul canal d'erreur
 2. Par item : `workspace.prepare(n)` → projet temporaire `data.update((d) => d.projects.push({ id: randomUUID(), path, color: '#6366f1' }))` → `sessions.createDraft(tempProjectId, { name: \`Autopilot #\${n}\` })` → `sessions.setPermissionMode(draftId, 'bypassPermissions')` → `item.sessionId = draftId`, status `running` → `streams.get(draftId, tempProjectId).onMessage(JSON.stringify({ type: 'user_message', text: buildItemPrompt(…) }))`
-3. Attente de fin : sink posé via `streams.onStatusConnect` au démarrage du run (retiré via `onStatusClose` à la fin) ; à chaque `session_status`, l'item courant matche si `event.sessionId === data.resolveSessionId(item.sessionId)` — et l'item met à jour `item.sessionId` avec l'id résolu (remap draft→SDK, seule voie fiable). `state === 'idle'` → vérifier la PR ; `state === 'error'` → item `failed` immédiat (message d'erreur du snapshot non accessible par le hub : mettre `error: 'la session a terminé en erreur'`) ; si l'erreur de session porte un resetAt (non visible par le hub — décision : sur `error`, TOUJOURS arrêter le run si l'item suivant échouerait pareil ? NON : spec = arrêt du run seulement sur rate limit ; le hub ne transporte pas resetAt, donc lire `data.get().rateLimits` : si une fenêtre a `status === 'rejected'`, arrêter le run proprement, sinon continuer)
+3. Attente de fin : sink posé via `streams.onStatusConnect` au démarrage du run (retiré via `onStatusClose` à la fin) ; à chaque `session_status`, l'item courant matche si `event.sessionId === data.resolveSessionId(item.sessionId)` — et l'item met à jour `item.sessionId` avec l'id résolu (remap draft→SDK, seule voie fiable). `state === 'idle'` → vérifier la PR ; `state === 'error'` → item `failed` immédiat (message d'erreur du snapshot non accessible par le hub : mettre `error: 'la session a terminé en erreur'`) ; si l'erreur de session porte un resetAt (non visible par le hub — décision : sur `error`, TOUJOURS arrêter le run si l'item suivant échouerait pareil ? NON : spec = arrêt du run seulement sur rate limit ; le hub ne transporte pas resetAt, donc lire `data.get().rateLimits` : si une fenêtre a `status === 'rejected'` ET est ENCORE valide (`resetsAt` absent ou dans le futur — un snapshot rejeté d'un run passé, fenêtre expirée, ne doit pas arrêter à tort), arrêter le run proprement, sinon continuer)
 4. Vérification PR : `github.prForBranch(repo, branch, user)` → trouvée : item `pr_opened` + `prUrl`, item suivant. Absente : UNE relance — `onMessage(user_message 'Termine : exécute les gates puis ouvre la PR (gh pr create … Closes #<n>).')` ; à l'idle suivant, re-vérifier ; toujours rien → `failed`
-5. Timeout 30 min par item (armé au lancement du tour, désarmé à la transition terminale) : `onMessage(JSON.stringify({ type: 'abort' }))` puis item `failed` (`error: 'timeout'`)
+5. Timeout 30 min par item (armé au lancement du tour, désarmé à la transition terminale) : `onMessage(JSON.stringify({ type: 'abort' }))` puis item `failed` (`error: 'timeout'`). ⚠️ Après l'abort, le stream settle en `idle` et le hub le publie — l'item déjà `failed` ne doit PAS être re-traité par le handler d'idle (garde : ne traiter une transition que si l'item courant est encore `running`) ; test dédié
 6. `stop()` : `run.state = 'stopping'` — l'item courant va au bout de son cycle (y compris relance déjà émise mais pas de NOUVELLE relance), les `queued` restants ne démarrent pas ; fin de boucle → `run = null`, publish
 7. Fin de boucle normale (tous items traités) → `run = null`, publish
 8. Erreurs par item (workspace.prepare qui lève, gh qui lève) → item `failed` avec le message FR, boucle continue
-9. `cleanup()` : pour chaque item terminal, `workspace.cleanup(issue)` puis `data.update` retire le projet temporaire (id `item.projectId`) et l'item de la liste ; publish
+9. `cleanup()` : pour chaque item terminal, `workspace(project.path).cleanup(issue)` puis `data.update` retire le projet temporaire (id `item.projectId`) et l'item de la liste ; publish. (Retirer l'item est assumé : Nettoyer est une action volontaire post-autopsie — le widget ne montre plus que ce qui reste.)
 
 **Fakes de test** : fake SessionsService (createDraft → { id: 'd1', … }), fake registry (capture onMessage, expose un `emit(sessionId, state)` pour simuler le hub, `publish` accumulé), fake workspace, fake github. Utiliser des timers contrôlables (`itemTimeoutMs: 50` + attentes courtes) — PAS de vrais setTimeout de 30 min dans les tests.
 
@@ -372,7 +376,7 @@ Comportement (chaque point = un test) :
 - Modify: `apps/server/src/github/github-service.ts` (+ test) — `issueBody(repo, issue, user)` : `gh issue view <n> -R repo --json body`, sans cache, mêmes erreurs FR
 - Create: `apps/server/src/autopilot/autopilot-routes.ts`
 - Test: `apps/server/src/autopilot/autopilot-routes.test.ts` (pattern github-routes.test.ts)
-- Modify: `apps/server/src/app.ts` (montage) + `apps/server/src/index.ts` (construction runner + workspace + registre avec isAutopilot)
+- Modify: `apps/server/src/app.ts` (montage) + `apps/server/src/index.ts` (construction du runner avec `workspace: createWorkspace` en FACTORY — le repoRoot n'est connu qu'au start — + registre avec isAutopilot)
 
 Routes (préfixe `/api` déjà géré par app.ts) :
 - `GET /autopilot` → `{ ...data.get().autopilot }` (200)
@@ -399,7 +403,7 @@ Tests de routes : 404/400/409/202/200 + le start passe bien repo/user au runner 
 - [ ] **Step 3: Implémentation**
   - `protocol.ts` : `WidgetType = 'github-prs' | 'rate-limits' | 'modified-files' | 'autopilot'` ; `config?: { repo: string; limit?: number } | { projectId: string; maxItems?: number }` (union — les consommateurs discriminent par `type` du widget) ; `SINGLETON_WIDGET_TYPES` + `'autopilot'`
   - `validate-widgets.ts` : brancher la validation par type — `github-prs` → `{ repo, limit? }` (existant), `autopilot` → `{ projectId: string non vide, maxItems?: 1-10 }`, autres types → config absente
-- [ ] **Step 4: Relancer** → PASS. Gate `bun test` + tsc (l'union peut casser PrListWidget/PrConfigDialog : caster via le discriminant `w.type === 'github-prs'` là où ça râle — pas de `as` sauvage).
+- [ ] **Step 4: Relancer** → PASS. Gate `bun test` + tsc. ⚠️ L'union casse App.tsx:360 (`w.config?.repo/.limit`) et PrConfigDialog.tsx:28,31 sous strict — `w.type === 'github-prs'` ne narrowe PAS `w.config` (champs indépendants). Remède prescrit : narrowing STRUCTUREL — `const cfg = w.config && 'repo' in w.config ? w.config : undefined` (et symétriquement `'projectId' in config` côté autopilot). Pas de `as`. Ne pas oublier le Set `TYPES` codé en dur dans validate-widgets.ts:3.
 - [ ] **Step 5: Commit** — `feat(shared,server): widget autopilot — type, singleton, config validée par type`
 
 ### Task 10: Seam Backend + client REST + fixtures
@@ -420,6 +424,11 @@ cleanupAutopilot(): Promise<void>
 ```
 
 - `client.ts` : GET/POST correspondants (pattern `getGithubPrs` — même gestion d'erreur `{ error }` → throw)
+- **Pont hub→web (BLOQUANT — trois seams supplémentaires, sinon les trames autopilot_status sont droppées silencieusement)** :
+  - `apps/web/src/api/status-socket.ts` : L55 parse via `parseSessionStatus` et le callback est typé `SessionStatusEvent` (L29) → passer à `parseStatusHubEvent` et retyper le callback `(event: StatusHubEvent) => void`
+  - `apps/web/src/api/backend.ts` : `createStatusSocket` (L57) — retyper le paramètre `onEvent` en `StatusHubEvent`
+  - `apps/web/src/App.tsx` : L101 route tout vers `statusStore.handle` (typé `SessionStatusEvent`, session-status-store.ts:27) → dispatcher par type : `session_status` → statusStore.handle (inchangé), `autopilot_status` → setter d'état autopilot (consommé par le widget en Task 11)
+  - `apps/server/src/app.ts` : L99 `sink: ((event: SessionStatusEvent) => void) | null` → retyper `StatusHubEvent` (+ import L4) — contravariance sinon
 - Fixtures : `fixtureAutopilot: AutopilotState` avec un run null et 3 items d'exemple (`pr_opened` avec prUrl, `failed` avec error, `running`) ; `createFixtureBackend` : start → bascule le run + premier item running (assez pour la démo), stop/cleanup → mutations simples
 - Le socket de statut fixture n'émet PAS d'autopilot_status (refetch au focus suffit en démo)
 - [ ] **Step 2: Gate** tsc → toutes les implémentations de Backend compilent
@@ -448,7 +457,7 @@ Comportements du widget (un test chacun, Testing Library, backend fixture) :
 ### Task 12: Vérification E2E réelle (MANUELLE / superviseur — pas de subagent)
 
 - [ ] `bun run build:web` (le widget est servi depuis dist/)
-- [ ] Serveur headless isolé : `ATELIER_PORT` libre + `--data` temporaire (pattern QCM v0.1.11) ; créer une issue de test labellisée `autopilot` sur un repo jetable (ou g-grum/atelier avec une issue triviale, ex. « ajouter un fichier docs/test-autopilot.md ») ; `POST /api/autopilot/start` ; observer : worktree créé, bun install, session qui tourne, PR ouverte, item `pr_opened`, hub qui diffuse
+- [ ] Serveur headless isolé : flags `--port <libre> --token <t> --data <tmp>` (index.ts:27-40 — il n'y a PAS de variable ATELIER_PORT côté serveur) ; créer une issue de test labellisée `autopilot` sur un repo jetable (ou g-grum/atelier avec une issue triviale, ex. « ajouter un fichier docs/test-autopilot.md ») ; `POST /api/autopilot/start` ; observer : worktree créé, bun install, session qui tourne, PR ouverte, item `pr_opened`, hub qui diffuse
 - [ ] Vérifier le deny AskUserQuestion (session autonome) et le stop propre
 - [ ] Nettoyage : `POST /api/autopilot/cleanup` + fermeture de l'issue de test
 - [ ] Commit final + push (CI verte attendue) + release : bumper `version.json` (notes FR)
