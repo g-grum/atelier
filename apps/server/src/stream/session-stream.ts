@@ -18,6 +18,8 @@ type SessionStreamParams = {
   onRekey?: (from: string, to: string) => void
   /** Notifié à CHAQUE transition d'état (démarrage de tour inclus) — alimente le status hub. */
   onStatusChange?: (sessionId: string, state: SessionState) => void
+  /** Session autopilot (spec 2026-08-05) : AskUserQuestion y est refusé net — personne ne répondra. Data-driven (lit l'état autopilot), pas de cycle registre↔runner. */
+  isAutopilot?: (sessionId: string) => boolean
 }
 
 /**
@@ -32,6 +34,7 @@ export class SessionStream {
   private readonly sdk: SdkClient
   private readonly onRekey?: (from: string, to: string) => void
   private readonly onStatusChange?: (sessionId: string, state: SessionState) => void
+  private readonly isAutopilot?: (sessionId: string) => boolean
   private readonly broker: PermissionBroker
   private readonly questions: QuestionBroker
 
@@ -46,13 +49,14 @@ export class SessionStream {
   /** Draft name awaiting renameSession — applied at turn end, once the SDK CLI has flushed the session JSONL. */
   private pendingRename: { sessionId: string; name: string } | null = null
 
-  constructor({ id, projectId, data, sdk, onRekey, onStatusChange }: SessionStreamParams) {
+  constructor({ id, projectId, data, sdk, onRekey, onStatusChange, isAutopilot }: SessionStreamParams) {
     this.id = id
     this.projectId = projectId
     this.data = data
     this.sdk = sdk
     this.onRekey = onRekey
     this.onStatusChange = onStatusChange
+    this.isAutopilot = isAutopilot
     const projectDir = data.get().projects.find((p) => p.id === projectId)?.path ?? ''
     this.broker = new PermissionBroker(data, projectId, projectDir, (request) => {
       this.broadcast(this.toPermissionEvent(request))
@@ -148,6 +152,11 @@ export class SessionStream {
         // règles « always » ; le mode skip-permissions est un auto-allow sélectif
         // (plus de bypassPermissions SDK : il court-circuitait canUseTool et avalait le QCM).
         canUseTool: (toolName, input) => {
+          // Session autopilot : deny immédiat AVANT le QuestionBroker — la session
+          // est autonome, personne ne répondra jamais au QCM (spec 2026-08-05).
+          if (toolName === 'AskUserQuestion' && this.isAutopilot?.(this.sessionId()) === true) {
+            return Promise.resolve({ behavior: 'deny' as const, message: 'Session autonome — décide seul et continue.' })
+          }
           if (toolName === 'AskUserQuestion') return this.questions.request(input)
           if (permissionMode === 'bypassPermissions') return Promise.resolve({ behavior: 'allow' as const })
           return this.broker.request(toolName, input)
@@ -383,7 +392,9 @@ export class SessionStreamRegistry {
 
   constructor(
     private readonly data: AppData,
-    private readonly sdk: SdkClient
+    private readonly sdk: SdkClient,
+    /** Prédicat data-driven « cette session est-elle pilotée par l'autopilot ? » — transmis à chaque stream. */
+    private readonly isAutopilot?: (sessionId: string) => boolean
   ) {}
 
   get(id: string, projectId: string): SessionStream {
@@ -395,6 +406,7 @@ export class SessionStreamRegistry {
         projectId,
         data: this.data,
         sdk: this.sdk,
+        isAutopilot: this.isAutopilot,
         onRekey: (from, to) => {
           const entry = this.streams.get(from)
           if (entry) {

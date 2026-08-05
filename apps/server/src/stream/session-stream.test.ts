@@ -13,7 +13,7 @@ type Turns = NonNullable<ConstructorParameters<typeof MockSdkClient>[0]>['turns'
 /** Drains all pending microtasks (the mock yields synchronously between awaits). */
 const tick = () => Bun.sleep(0)
 
-function setup({ turns, draft }: { turns?: Turns; draft?: Draft } = {}) {
+function setup({ turns, draft, isAutopilot }: { turns?: Turns; draft?: Draft; isAutopilot?: (sessionId: string) => boolean } = {}) {
   const filePath = join(mkdtempSync(join(tmpdir(), 'atelier-stream-')), 'data.json')
   const data = new AppData(filePath)
   data.update((d) => {
@@ -21,7 +21,7 @@ function setup({ turns, draft }: { turns?: Turns; draft?: Draft } = {}) {
     if (draft) d.drafts.push(draft)
   })
   const sdk = new MockSdkClient({ turns })
-  const registry = new SessionStreamRegistry(data, sdk)
+  const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
   return { data, sdk, registry }
 }
 
@@ -604,7 +604,7 @@ describe('SessionStream', () => {
       d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
     })
     const sdk = new AbortAsTurnErrorSdk()
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('s1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
@@ -635,7 +635,7 @@ describe('SessionStream', () => {
       d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
     })
     const sdk = new AbortThrowingSdk()
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('s1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
@@ -684,7 +684,7 @@ describe('SessionStream', () => {
       d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
     })
     const sdk = new DrainGapSdk()
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('s1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
@@ -738,7 +738,7 @@ describe('SessionStream', () => {
       d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
     })
     const sdk = new DrainRejectSdk()
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('s1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
@@ -801,7 +801,7 @@ describe('SessionStream', () => {
       d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
     })
     const sdk = new DrainErrorEventSdk()
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('s1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
@@ -853,7 +853,7 @@ describe('SessionStream', () => {
       d.projects.push({ id: 'p1', path: '/proj', color: 'cyan' })
     })
     const sdk = new DrainErrorEventSdk()
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('s1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
@@ -970,7 +970,7 @@ describe('SessionStream', () => {
         { type: 'turn_done' },
       ]],
     })
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('d1', 'p1')
     const { events, send } = makeSink()
     stream.onConnect(send)
@@ -1041,7 +1041,7 @@ describe('SessionStream', () => {
         { type: 'turn_done' },
       ]],
     })
-    const registry = new SessionStreamRegistry(data, sdk)
+    const registry = new SessionStreamRegistry(data, sdk, isAutopilot)
     const stream = registry.get('d1', 'p1')
     stream.onConnect(send)
 
@@ -1206,5 +1206,47 @@ describe('status hub — publish', () => {
       errorLog.mockRestore()
     }
     expect(seen).toHaveLength(1)
+  })
+})
+
+// 11. Sessions autopilot (spec 2026-08-05) : AskUserQuestion refusé net — personne ne répondra
+describe('deny AskUserQuestion en session autopilot', () => {
+  const VALID_INPUT = {
+    questions: [{
+      question: 'Quelle approche ?',
+      header: 'Approche',
+      options: [{ label: 'A', description: 'a' }, { label: 'B', description: 'b' }],
+      multiSelect: false,
+    }],
+  }
+
+  test('AskUserQuestion est refusé immédiatement (pas de QuestionBroker) quand isAutopilot matche', async () => {
+    const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]], isAutopilot: (id) => id === 's1' })
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    await expect(runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)).resolves.toEqual({
+      behavior: 'deny',
+      message: 'Session autonome — décide seul et continue.',
+    })
+    expect(ofType(events, 'question_request')).toHaveLength(0)
+  })
+
+  test('AskUserQuestion va au QuestionBroker pour une session normale (prédicat faux)', async () => {
+    const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]], isAutopilot: () => false })
+    const stream = registry.get('s1', 'p1')
+    const { events, send } = makeSink()
+    stream.onConnect(send)
+
+    stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+    await tick()
+
+    void runTurnParams(sdk).canUseTool('AskUserQuestion', VALID_INPUT)
+    await tick()
+    expect(ofType(events, 'question_request')).toHaveLength(1)
   })
 })
