@@ -188,6 +188,8 @@ export type AutopilotItem = {
   branch: string
   /** Projet Atelier temporaire pointant sur le worktree. */
   projectId: string
+  /** Racine du repo CIBLE (path du projet lancé) — indispensable au cleanup : le run est null à ce moment-là et le path du projet temporaire est le worktree, pas le repo. */
+  repoRoot: string
   /** Id de session — draft d'abord, ré-écrit avec l'id SDK après matérialisation. */
   sessionId: string
   status: AutopilotItemStatus

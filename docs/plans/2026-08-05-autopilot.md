@@ -57,6 +57,8 @@ export type AutopilotItem = {
   branch: string
   /** Projet Atelier temporaire pointant sur le worktree. */
   projectId: string
+  /** Racine du repo CIBLE — indispensable au cleanup (run null, path du projet temporaire = worktree). */
+  repoRoot: string
   /** Id de session — draft d'abord, ré-écrit avec l'id SDK après matérialisation. */
   sessionId: string
   status: AutopilotItemStatus
@@ -284,7 +286,7 @@ test('un sink qui lève n'empêche pas les suivants de recevoir publish', () => 
   - `statusSinks` retypé `Set<(event: StatusHubEvent) => void>` (import `StatusHubEvent` de `@atelier/shared`)
   - Nouvelle méthode publique `publish(event: StatusHubEvent): void` avec la même garde par-sink que `publishStatus` ; `publishStatus` (privé, inchangé de signature) délègue à `publish`
   - `onStatusConnect`/`onStatusClose` : paramètre retypé `(event: StatusHubEvent) => void` — le snapshot existant reste fait de `session_status` uniquement (l'état autopilot se récupère par GET, pas par snapshot hub)
-  - `app.ts` : le sink WS passe tel quel (il fait `ws.send(JSON.stringify(event))`) — vérifier juste que le typage compile
+  - `app.ts` : retyper ICI la déclaration L99 `sink: ((event: SessionStatusEvent) => void) | null` → `StatusHubEvent` (+ import L4) — contravariance dès que `onStatusConnect` est élargi (aucun gate ne typecheck apps/server : ne pas compter sur tsc pour l'attraper)
 - [ ] **Step 4: Relancer** → PASS. Gate `bun test`.
 - [ ] **Step 5: Commit** — `feat(server): hub de statut élargi — publish public typé StatusHubEvent`
 
@@ -362,7 +364,7 @@ Comportement (chaque point = un test) :
 6. `stop()` : `run.state = 'stopping'` — l'item courant va au bout de son cycle (y compris relance déjà émise mais pas de NOUVELLE relance), les `queued` restants ne démarrent pas ; fin de boucle → `run = null`, publish
 7. Fin de boucle normale (tous items traités) → `run = null`, publish
 8. Erreurs par item (workspace.prepare qui lève, gh qui lève) → item `failed` avec le message FR, boucle continue
-9. `cleanup()` : pour chaque item terminal, `workspace(project.path).cleanup(issue)` puis `data.update` retire le projet temporaire (id `item.projectId`) et l'item de la liste ; publish. (Retirer l'item est assumé : Nettoyer est une action volontaire post-autopsie — le widget ne montre plus que ce qui reste.)
+9. `cleanup()` : pour chaque item terminal, `workspace(item.repoRoot).cleanup(item.issue)` (⚠️ PAS le path du projet temporaire — c'est le worktree ; `repoRoot` est persisté sur l'item exprès) puis `data.update` retire le projet temporaire (id `item.projectId`) et l'item de la liste ; publish. (Retirer l'item est assumé : Nettoyer est une action volontaire post-autopsie — le widget ne montre plus que ce qui reste.)
 
 **Fakes de test** : fake SessionsService (createDraft → { id: 'd1', … }), fake registry (capture onMessage, expose un `emit(sessionId, state)` pour simuler le hub, `publish` accumulé), fake workspace, fake github. Utiliser des timers contrôlables (`itemTimeoutMs: 50` + attentes courtes) — PAS de vrais setTimeout de 30 min dans les tests.
 
@@ -441,7 +443,7 @@ cleanupAutopilot(): Promise<void>
 - Create: `apps/web/src/components/widgets/AutopilotConfigDialog.tsx` (+ test — pattern PrConfigDialog : sélecteur de projet + maxItems)
 - Modify: `apps/web/src/components/widgets/widget-registry.ts` (WIDGET_META : `autopilot`, singleton, `create()`)
 - Modify: `apps/web/src/components/widgets/DashboardGrid.tsx` (~L103 : `onConfigure` aussi pour `autopilot`)
-- Modify: `apps/web/src/App.tsx` (renderWidget ~L353 ; hub : passer de `parseSessionStatus` à `parseStatusHubEvent` là où le socket de statut est consommé — sur `autopilot_status`, rafraîchir l'état autopilot ; « ouvrir la session » = réutiliser la sélection de session existante)
+- Modify: `apps/web/src/App.tsx` (renderWidget ~L353 ; le pont hub→web est FAIT en Task 10 — ici : consommer l'état autopilot mis à jour et « ouvrir la session » = réutiliser la sélection de session existante)
 
 Comportements du widget (un test chacun, Testing Library, backend fixture) :
 - run null : bouton « Lancer » (désactivé si pas de config projectId) ; run actif : « Arrêter » + état
