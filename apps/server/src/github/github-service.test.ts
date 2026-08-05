@@ -125,3 +125,64 @@ describe('GithubService', () => {
     expect(calls.filter((c) => c.args[0] === 'pr')).toHaveLength(2)
   })
 })
+
+/** Helper séquentiel : une file de réponses, consommées appel par appel (le fake historique route par args[0] et ne sait pas varier). */
+function sequentialRunner(queue: { stdout?: string; stderr?: string; exitCode?: number }[]) {
+  const calls: Call[] = []
+  const run: GhRun = async (args, env) => {
+    calls.push({ args, env })
+    const r = queue.shift() ?? {}
+    return { stdout: r.stdout ?? '', stderr: r.stderr ?? '', exitCode: r.exitCode ?? 0 }
+  }
+  return { run, calls }
+}
+
+describe('listAutopilotIssues', () => {
+  test('liste les issues ouvertes labellisées autopilot, triées par ancienneté', async () => {
+    const { run, calls } = fakeRunner({
+      auth: { stdout: 'tok\n' },
+      list: { stdout: JSON.stringify([
+        { number: 12, title: 'B', createdAt: '2026-08-02T00:00:00Z' },
+        { number: 7, title: 'A', createdAt: '2026-08-01T00:00:00Z' },
+      ]) },
+    })
+    const issues = await new GithubService(run, () => 0).listAutopilotIssues('g-grum/atelier', 'g-grum')
+    expect(issues).toEqual([{ number: 7, title: 'A' }, { number: 12, title: 'B' }])
+    expect(calls[1]!.args).toEqual(['issue', 'list', '-R', 'g-grum/atelier', '--label', 'autopilot', '--state', 'open', '--json', 'number,title,createdAt'])
+    expect(calls[1]!.env).toEqual({ GH_TOKEN: 'tok' })
+  })
+
+  test('gh en échec → GithubError FR', async () => {
+    const { run } = fakeRunner({ auth: { stdout: 't' }, list: { exitCode: 1, stderr: 'boom' } })
+    expect(new GithubService(run, () => 0).listAutopilotIssues('o/r', 'u')).rejects.toThrow('gh a échoué pour o/r : boom')
+  })
+})
+
+describe('prForBranch', () => {
+  test('retourne la première PR de la branche, SANS cache (deux appels = deux exécutions gh)', async () => {
+    const { run, calls } = sequentialRunner([
+      { stdout: 'tok\n' },
+      { stdout: '[]' },
+      { stdout: JSON.stringify([{ number: 5, url: 'https://github.com/o/r/pull/5' }]) },
+    ])
+    const service = new GithubService(run, () => 0)
+    expect(await service.prForBranch('o/r', 'autopilot/5', 'u')).toBeNull()
+    expect(await service.prForBranch('o/r', 'autopilot/5', 'u')).toEqual({ number: 5, url: 'https://github.com/o/r/pull/5' })
+    // 3 appels gh : 1 token + 2 pr list — aucun cache
+    expect(calls).toHaveLength(3)
+    expect(calls[1]!.args).toEqual(['pr', 'list', '-R', 'o/r', '--head', 'autopilot/5', '--state', 'all', '--json', 'number,url'])
+  })
+
+  test('réponse illisible → GithubError FR', async () => {
+    const { run } = fakeRunner({ auth: { stdout: 't' }, list: { stdout: 'pas du json' } })
+    expect(new GithubService(run, () => 0).prForBranch('o/r', 'b', 'u')).rejects.toThrow('réponse gh illisible pour o/r')
+  })
+})
+
+describe('issueBody', () => {
+  test('récupère le corps de l’issue', async () => {
+    const { run, calls } = fakeRunner({ auth: { stdout: 'tok\n' }, list: { stdout: JSON.stringify({ body: 'faire X' }) } })
+    expect(await new GithubService(run, () => 0).issueBody('o/r', 42, 'u')).toBe('faire X')
+    expect(calls[1]!.args).toEqual(['issue', 'view', '42', '-R', 'o/r', '--json', 'body'])
+  })
+})

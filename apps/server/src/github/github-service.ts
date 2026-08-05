@@ -59,6 +59,52 @@ export class GithubService {
     return prs
   }
 
+  /** Issues ouvertes labellisées autopilot, plus ancienne d'abord. AUCUN cache (spec 2026-08-05). */
+  async listAutopilotIssues(repo: string, githubUser: string): Promise<{ number: number; title: string }[]> {
+    const raw = await this.runJson<{ number: number; title: string; createdAt: string }[]>(
+      ['issue', 'list', '-R', repo, '--label', 'autopilot', '--state', 'open', '--json', 'number,title,createdAt'],
+      repo,
+      githubUser,
+    )
+    return raw
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(({ number, title }) => ({ number, title }))
+  }
+
+  /** PR (tous états) dont la branche est `branch`. SANS cache — doit voir une PR toute fraîche (le cache 60 s de listPrs la manquerait). */
+  async prForBranch(repo: string, branch: string, githubUser: string): Promise<{ number: number; url: string } | null> {
+    const raw = await this.runJson<{ number: number; url: string }[]>(
+      ['pr', 'list', '-R', repo, '--head', branch, '--state', 'all', '--json', 'number,url'],
+      repo,
+      githubUser,
+    )
+    return raw[0] ?? null
+  }
+
+  /** Corps d'une issue (prompt d'item autopilot). SANS cache. */
+  async issueBody(repo: string, issue: number, githubUser: string): Promise<string> {
+    const raw = await this.runJson<{ body?: string }>(
+      ['issue', 'view', String(issue), '-R', repo, '--json', 'body'],
+      repo,
+      githubUser,
+    )
+    return raw.body ?? ''
+  }
+
+  /** Exécute gh avec le token épinglé et parse le JSON — conventions d'erreur FR communes. */
+  private async runJson<T>(args: string[], repo: string, githubUser: string): Promise<T> {
+    const token = await this.resolveToken(githubUser)
+    const result = await this.run(args, { GH_TOKEN: token })
+    if (result.exitCode !== 0) {
+      throw new GithubError(`gh a échoué pour ${repo} : ${result.stderr.trim() || 'erreur inconnue'}`)
+    }
+    try {
+      return JSON.parse(result.stdout) as T
+    } catch {
+      throw new GithubError(`réponse gh illisible pour ${repo}`)
+    }
+  }
+
   private async resolveToken(user: string): Promise<string> {
     if (this.token !== null && this.token.user === user) return this.token.value
     const result = await this.run(['auth', 'token', '--user', user])
