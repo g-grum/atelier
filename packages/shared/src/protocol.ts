@@ -179,6 +179,45 @@ export function parseSessionStatus(raw: string): SessionStatusEvent | null {
   }
 }
 
+// ── Autopilot (spec 2026-08-05) ──
+export type AutopilotItemStatus = 'queued' | 'running' | 'pr_opened' | 'failed'
+export type AutopilotRunState = 'running' | 'stopping'
+export type AutopilotItem = {
+  issue: number
+  title: string
+  branch: string
+  /** Projet Atelier temporaire pointant sur le worktree. */
+  projectId: string
+  /** Id de session — draft d'abord, ré-écrit avec l'id SDK après matérialisation. */
+  sessionId: string
+  status: AutopilotItemStatus
+  prUrl?: string
+  error?: string
+  startedAt?: string
+  endedAt?: string
+}
+/** run: null = idle. items = dernier run (remplacés au start suivant). lastError = échec du démarrage de la boucle (fetch issues), effacé au start suivant. */
+export type AutopilotState = {
+  run: { state: AutopilotRunState; startedAt: string; maxItems: number; projectId: string } | null
+  items: AutopilotItem[]
+  lastError?: string
+}
+/** Diffusé sur le hub /api/sessions-status à chaque mutation d'état autopilot. */
+export type AutopilotStatusEvent = { type: 'autopilot_status'; autopilot: AutopilotState }
+export type StatusHubEvent = SessionStatusEvent | AutopilotStatusEvent
+
+export function parseStatusHubEvent(raw: string): StatusHubEvent | null {
+  const session = parseSessionStatus(raw)
+  if (session !== null) return session
+  try {
+    const v = JSON.parse(raw) as Record<string, unknown>
+    if (v?.type !== 'autopilot_status' || typeof v.autopilot !== 'object' || v.autopilot === null) return null
+    return { type: 'autopilot_status', autopilot: v.autopilot as AutopilotState }
+  } catch {
+    return null
+  }
+}
+
 // ── Widget dashboard (spec 2026-07-21) ──
 export type WidgetType = 'github-prs' | 'rate-limits' | 'modified-files'
 export type WidgetHeight = 'S' | 'M' | 'L'

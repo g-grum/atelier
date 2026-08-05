@@ -4,6 +4,7 @@ import {
   isServerEvent,
   parseClientMessage,
   parseSessionStatus,
+  parseStatusHubEvent,
   REPO_PATTERN,
   type ServerEvent,
 } from './protocol'
@@ -81,5 +82,24 @@ describe('parseSessionStatus', () => {
     expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 's1', state: 'busy' }))).toBeNull()
     expect(parseSessionStatus(JSON.stringify({ type: 'session_status', sessionId: 42, state: 'idle' }))).toBeNull()
     expect(parseSessionStatus('{not json')).toBeNull()
+  })
+})
+
+describe('parseStatusHubEvent', () => {
+  test('accepte session_status (comportement historique)', () => {
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'session_status', sessionId: 's1', state: 'idle' })))
+      .toEqual({ type: 'session_status', sessionId: 's1', state: 'idle' })
+  })
+
+  test('accepte autopilot_status avec un état complet', () => {
+    const autopilot = { run: null, items: [] }
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'autopilot_status', autopilot })))
+      .toEqual({ type: 'autopilot_status', autopilot })
+  })
+
+  test('rejette le reste', () => {
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'nope' }))).toBeNull()
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'autopilot_status' }))).toBeNull()
+    expect(parseStatusHubEvent('pas du json')).toBeNull()
   })
 })
