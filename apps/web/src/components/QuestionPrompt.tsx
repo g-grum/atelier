@@ -23,10 +23,21 @@ const EMPTY_DRAFT: Draft = { selected: [], other: '', useOther: false }
  * Mono-question single-select : cliquer une option prédéfinie envoie
  * directement (friction zéro). « Autre » et tous les autres cas passent par le
  * bouton « Envoyer les réponses », actif quand chaque question a une réponse.
+ *
+ * Preview (issue #5) : la preview d'une option s'affiche au survol et au focus
+ * clavier — indispensable en direct-send où le clic répond immédiatement —
+ * dans une zone dédiée sous les options (hauteur animée en CSS, pas de saut
+ * dans la pile de boutons). Repli : la sélection courante (ou la réponse une
+ * fois résolue), pour que la preview reste visible hors survol.
  */
 export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  /** Option survolée / focalisée, par texte de question (label d'option). */
+  const [hovered, setHovered] = useState<Record<string, string | undefined>>({})
+  const [focused, setFocused] = useState<Record<string, string | undefined>>({})
+  /** Dernière preview affichée par question — reste montée le temps du repli animé. */
+  const lastPreview = useRef<Record<string, string>>({})
   const resolved = item.resolved
   const disabled = resolved !== undefined
   const directSend = item.questions.length === 1 && !item.questions[0]!.multiSelect
@@ -81,6 +92,26 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
       {item.questions.map((q) => {
         const draft = draftOf(q)
         const chosen = item.answers?.[q.question]
+        const previewOf = (label: string | undefined): string | undefined =>
+          label === undefined ? undefined : q.options.find((o) => o.label === label)?.preview
+        // Labels retenus : la réponse une fois résolue, la sélection en cours sinon.
+        const kept =
+          resolved === 'answered'
+            ? chosen === undefined
+              ? []
+              : q.multiSelect
+                ? chosenLabels(chosen, q.options.map((o) => o.label))
+                : [chosen]
+            : draft.selected
+        // Priorité : survol > focus clavier > sélection (la plus récente ayant une preview).
+        // Carte résolue : le survol/focus ne pilote plus rien — les boutons disabled
+        // n'émettent plus mouseleave, l'état hovered resterait figé sur la carte gelée.
+        const live = resolved === undefined ? (previewOf(hovered[q.question]) ?? previewOf(focused[q.question])) : undefined
+        const preview = live ?? [...kept].reverse().map(previewOf).find((p) => p !== undefined)
+        // Fermeture animée : on garde le DERNIER contenu monté pendant que la zone se
+        // replie (une rangée grid vide mesure 0 — la transition 1fr→0fr ne se verrait pas).
+        if (preview !== undefined) lastPreview.current[q.question] = preview
+        const shownPreview = preview ?? lastPreview.current[q.question]
         return (
           <fieldset key={q.question} className="q-block" disabled={disabled}>
             {/* legend en PREMIER enfant du fieldset (validité HTML) : elle porte le chip
@@ -108,10 +139,13 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
                     aria-pressed={active}
                     disabled={disabled}
                     onClick={() => pick(q, option.label)}
+                    onMouseEnter={() => setHovered((prev) => ({ ...prev, [q.question]: option.label }))}
+                    onMouseLeave={() => setHovered((prev) => ({ ...prev, [q.question]: undefined }))}
+                    onFocus={() => setFocused((prev) => ({ ...prev, [q.question]: option.label }))}
+                    onBlur={() => setFocused((prev) => ({ ...prev, [q.question]: undefined }))}
                   >
                     <span className="q-label">{option.label}</span>
                     <span className="q-desc">{option.description}</span>
-                    {option.preview !== undefined && active && <code className="q-preview">{option.preview}</code>}
                   </button>
                 )
               })}
@@ -126,6 +160,13 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
                 <span className="q-desc">Réponse libre</span>
               </button>
             </div>
+            {q.options.some((o) => o.preview !== undefined) && (
+              <div className={preview !== undefined ? 'q-preview-zone open' : 'q-preview-zone'} aria-live="polite">
+                <div className="q-preview-clip">
+                  {shownPreview !== undefined && <code className="q-preview">{shownPreview}</code>}
+                </div>
+              </div>
+            )}
             {draft.useOther && !disabled && (
               <input
                 type="text"
