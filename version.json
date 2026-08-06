@@ -1,8 +1,8 @@
 {
-  "version": "0.1.13",
+  "version": "0.1.14",
   "notes": [
-    "Autopilot : un widget lance le traitement autonome du backlog — chaque issue GitHub labellisée « autopilot » est implémentée dans un worktree isolé et livrée en PR à reviewer",
-    "Les sessions autopilot sont observables en direct dans l'app (lien depuis le widget) ; Stop, relance unique et timeout 30 min par item",
-    "CI GitHub Actions : bun test + typecheck sur chaque push et chaque PR"
+    "Démarrage plus léger : le rendu markdown (et sa coloration de code) est chargé à la demande — fini le warning de taille au build",
+    "Widget Pull Requests : naît « à configurer » et se préremplit avec le repo du projet ouvert",
+    "QCM : la preview des options s'affiche au survol et au focus clavier, avec un repli animé propre"
   ]
 }
