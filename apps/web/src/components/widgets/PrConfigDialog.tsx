@@ -1,9 +1,17 @@
-import { useState } from 'react'
-import { REPO_PATTERN, type WidgetInstance } from '@atelier/shared'
+import { useEffect, useState } from 'react'
+import { REPO_PATTERN, type ProjectGithubAccount, type WidgetInstance } from '@atelier/shared'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
+
+export type PrConfigDialogApi = {
+  /** Compte/repo GitHub dérivés du remote origin du projet — le seam du chip topbar. */
+  getProjectGithubAccount: (projectId: string) => Promise<ProjectGithubAccount>
+}
 
 export type PrConfigDialogProps = {
   instance: WidgetInstance
+  /** Projet actuellement ouvert — null si aucun (pas de préremplissage possible). */
+  projectId: string | null
+  api: PrConfigDialogApi
   onSave: (next: WidgetInstance) => void
   onClose: () => void
 }
@@ -24,7 +32,7 @@ function clampLimit(raw: string): number {
  * the caller has a non-null instance to configure — no internal open/close
  * state, App owns that via `configuring`.
  */
-export function PrConfigDialog({ instance, onSave, onClose }: PrConfigDialogProps) {
+export function PrConfigDialog({ instance, projectId, api, onSave, onClose }: PrConfigDialogProps) {
   // Narrowing structurel : le `type` du widget ne narrowe pas l'union de config.
   const cfg = instance.config && 'repo' in instance.config ? instance.config : undefined
   const [repo, setRepo] = useState(cfg?.repo ?? '')
@@ -32,6 +40,26 @@ export function PrConfigDialog({ instance, onSave, onClose }: PrConfigDialogProp
   // emptied field back to 10, making clear-then-retype impossible.
   const [limitRaw, setLimitRaw] = useState(String(cfg?.limit ?? 10))
   const [error, setError] = useState<string | null>(null)
+
+  // Préremplissage : instance fraîche (repo vide) → repo dérivé du remote du
+  // projet ouvert. Une seule fois à l'ouverture ; silencieux sur échec (champ
+  // vide) et jamais par-dessus une saisie déjà commencée.
+  useEffect(() => {
+    if ((cfg?.repo ?? '') !== '' || projectId === null) return
+    let cancelled = false
+    api
+      .getProjectGithubAccount(projectId)
+      .then(({ repo: derived }) => {
+        if (cancelled || derived === null) return
+        setRepo((current) => (current === '' ? derived : current))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // Volontairement à l'ouverture uniquement — le dialog est remonté à chaque « Configurer… ».
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const save = () => {
     if (!REPO_PATTERN.test(repo)) {

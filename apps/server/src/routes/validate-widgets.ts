@@ -36,7 +36,9 @@ export function validateWidgets(value: unknown): { widgets: WidgetInstance[] } |
         return { error: 'requête invalide : « config » (avec repo) est requis pour github-prs' }
       }
       const config = w.config as Record<string, unknown>
-      if (typeof config.repo !== 'string' || !REPO_PATTERN.test(config.repo)) {
+      // Chaîne vide acceptée = « à configurer » (l'instance fraîche du registre) — le
+      // widget affiche l'état dédié et n'interroge pas gh tant que le repo est vide.
+      if (typeof config.repo !== 'string' || (config.repo !== '' && !REPO_PATTERN.test(config.repo))) {
         return { error: 'requête invalide : « config.repo » doit être de la forme owner/repo' }
       }
       if (config.limit !== undefined && (!Number.isInteger(config.limit) || (config.limit as number) < 1 || (config.limit as number) > 30)) {

@@ -366,7 +366,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
       case 'github-prs': {
         // Narrowing structurel : le `type` du widget ne narrowe pas l'union de config.
         const cfg = w.config && 'repo' in w.config ? w.config : undefined
-        return <PrListWidget repo={cfg?.repo ?? ''} limit={cfg?.limit ?? 10} api={{ getGithubPrs: backend.getGithubPrs }} />
+        return <PrListWidget repo={cfg?.repo ?? ''} limit={cfg?.limit ?? 10} api={{ getGithubPrs: backend.getGithubPrs }} onConfigure={() => setConfiguring(w)} />
       }
       case 'autopilot': {
         const cfg = w.config && 'projectId' in w.config ? w.config : undefined
@@ -522,6 +522,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
       {configuring !== null && configuring.type === 'github-prs' && (
         <PrConfigDialog
           instance={configuring}
+          projectId={projectId}
+          api={{ getProjectGithubAccount: backend.getProjectGithubAccount }}
           onSave={(next) => saveWidgets.mutate(widgets.map((w) => (w.id === next.id ? next : w)))}
           onClose={() => setConfiguring(null)}
         />

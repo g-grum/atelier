@@ -12,11 +12,11 @@ const prs: PrSummary[] = [
   { number: 2, title: 'Merged green', url: 'https://x/2', author: 'b', state: 'merged', updatedAt: new Date().toISOString(), branch: 'b2', ci: 'passed', review: 'approved' },
 ]
 
-function renderWidget(impl: () => Promise<PrSummary[]>) {
+function renderWidget(impl: () => Promise<PrSummary[]>, { repo = 'o/r', onConfigure }: { repo?: string; onConfigure?: () => void } = {}) {
   const opened: string[] = []
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <PrListWidget repo="o/r" limit={10} api={{ getGithubPrs: impl }} openUrl={(url) => opened.push(url)} />
+      <PrListWidget repo={repo} limit={10} api={{ getGithubPrs: impl }} openUrl={(url) => opened.push(url)} onConfigure={onConfigure} />
     </QueryClientProvider>,
   )
   return { opened }
@@ -65,6 +65,22 @@ describe('PrListWidget', () => {
   test('empty state', async () => {
     renderWidget(async () => [])
     await waitFor(() => screen.getByText('Aucune PR récente'))
+  })
+
+  test('repo vide → état « à configurer » sans appel gh, le bouton ouvre la config', () => {
+    const calls: number[] = []
+    const configured: boolean[] = []
+    renderWidget(
+      async () => {
+        calls.push(1)
+        return prs
+      },
+      { repo: '', onConfigure: () => configured.push(true) },
+    )
+    screen.getByText(/à configurer/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Configurer…' }))
+    expect(configured).toEqual([true])
+    expect(calls).toEqual([]) // pas de requête gh tant que le repo n'est pas défini
   })
 })
 

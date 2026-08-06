@@ -488,10 +488,12 @@
   .pr-open { background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 2px 4px; }
   .pr-details { padding: 0 0 7px 14px; color: var(--color-faint); font-size: 11px; }
   .pr-open-detail { display: block; margin-top: 4px; background: none; border: none; color: var(--color-faint); cursor: pointer; padding: 0; font-size: 11px; text-decoration: underline; }
-  .pr-empty, .pr-error { color: var(--color-faint); font-size: 12px; display: flex; flex-direction: column; gap: 8px; }
+  /* .pr-setup = instance fraîche sans repo (état « à configurer ») — même chrome neutre que l'erreur. */
+  .pr-empty, .pr-error, .pr-setup { color: var(--color-faint); font-size: 12px; display: flex; flex-direction: column; gap: 8px; }
   /* Same chrome as .banner .banner-btn — the retry button lives outside a .banner. */
-  .pr-error .banner-btn { align-self: flex-start; font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+  .pr-error .banner-btn, .pr-setup .banner-btn { align-self: flex-start; font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
   .pr-error .banner-btn:hover { border-color: var(--color-red); color: var(--color-red); }
+  .pr-setup .banner-btn:hover { border-color: var(--color-indigo); color: var(--color-indigo); }
   .pr-skeleton { height: 60px; border-radius: 6px; background: var(--color-surface-2); }
 }
 

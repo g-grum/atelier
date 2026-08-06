@@ -9,6 +9,8 @@ export type PrListWidgetProps = {
   repo: string
   limit: number
   api: PrListWidgetApi
+  /** Ouvre le dialog de config — l'état « à configurer » (repo vide) l'affiche en bouton. */
+  onConfigure?: () => void
   /** Injectable for tests — production opens the system browser via the Electron window-open handler. */
   openUrl?: (url: string) => void
 }
@@ -28,7 +30,7 @@ export function formatAge(updatedAt: string, now: Date = new Date()): string {
  * Compact-extensible list (spec): one line per PR, click expands inline
  * details, ↗ opens GitHub. All failure states stay INSIDE the widget.
  */
-export function PrListWidget({ repo, limit, api, openUrl = (url) => window.open(url, '_blank', 'noopener') }: PrListWidgetProps) {
+export function PrListWidget({ repo, limit, api, onConfigure, openUrl = (url) => window.open(url, '_blank', 'noopener') }: PrListWidgetProps) {
   const [expanded, setExpanded] = useState<number | null>(null)
   const query = useQuery({
     queryKey: ['github-prs', repo, limit],
@@ -36,8 +38,23 @@ export function PrListWidget({ repo, limit, api, openUrl = (url) => window.open(
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
     retry: false,
+    // Repo vide = instance fraîche pas encore configurée — ne pas interroger gh.
+    enabled: repo !== '',
   })
 
+  // Instance fraîche (repo vide) : état « à configurer », pas une erreur gh.
+  if (repo === '') {
+    return (
+      <div className="pr-setup">
+        <span>Widget à configurer — choisis un repo GitHub.</span>
+        {onConfigure !== undefined && (
+          <button type="button" className="banner-btn" onClick={onConfigure}>
+            Configurer…
+          </button>
+        )}
+      </div>
+    )
+  }
   if (query.status === 'pending') return <div className="pr-skeleton" aria-hidden="true" />
   if (query.status === 'error') {
     return (

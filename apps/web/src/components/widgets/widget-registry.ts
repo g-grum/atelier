@@ -23,12 +23,13 @@ export const WIDGET_META: Partial<Record<WidgetType, WidgetMeta>> = {
   'github-prs': {
     title: 'Pull Requests',
     multiInstance: true,
+    // repo vide = à configurer (le widget affiche un état dédié au lieu d'interroger gh).
     create: () => ({
       id: crypto.randomUUID(),
       type: 'github-prs',
       span: 2,
       height: 'M',
-      config: { repo: 'acme-corp/demoapp-frontend', limit: 10 },
+      config: { repo: '', limit: 10 },
     }),
   },
   autopilot: {

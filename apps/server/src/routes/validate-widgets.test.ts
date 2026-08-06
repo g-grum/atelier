@@ -40,6 +40,12 @@ describe('validateWidgets', () => {
     expect(result.error).toContain(fragment)
   })
 
+  test('github-prs au repo vide accepté (instance fraîche « à configurer »)', () => {
+    const result = validateWidgets([pr({ config: { repo: '', limit: 10 } })])
+    if ('error' in result) throw new Error(result.error)
+    expect(result.widgets).toEqual([{ id: 'p', type: 'github-prs', span: 2, height: 'M', config: { repo: '', limit: 10 } }])
+  })
+
   test('multiple github-prs instances are allowed', () => {
     const result = validateWidgets([pr({ id: 'p1' }), pr({ id: 'p2' })])
     if ('error' in result) throw new Error(result.error)
