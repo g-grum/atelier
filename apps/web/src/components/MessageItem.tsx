@@ -1,7 +1,8 @@
-import { type ReactNode, useRef, useState } from 'react'
-import Markdown from 'react-markdown'
-import rehypeHighlight from 'rehype-highlight'
-import remarkGfm from 'remark-gfm'
+import { lazy, type ReactNode, Suspense } from 'react'
+
+// Pipeline markdown (~500 kB : react-markdown + gfm + hljs) chargé paresseusement —
+// il ne sert qu'aux messages assistant, inutile de l'embarquer dans le chunk principal.
+const MarkdownBody = lazy(() => import('./MarkdownBody'))
 
 export type MessageItemProps = {
   role: 'user' | 'assistant'
@@ -10,27 +11,6 @@ export type MessageItemProps = {
   queued?: boolean
   /** Tool rows / typing indicator rendered inside the message column (mockup nesting). */
   children?: ReactNode
-}
-
-/** Fenced code block with a copy button — plugged into react-markdown as `pre`. */
-function CodeBlock({ children }: { children?: ReactNode }) {
-  const ref = useRef<HTMLPreElement>(null)
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
-    const code = ref.current?.querySelector('code')?.textContent ?? ''
-    void navigator.clipboard.writeText(code).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-  return (
-    <div className="codeblock">
-      <button type="button" className="codeblock-copy" onClick={copy}>
-        {copied ? 'Copié' : 'Copier'}
-      </button>
-      <pre ref={ref}>{children}</pre>
-    </div>
-  )
 }
 
 /**
@@ -52,13 +32,10 @@ export function MessageItem({ role, text, queued = false, children }: MessageIte
         {text !== '' &&
           (role === 'assistant' ? (
             <div className="body markdown">
-              <Markdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{ pre: CodeBlock }}
-              >
-                {text}
-              </Markdown>
+              {/* Fallback texte brut le temps du chargement du chunk markdown. */}
+              <Suspense fallback={<span style={{ whiteSpace: 'pre-wrap' }}>{text}</span>}>
+                <MarkdownBody text={text} />
+              </Suspense>
             </div>
           ) : (
             <div className="body">{text}</div>

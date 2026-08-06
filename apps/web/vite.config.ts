@@ -7,6 +7,17 @@ export default defineConfig({
   resolve: {
     alias: { '@': '/src' },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Vendor react séparé : meilleur cache long terme + chunk principal
+        // sous la limite d'avertissement (500 kB) après le lazy-load du markdown.
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-dom/client'],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       // REST and WS both live under /api — one rule covers the whole server surface.
