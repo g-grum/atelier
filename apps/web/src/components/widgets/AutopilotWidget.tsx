@@ -26,7 +26,11 @@ export type AutopilotWidgetProps = {
 const STATUS_LABEL: Record<AutopilotItem['status'], string> = {
   queued: 'en attente',
   running: 'en cours',
-  pr_opened: 'PR ouverte',
+  pr_opened: 'PR ouverte (non mergée)',
+  reviewing: 'en review',
+  fixing: 'en correction',
+  merging: 'merge en cours',
+  merged: 'mergée',
   failed: 'échec',
 }
 
