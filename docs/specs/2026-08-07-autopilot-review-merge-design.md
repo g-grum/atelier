@@ -52,6 +52,7 @@ fichier hors worktree, dans `.worktrees/` (déjà gitignoré) :
 - Fichier absent ou invalide après le tour → **une** relance (prompt de rappel),
   sinon `failed` « la review n'a pas rendu de verdict ».
 - Lecture par un seam injectable (`readVerdict(path)`) pour les tests du runner.
+- `cleanup()` supprime aussi `review-<issue>.json` (best-effort).
 
 ## Correction (fixing)
 
@@ -61,6 +62,9 @@ Fin de tour → re-review (même session de review, `buildReReviewPrompt`).
 **Un seul cycle fix→re-review**, symétrique de la relance PR unique existante.
 
 ## Attente CI et merge
+
+`merging` couvre l'attente CI **puis** la commande de merge (l'item y passe dès
+le verdict approve).
 
 - `GithubService.prCi(repo, number, githubUser)` : `gh pr view --json
   statusCheckRollup`, SANS cache, même mapping que `mapPr` (passed/failed/pending/null).
@@ -88,7 +92,8 @@ Fin de tour → re-review (même session de review, `buildReReviewPrompt`).
 
 Nouveaux libellés d'état FR : `reviewing` « en review », `fixing`
 « en correction », `merging` « merge en cours », `merged` « mergée » (vert).
-`pr_opened` devient « PR ouverte (non mergée) ». Rien d'autre ne change.
+`pr_opened` devient « PR ouverte (non mergée) ». `hasTerminal` (gating du bouton
+Nettoyer) et la classe du dot d'état incluent `merged`.
 
 ## Hors périmètre
 
