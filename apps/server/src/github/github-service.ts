@@ -101,6 +101,15 @@ export class GithubService {
     return raw.body ?? ''
   }
 
+  /** Merge squash + suppression de la branche distante (worktree et branche locale restent à cleanup()). */
+  async mergePr(repo: string, number: number, githubUser: string): Promise<void> {
+    const token = await this.resolveToken(githubUser)
+    const result = await this.run(['pr', 'merge', String(number), '-R', repo, '--squash', '--delete-branch'], { GH_TOKEN: token })
+    if (result.exitCode !== 0) {
+      throw new GithubError(`gh a échoué pour ${repo} : ${result.stderr.trim() || 'erreur inconnue'}`)
+    }
+  }
+
   /** Exécute gh avec le token épinglé et parse le JSON — conventions d'erreur FR communes. */
   private async runJson<T>(args: string[], repo: string, githubUser: string): Promise<T> {
     const token = await this.resolveToken(githubUser)

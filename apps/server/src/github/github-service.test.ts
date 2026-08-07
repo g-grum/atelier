@@ -209,6 +209,20 @@ describe('prCi', () => {
   })
 })
 
+describe('mergePr', () => {
+  test('merge squash avec suppression de branche, token épinglé en env', async () => {
+    const { run, calls } = fakeRunner({ auth: { stdout: 'tok\n' } })
+    await new GithubService(run, () => 0).mergePr('o/r', 42, 'u')
+    expect(calls[1]!.args).toEqual(['pr', 'merge', '42', '-R', 'o/r', '--squash', '--delete-branch'])
+    expect(calls[1]!.env).toEqual({ GH_TOKEN: 'tok' })
+  })
+
+  test('gh en échec → GithubError avec le stderr', async () => {
+    const { run } = fakeRunner({ auth: { stdout: 't' }, list: { exitCode: 1, stderr: 'Pull request is not mergeable' } })
+    await expect(new GithubService(run, () => 0).mergePr('o/r', 42, 'u')).rejects.toThrow('gh a échoué pour o/r : Pull request is not mergeable')
+  })
+})
+
 describe('issueBody', () => {
   test('récupère le corps de l’issue', async () => {
     const { run, calls } = fakeRunner({ auth: { stdout: 'tok\n' }, list: { stdout: JSON.stringify({ body: 'faire X' }) } })
