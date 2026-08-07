@@ -195,6 +195,28 @@ describe('autopilot state', () => {
     expect(new AppData(path).get().autopilot.run).toBeNull()
   })
 
+  test('au chargement, merged survit et les états de review sont normalisés en failed', () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
+    writeFileSync(path, JSON.stringify({
+      autopilot: {
+        run: { state: 'running', startedAt: '2026-08-07T00:00:00Z', maxItems: 4, projectId: 'p1' },
+        items: [
+          { issue: 1, title: 'a', branch: 'autopilot/1', projectId: 'tp1', repoRoot: '/r', sessionId: 's1', status: 'merged' },
+          { issue: 2, title: 'b', branch: 'autopilot/2', projectId: 'tp2', repoRoot: '/r', sessionId: 's2', status: 'reviewing' },
+          { issue: 3, title: 'c', branch: 'autopilot/3', projectId: 'tp3', repoRoot: '/r', sessionId: 's3', status: 'fixing' },
+          { issue: 4, title: 'd', branch: 'autopilot/4', projectId: 'tp4', repoRoot: '/r', sessionId: 's4', status: 'merging' },
+        ],
+      },
+    }))
+    const items = new AppData(path).get().autopilot.items
+    expect(items.map((i) => i.status)).toEqual(['merged', 'failed', 'failed', 'failed'])
+    expect(items[0]?.error).toBeUndefined()
+    for (const item of items.slice(1)) {
+      expect(item.error).toBe('interrompu par un redémarrage du serveur')
+      expect(item.endedAt).toBeDefined()
+    }
+  })
+
   test('un run terminé (null) est chargé tel quel', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'atelier-')), 'data.json')
     writeFileSync(path, JSON.stringify({

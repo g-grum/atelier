@@ -85,7 +85,7 @@ export class AppData {
     autopilot.run = null
     const endedAt = new Date().toISOString()
     for (const item of autopilot.items) {
-      if (item.status === 'pr_opened' || item.status === 'failed') continue
+      if (item.status === 'pr_opened' || item.status === 'failed' || item.status === 'merged') continue
       item.status = 'failed'
       item.error = 'interrompu par un redémarrage du serveur'
       item.endedAt = endedAt
