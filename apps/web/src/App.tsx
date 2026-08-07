@@ -153,6 +153,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     notifiedVersion.current = latest.version
     toast('Une nouvelle version est disponible', {
       duration: Number.POSITIVE_INFINITY,
+      closeButton: true,
       description: (
         <>
           {latest.notes.map((note) => (
@@ -522,8 +523,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
       {configuring !== null && configuring.type === 'github-prs' && (
         <PrConfigDialog
           instance={configuring}
-          projectId={projectId}
-          api={{ getProjectGithubAccount: backend.getProjectGithubAccount }}
+          githubAccount={githubAccountQuery.data ?? null}
           onSave={(next) => saveWidgets.mutate(widgets.map((w) => (w.id === next.id ? next : w)))}
           onClose={() => setConfiguring(null)}
         />
