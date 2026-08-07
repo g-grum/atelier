@@ -81,6 +81,16 @@ export class GithubService {
     return raw[0] ?? null
   }
 
+  /** État CI d'une PR. SANS cache — sert au poll pré-merge (spec 2026-08-07). */
+  async prCi(repo: string, number: number, githubUser: string): Promise<PrCi> {
+    const raw = await this.runJson<{ statusCheckRollup?: { status?: string; conclusion?: string }[] | null }>(
+      ['pr', 'view', String(number), '-R', repo, '--json', 'statusCheckRollup'],
+      repo,
+      githubUser,
+    )
+    return mapCi(raw.statusCheckRollup)
+  }
+
   /** Corps d'une issue (prompt d'item autopilot). SANS cache. */
   async issueBody(repo: string, issue: number, githubUser: string): Promise<string> {
     const raw = await this.runJson<{ body?: string }>(
@@ -121,18 +131,21 @@ export class GithubService {
   }
 }
 
+function mapCi(rollup: { status?: string; conclusion?: string }[] | null | undefined): PrCi {
+  const checks = rollup ?? []
+  return checks.length === 0 ? null
+    : checks.some((c) => c.conclusion === 'FAILURE' || c.conclusion === 'ERROR') ? 'failed'
+    : checks.some((c) => c.status !== 'COMPLETED') ? 'pending'
+    : 'passed'
+}
+
 function mapPr(raw: RawPr): PrSummary {
   const state: PrState =
     raw.isDraft === true && raw.state === 'OPEN' ? 'draft'
     : raw.state === 'MERGED' ? 'merged'
     : raw.state === 'CLOSED' ? 'closed'
     : 'open'
-  const rollup = raw.statusCheckRollup ?? []
-  const ci: PrCi =
-    rollup.length === 0 ? null
-    : rollup.some((c) => c.conclusion === 'FAILURE' || c.conclusion === 'ERROR') ? 'failed'
-    : rollup.some((c) => c.status !== 'COMPLETED') ? 'pending'
-    : 'passed'
+  const ci = mapCi(raw.statusCheckRollup)
   const review: PrReview =
     raw.reviewDecision === 'APPROVED' ? 'approved'
     : raw.reviewDecision === 'CHANGES_REQUESTED' ? 'changes_requested'
