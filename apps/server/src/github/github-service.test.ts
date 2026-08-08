@@ -179,6 +179,50 @@ describe('prForBranch', () => {
   })
 })
 
+describe('prCi', () => {
+  test('interroge statusCheckRollup avec les bons arguments', async () => {
+    const { run, calls } = fakeRunner({ auth: { stdout: 'tok\n' }, list: { stdout: JSON.stringify({ statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }] }) } })
+    expect(await new GithubService(run, () => 0).prCi('o/r', 42, 'u')).toBe('passed')
+    expect(calls[1]!.args).toEqual(['pr', 'view', '42', '-R', 'o/r', '--json', 'statusCheckRollup'])
+    expect(calls[1]!.env).toEqual({ GH_TOKEN: 'tok' })
+  })
+
+  test.each([
+    ['failed si un check FAILURE', [{ status: 'COMPLETED', conclusion: 'SUCCESS' }, { status: 'COMPLETED', conclusion: 'FAILURE' }], 'failed'],
+    ['failed si un check ERROR', [{ status: 'IN_PROGRESS' }, { status: 'COMPLETED', conclusion: 'ERROR' }], 'failed'],
+    ['pending si un check incomplet', [{ status: 'IN_PROGRESS' }, { status: 'COMPLETED', conclusion: 'SUCCESS' }], 'pending'],
+    ['null si aucun check', [], null],
+    ['null si rollup null', null, null],
+  ] as const)('mapping CI : %s', async (_n, rollup, expected) => {
+    const { run } = fakeRunner({ auth: { stdout: 't' }, list: { stdout: JSON.stringify({ statusCheckRollup: rollup }) } })
+    expect(await new GithubService(run, () => 0).prCi('o/r', 42, 'u')).toBe(expected)
+  })
+
+  test('rollup absent → null', async () => {
+    const { run } = fakeRunner({ auth: { stdout: 't' }, list: { stdout: '{}' } })
+    expect(await new GithubService(run, () => 0).prCi('o/r', 42, 'u')).toBeNull()
+  })
+
+  test('gh en échec → GithubError FR', async () => {
+    const { run } = fakeRunner({ auth: { stdout: 't' }, list: { exitCode: 1, stderr: 'boom' } })
+    await expect(new GithubService(run, () => 0).prCi('o/r', 42, 'u')).rejects.toThrow('gh a échoué pour o/r : boom')
+  })
+})
+
+describe('mergePr', () => {
+  test('merge squash avec suppression de branche, token épinglé en env', async () => {
+    const { run, calls } = fakeRunner({ auth: { stdout: 'tok\n' } })
+    await new GithubService(run, () => 0).mergePr('o/r', 42, 'u')
+    expect(calls[1]!.args).toEqual(['pr', 'merge', '42', '-R', 'o/r', '--squash', '--delete-branch'])
+    expect(calls[1]!.env).toEqual({ GH_TOKEN: 'tok' })
+  })
+
+  test('gh en échec → GithubError avec le stderr', async () => {
+    const { run } = fakeRunner({ auth: { stdout: 't' }, list: { exitCode: 1, stderr: 'Pull request is not mergeable' } })
+    await expect(new GithubService(run, () => 0).mergePr('o/r', 42, 'u')).rejects.toThrow('gh a échoué pour o/r : Pull request is not mergeable')
+  })
+})
+
 describe('issueBody', () => {
   test('récupère le corps de l’issue', async () => {
     const { run, calls } = fakeRunner({ auth: { stdout: 'tok\n' }, list: { stdout: JSON.stringify({ body: 'faire X' }) } })

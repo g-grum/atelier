@@ -40,4 +40,10 @@ describe('workspace', () => {
     expect(calls[0]).toEqual({ cmd: ['git', 'worktree', 'remove', '--force', '.worktrees/autopilot-42'], cwd: '/repo' })
     expect(calls[1]).toEqual({ cmd: ['git', 'branch', '-D', 'autopilot/42'], cwd: '/repo' })
   })
+
+  test('cleanup retire aussi le fichier de verdict de review (best-effort)', async () => {
+    const { exec, calls } = fakeExec([{}, {}, { exitCode: 1, stderr: 'absent' }])
+    await createWorkspace('/repo', exec).cleanup(7)
+    expect(calls[2]).toEqual({ cmd: ['rm', '-f', '.worktrees/review-7.json'], cwd: '/repo' })
+  })
 })

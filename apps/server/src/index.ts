@@ -63,7 +63,11 @@ const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
 // Prédicat data-driven « session autopilot ? » — pas de cycle registre↔runner (spec 2026-08-05).
 const streams = new SessionStreamRegistry(data, sdk, (sessionId) =>
-  data.get().autopilot.items.some((i) => i.sessionId !== '' && data.resolveSessionId(i.sessionId) === sessionId)
+  data.get().autopilot.items.some(
+    (i) =>
+      (i.sessionId !== '' && data.resolveSessionId(i.sessionId) === sessionId) ||
+      (i.reviewSessionId !== undefined && i.reviewSessionId !== '' && data.resolveSessionId(i.reviewSessionId) === sessionId)
+  )
 )
 const sessions = new SessionsService(sdk, data, streams)
 const github = new GithubService(createGhRunner())

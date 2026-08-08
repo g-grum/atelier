@@ -24,6 +24,22 @@ const DONE_STATE: AutopilotState = {
   ],
 }
 
+const MERGED_STATE: AutopilotState = {
+  run: null,
+  items: [
+    { issue: 21, title: 'Badge de statut', branch: 'autopilot/21', projectId: 'tp1', repoRoot: '/r', sessionId: 's-21', status: 'merged', prUrl: 'https://github.com/o/r/pull/99' },
+  ],
+}
+
+const REVIEW_STATE: AutopilotState = {
+  run: null,
+  items: [
+    { issue: 31, title: 'Review en cours', branch: 'autopilot/31', projectId: 'tp1', repoRoot: '/r', sessionId: 's-31', status: 'reviewing' },
+    { issue: 32, title: 'Correction en cours', branch: 'autopilot/32', projectId: 'tp1', repoRoot: '/r', sessionId: 's-32', status: 'fixing' },
+    { issue: 33, title: 'Merge en cours', branch: 'autopilot/33', projectId: 'tp1', repoRoot: '/r', sessionId: 's-33', status: 'merging' },
+  ],
+}
+
 function makeApi(overrides: Partial<AutopilotWidgetApi> = {}): AutopilotWidgetApi & { calls: string[] } {
   const calls: string[] = []
   return {
@@ -94,6 +110,30 @@ describe('AutopilotWidget', () => {
     expect(selected).toEqual(['s-15:tp2'])
     fireEvent.click(screen.getByRole('button', { name: 'Nettoyer' }))
     await waitFor(() => expect(api.calls).toContain('cleanup'))
+  })
+
+  test('item mergé : libellé « mergée », pastille verte et terminal (Nettoyer visible)', async () => {
+    const { api } = renderWidget({ hubState: MERGED_STATE })
+    expect(screen.getByText('mergée')).toBeTruthy()
+    expect(document.querySelector('.pr-dot.merged')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Nettoyer' }))
+    await waitFor(() => expect(api.calls).toContain('cleanup'))
+  })
+
+  test('états review/correction/merge : libellés dédiés, non terminaux (pas de Nettoyer)', () => {
+    renderWidget({ hubState: REVIEW_STATE })
+    expect(screen.getByText('en review')).toBeTruthy()
+    expect(screen.getByText('en correction')).toBeTruthy()
+    expect(screen.getByText('merge en cours')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Nettoyer' })).toBeNull()
+  })
+
+  test('PR ouverte non mergée : libellé explicite et pastille distincte du merged', () => {
+    renderWidget({ hubState: DONE_STATE })
+    expect(screen.getByText('PR ouverte (non mergée)')).toBeTruthy()
+    expect(document.querySelector('.pr-dot.merged')).toBeNull()
+    expect(document.querySelector('.pr-dot.open')).toBeTruthy()
+    expect(document.querySelector('.pr-dot.closed')).toBeTruthy()
   })
 
   test('erreur d’action (start 409) affichée dans le widget', async () => {

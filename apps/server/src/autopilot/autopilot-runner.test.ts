@@ -2,9 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { StatusHubEvent } from '@atelier/shared'
+import type { PrCi, StatusHubEvent } from '@atelier/shared'
 import { AppData } from '../store/app-data'
 import { AutopilotConflictError, AutopilotRunner } from './autopilot-runner'
+import type { ReviewVerdict } from './review-verdict'
 import type { Workspace } from './workspace'
 
 const tick = async (n = 6) => {
@@ -15,6 +16,11 @@ function makeDeps(overrides: {
   issues?: { number: number; title: string }[] | (() => Promise<{ number: number; title: string }[]>)
   prs?: Array<{ number: number; url: string } | null>
   prepareError?: string
+  /** File de verdicts consommée par le readVerdict fake ; absent → approve systématique ; épuisée → null. */
+  verdicts?: Array<ReviewVerdict | null>
+  /** État CI : constante, ou file (le dernier élément se répète) ; une Error dans la file → prCi lève (blip réseau) ; défaut 'passed'. */
+  ci?: PrCi | Array<PrCi | Error>
+  mergeError?: string
 } = {}) {
   const data = new AppData(join(mkdtempSync(join(tmpdir(), 'atelier-ap-')), 'data.json'))
   data.update((d) => {
@@ -61,6 +67,8 @@ function makeDeps(overrides: {
 
   const prQueue = overrides.prs ?? [{ number: 9, url: 'https://x/pr/9' }]
   const ghCalls: string[][] = []
+  const ciQueue = Array.isArray(overrides.ci) ? [...overrides.ci] : null
+  const mergeCalls: { repo: string; number: number }[] = []
   const github = {
     listAutopilotIssues: async (_repo: string, _user: string) => {
       ghCalls.push(['issues'])
@@ -72,6 +80,28 @@ function makeDeps(overrides: {
       return prQueue.length > 0 ? (prQueue.shift() ?? null) : null
     },
     issueBody: async (_repo: string, issue: number, _user: string) => `corps de #${issue}`,
+    prCi: async (_repo: string, number: number, _user: string): Promise<PrCi> => {
+      ghCalls.push(['ci', String(number)])
+      const next = ciQueue !== null
+        ? (ciQueue.length > 1 ? ciQueue.shift() : (ciQueue[0] ?? null))
+        : (overrides.ci !== undefined ? overrides.ci : 'passed')
+      if (next instanceof Error) throw next
+      return (next ?? null) as PrCi
+    },
+    mergePr: async (repo: string, number: number, _user: string) => {
+      mergeCalls.push({ repo, number })
+      if (overrides.mergeError !== undefined) throw new Error(overrides.mergeError)
+    },
+  }
+
+  const verdictQueue = overrides.verdicts !== undefined ? [...overrides.verdicts] : null
+  const removedVerdicts: string[] = []
+  const readVerdict = async (_path: string): Promise<ReviewVerdict | null> => {
+    if (verdictQueue === null) return { verdict: 'approve', findings: [] }
+    return verdictQueue.shift() ?? null
+  }
+  const removeVerdict = async (path: string) => {
+    removedVerdicts.push(path)
   }
 
   const workspaceCalls: { repoRoot: string; op: string; issue: number }[] = []
@@ -93,15 +123,20 @@ function makeDeps(overrides: {
     github: github as never,
     workspace,
     itemTimeoutMs: 200,
+    readVerdict,
+    removeVerdict,
+    ciPollMs: 1,
+    ciGraceMs: 5,
+    ciTimeoutMs: 50,
   })
 
   const start = () => runner.start({ projectId: 'p1', repo: 'o/r', githubUser: 'u', maxItems: 3 })
 
-  return { data, runner, start, emit, messages, published, permissionCalls, ghCalls, workspaceCalls }
+  return { data, runner, start, emit, messages, published, permissionCalls, ghCalls, workspaceCalls, mergeCalls, removedVerdicts }
 }
 
 describe('AutopilotRunner', () => {
-  test('run nominal : issue → worktree → projet temporaire → session bypass → PR → pr_opened', async () => {
+  test('run nominal : issue → PR → review dédiée → approve → CI verte → merged', async () => {
     const d = makeDeps()
     d.start()
     await tick()
@@ -118,16 +153,221 @@ describe('AutopilotRunner', () => {
     expect(d.messages).toHaveLength(1)
     expect(d.messages[0]!.raw).toContain('corps de #42')
 
-    // fin de tour → PR trouvée → pr_opened, run terminé
+    // fin de tour → PR trouvée → session de review dédiée (2ᵉ draft, bypass)
     d.emit('draft-1', 'idle')
     await tick()
     item = d.data.get().autopilot.items[0]!
-    expect(item.status).toBe('pr_opened')
+    expect(item.status).toBe('reviewing')
     expect(item.prUrl).toBe('https://x/pr/9')
+    expect(item.reviewSessionId).toBe('draft-2')
+    expect(d.data.get().drafts.find((dr) => dr.id === 'draft-2')?.name).toBe('Review #42')
+    expect(d.permissionCalls).toContainEqual({ id: 'draft-2', mode: 'bypassPermissions' })
+    // le prompt de review part sur la session dédiée, verdict périmé purgé d'abord
+    expect(d.removedVerdicts).toContain('/repo/.worktrees/review-42.json')
+    expect(d.messages).toHaveLength(2)
+    expect(d.messages[1]!.sessionId).toBe('draft-2')
+    expect(d.messages[1]!.raw).toContain('/repo/.worktrees/review-42.json')
+
+    // verdict approve → merging → CI passed → mergePr avec le bon n° → merged
+    d.emit('draft-2', 'idle')
+    await tick(12)
+    item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('merged')
     expect(item.endedAt).toBeDefined()
+    expect(d.mergeCalls).toEqual([{ repo: 'o/r', number: 9 }])
     expect(d.data.get().autopilot.run).toBeNull()
     // le hub a été notifié
     expect(d.published.some((e) => e.type === 'autopilot_status')).toBe(true)
+  })
+
+  test('request_changes → fixing (findings dans le prompt), tour idle, re-review approve → merged', async () => {
+    const d = makeDeps({
+      verdicts: [
+        { verdict: 'request_changes', findings: [{ title: 'bug', detail: 'cas limite manqué' }] },
+        { verdict: 'approve', findings: [] },
+      ],
+    })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    // 1er verdict : request_changes → fixing, fix prompt AVEC les findings sur la session d'implémentation
+    d.emit('draft-2', 'idle')
+    await tick()
+    let item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('fixing')
+    const fix = d.messages.at(-1)!
+    expect(fix.sessionId).toBe('draft-1')
+    expect(fix.raw).toContain('cas limite manqué')
+    // fin du tour de correction → re-review sur la MÊME session de review
+    d.emit('draft-1', 'idle')
+    await tick()
+    item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('reviewing')
+    const rereview = d.messages.at(-1)!
+    expect(rereview.sessionId).toBe('draft-2')
+    expect(rereview.raw).toContain('Re-vérifie')
+    // re-review approve → CI verte → merged
+    d.emit('draft-2', 'idle')
+    await tick(12)
+    expect(d.data.get().autopilot.items[0]!.status).toBe('merged')
+    expect(d.mergeCalls).toEqual([{ repo: 'o/r', number: 9 }])
+  })
+
+  test('double request_changes → failed après le cycle unique de correction, prUrl conservé', async () => {
+    const d = makeDeps({
+      verdicts: [
+        { verdict: 'request_changes', findings: [{ title: 'a', detail: 'b' }] },
+        { verdict: 'request_changes', findings: [{ title: 'c', detail: 'd' }] },
+      ],
+    })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // review 1 → request_changes
+    await tick()
+    d.emit('draft-1', 'idle') // tour de correction
+    await tick()
+    d.emit('draft-2', 'idle') // re-review → request_changes encore
+    await tick()
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('failed')
+    expect(item.error).toBe('la review a rejeté la PR après correction')
+    expect(item.prUrl).toBe('https://x/pr/9')
+    expect(d.mergeCalls).toHaveLength(0)
+    expect(d.data.get().autopilot.run).toBeNull()
+  })
+
+  test('verdict absent au 1er tour → une relance sur la session de review, absent encore → failed', async () => {
+    const d = makeDeps({ verdicts: [null, null] })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // fin du 1er tour de review, pas de verdict écrit
+    await tick()
+    // relance envoyée sur la session de review
+    const retry = d.messages.at(-1)!
+    expect(retry.sessionId).toBe('draft-2')
+    expect(retry.raw).toContain('Il manque ton verdict')
+    d.emit('draft-2', 'idle') // toujours pas de verdict
+    await tick()
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('failed')
+    expect(item.error).toBe('la review n’a pas rendu de verdict')
+    expect(d.mergeCalls).toHaveLength(0)
+  })
+
+  test('CI rouge → failed « CI rouge sur la PR », mergePr jamais appelé', async () => {
+    const d = makeDeps({ ci: 'failed' })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // approve → merging → CI failed
+    await tick(12)
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('failed')
+    expect(item.error).toBe('CI rouge sur la PR')
+    expect(item.endedAt).toBeDefined()
+    expect(d.mergeCalls).toHaveLength(0)
+  })
+
+  test('CI pending sans fin → failed « timeout CI »', async () => {
+    const d = makeDeps({ ci: 'pending' })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // approve → merging → CI pending en boucle
+    await new Promise((r) => setTimeout(r, 120)) // > ciTimeoutMs (50)
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('failed')
+    expect(item.error).toBe('timeout CI')
+    expect(d.mergeCalls).toHaveLength(0)
+  })
+
+  test('erreur transitoire de prCi (blip réseau) → on continue de poller → merged', async () => {
+    const d = makeDeps({ ci: [new Error('gh a échoué pour o/r : réseau'), 'passed'] })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // approve → merging → prCi lève une fois, puis passed
+    await new Promise((r) => setTimeout(r, 20))
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('merged')
+    expect(item.error).toBeUndefined()
+    expect(d.mergeCalls).toEqual([{ repo: 'o/r', number: 9 }])
+  })
+
+  test('CI muette (rollup vide) au-delà de la grâce → merge quand même → merged', async () => {
+    const d = makeDeps({ ci: null })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // approve → merging → rollup vide en boucle
+    await new Promise((r) => setTimeout(r, 60)) // > ciGraceMs (5), < rien d'autre
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('merged')
+    expect(d.mergeCalls).toEqual([{ repo: 'o/r', number: 9 }])
+  })
+
+  test('stop() pendant l’attente CI → item pr_opened « run arrêté avant merge », run arrêté', async () => {
+    const d = makeDeps({ issues: [{ number: 1, title: 'A' }, { number: 2, title: 'B' }], ci: 'pending' })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // approve → merging, CI pending en boucle
+    await tick()
+    expect(d.data.get().autopilot.items[0]!.status).toBe('merging')
+    d.runner.stop()
+    await new Promise((r) => setTimeout(r, 20))
+    const items = d.data.get().autopilot.items
+    expect(items[0]!.status).toBe('pr_opened')
+    expect(items[0]!.error).toBe('run arrêté avant merge')
+    expect(items[1]!.status).toBe('queued')
+    expect(d.mergeCalls).toHaveLength(0)
+    expect(d.data.get().autopilot.run).toBeNull()
+  })
+
+  test('stop() pendant la review → item pr_opened, PAS de cycle de correction', async () => {
+    const d = makeDeps({ verdicts: [{ verdict: 'request_changes', findings: [{ title: 'a', detail: 'b' }] }] })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    expect(d.data.get().autopilot.items[0]!.status).toBe('reviewing')
+    const messagesBefore = d.messages.length
+    d.runner.stop() // posé avant la fin du tour de review
+    d.emit('draft-2', 'idle')
+    await tick()
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('pr_opened')
+    expect(item.error).toBe('run arrêté avant merge')
+    // aucun fix prompt malgré le verdict request_changes
+    expect(d.messages).toHaveLength(messagesBefore)
+    expect(d.data.get().autopilot.run).toBeNull()
+  })
+
+  test('tour de review en error + rate limit rejeté valide → item failed, run entier stoppé', async () => {
+    const d = makeDeps({ issues: [{ number: 1, title: 'A' }, { number: 2, title: 'B' }] })
+    d.data.recordRateLimit({ window: 'five_hour', utilization: 100, status: 'rejected', resetsAt: new Date(Date.now() + 3600_000).toISOString(), recordedAt: new Date().toISOString() })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    expect(d.data.get().autopilot.items[0]!.status).toBe('reviewing')
+    d.emit('draft-2', 'error') // la session de review meurt
+    await tick()
+    const items = d.data.get().autopilot.items
+    expect(items[0]!.status).toBe('failed')
+    expect(items[0]!.error).toBe('la session a terminé en erreur')
+    expect(items[1]!.status).toBe('queued')
+    expect(d.data.get().autopilot.run).toBeNull()
   })
 
   test('remap draft→SDK : la transition arrive sous l’id SDK et item.sessionId est mis à jour', async () => {
@@ -139,11 +379,27 @@ describe('AutopilotRunner', () => {
     d.emit('sdk-1', 'idle')
     await tick()
     const item = d.data.get().autopilot.items[0]!
-    expect(item.status).toBe('pr_opened')
+    expect(item.status).toBe('reviewing')
     expect(item.sessionId).toBe('sdk-1')
   })
 
-  test('pas de PR au premier idle → une relance, puis pr_opened au second', async () => {
+  test('remap draft→SDK de la session de review : reviewSessionId réécrit, review menée à bout', async () => {
+    const d = makeDeps()
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    expect(d.data.get().autopilot.items[0]!.reviewSessionId).toBe('draft-2')
+    // matérialisation de la session de review : draft-2 → sdk-9
+    d.data.mapDraft('draft-2', 'sdk-9')
+    d.emit('sdk-9', 'idle')
+    await tick(12)
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.reviewSessionId).toBe('sdk-9')
+    expect(item.status).toBe('merged')
+  })
+
+  test('pas de PR au premier idle → une relance, puis PR trouvée au second (review enclenchée)', async () => {
     const d = makeDeps({ prs: [null, { number: 5, url: 'https://x/pr/5' }] })
     d.start()
     await tick()
@@ -154,7 +410,9 @@ describe('AutopilotRunner', () => {
     expect(d.messages[1]!.raw).toContain('gates')
     d.emit('draft-1', 'idle')
     await tick()
-    expect(d.data.get().autopilot.items[0]!.status).toBe('pr_opened')
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('reviewing')
+    expect(item.prUrl).toBe('https://x/pr/5')
   })
 
   test('pas de PR après la relance → failed, une SEULE relance', async () => {
@@ -183,7 +441,7 @@ describe('AutopilotRunner', () => {
     expect(d.data.get().autopilot.items[1]!.status).toBe('running')
     d.emit('draft-2', 'idle')
     await tick()
-    expect(d.data.get().autopilot.items[1]!.status).toBe('pr_opened')
+    expect(d.data.get().autopilot.items[1]!.status).toBe('reviewing')
   })
 
   test('error avec rate limit rejeté encore valide → arrêt du run entier', async () => {
@@ -280,6 +538,10 @@ describe('AutopilotRunner', () => {
     await tick()
     d.emit('draft-1', 'idle')
     await tick()
+    // stop pendant la review → l'item retombe en pr_opened (terminal nettoyable)
+    d.runner.stop()
+    d.emit('draft-2', 'idle')
+    await tick()
     const before = d.data.get().autopilot.items[0]!
     expect(before.status).toBe('pr_opened')
     const tempProjectId = before.projectId
@@ -290,5 +552,23 @@ describe('AutopilotRunner', () => {
     expect(d.data.get().projects.some((p) => p.id === tempProjectId)).toBe(false)
     // le projet cible n'est PAS touché
     expect(d.data.get().projects.some((p) => p.id === 'p1')).toBe(true)
+  })
+
+  test('cleanup : les items merged sont nettoyés aussi (worktree + projet + item)', async () => {
+    const d = makeDeps()
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle')
+    await tick(12)
+    const before = d.data.get().autopilot.items[0]!
+    expect(before.status).toBe('merged')
+    const tempProjectId = before.projectId
+
+    await d.runner.cleanup()
+    expect(d.workspaceCalls).toContainEqual({ repoRoot: '/repo', op: 'cleanup', issue: 42 })
+    expect(d.data.get().autopilot.items).toHaveLength(0)
+    expect(d.data.get().projects.some((p) => p.id === tempProjectId)).toBe(false)
   })
 })

@@ -180,7 +180,7 @@ export function parseSessionStatus(raw: string): SessionStatusEvent | null {
 }
 
 // ── Autopilot (spec 2026-08-05) ──
-export type AutopilotItemStatus = 'queued' | 'running' | 'pr_opened' | 'failed'
+export type AutopilotItemStatus = 'queued' | 'running' | 'pr_opened' | 'reviewing' | 'fixing' | 'merging' | 'merged' | 'failed'
 export type AutopilotRunState = 'running' | 'stopping'
 export type AutopilotItem = {
   issue: number
@@ -192,6 +192,8 @@ export type AutopilotItem = {
   repoRoot: string
   /** Id de session — draft d'abord, ré-écrit avec l'id SDK après matérialisation. */
   sessionId: string
+  /** Session de review (niveau 2) — draft d'abord, ré-écrit avec l'id SDK après matérialisation. */
+  reviewSessionId?: string
   status: AutopilotItemStatus
   prUrl?: string
   error?: string
