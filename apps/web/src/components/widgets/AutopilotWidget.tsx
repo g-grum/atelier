@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { AutopilotItem, AutopilotState } from '@atelier/shared'
+import type { AutopilotItem, AutopilotItemStatus, AutopilotState } from '@atelier/shared'
 import { errorMessage } from '../../lib/utils'
 
 export type AutopilotWidgetApi = {
@@ -32,6 +32,16 @@ const STATUS_LABEL: Record<AutopilotItem['status'], string> = {
   merging: 'merge en cours',
   merged: 'mergée',
   failed: 'échec',
+}
+
+/** États sur lesquels l'item ne bougera plus — seuls eux autorisent le nettoyage. */
+const TERMINAL = new Set<AutopilotItemStatus>(['pr_opened', 'failed', 'merged'])
+
+/** Pastille : vert (mergée), rouge (échec), bleu (tout le reste, travail en cours ou PR ouverte). */
+function dotClass(status: AutopilotItemStatus): string {
+  if (status === 'merged') return 'merged'
+  if (status === 'failed') return 'closed'
+  return 'open'
 }
 
 /**
@@ -72,7 +82,7 @@ export function AutopilotWidget({ projectId, maxItems, hubState, api, onOpenSess
   if (state === null) return null
 
   const running = state.run !== null
-  const hasTerminal = state.items.some((i) => i.status === 'pr_opened' || i.status === 'failed')
+  const hasTerminal = state.items.some((i) => TERMINAL.has(i.status))
 
   return (
     <div className="flex flex-col gap-2">
@@ -119,7 +129,7 @@ export function AutopilotWidget({ projectId, maxItems, hubState, api, onOpenSess
             <li key={item.issue} className="pr-item">
               <div className="pr-row">
                 <span className="pr-line" aria-label={`Issue #${item.issue} : ${STATUS_LABEL[item.status]}`}>
-                  <span className={`pr-dot ${item.status === 'pr_opened' ? 'merged' : item.status === 'failed' ? 'closed' : 'open'}`} title={STATUS_LABEL[item.status]} />
+                  <span className={`pr-dot ${dotClass(item.status)}`} title={STATUS_LABEL[item.status]} />
                   <span className="pr-title">#{item.issue} — {item.title}</span>
                   <span className="pr-age">{STATUS_LABEL[item.status]}</span>
                 </span>
