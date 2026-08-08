@@ -2,7 +2,7 @@ import { describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ServerEvent } from '@atelier/shared'
+import type { ServerEvent, StatusHubEvent } from '@atelier/shared'
 import type { RunTurnParams, SdkTurnEvent } from '../sdk/sdk-client'
 import { MockSdkClient } from '../sdk/sdk-client.mock'
 import { AppData, type Draft } from '../store/app-data'
@@ -1119,7 +1119,9 @@ describe('SessionStream', () => {
     s.onMessage(clientMessage({ type: 'user_message', text: 'hi' })) // → streaming
 
     const seen: Array<{ sessionId: string; state: string }> = []
-    registry.onStatusConnect((e) => seen.push({ sessionId: e.sessionId, state: e.state }))
+    registry.onStatusConnect((e) => {
+      if (e.type === 'session_status') seen.push({ sessionId: e.sessionId, state: e.state })
+    })
     // initial snapshot: s1 already streaming
     expect(seen).toContainEqual({ sessionId: 's1', state: 'streaming' })
 
@@ -1136,7 +1138,9 @@ describe('SessionStream', () => {
       throw new Error('sink boom')
     })
     const seen: Array<{ sessionId: string; state: string }> = []
-    registry.onStatusConnect((e) => seen.push({ sessionId: e.sessionId, state: e.state }))
+    registry.onStatusConnect((e) => {
+      if (e.type === 'session_status') seen.push({ sessionId: e.sessionId, state: e.state })
+    })
 
     const errorLog = spyOn(console, 'error').mockImplementation(() => {})
     try {
@@ -1155,7 +1159,7 @@ describe('SessionStream', () => {
   test('onStatusClose retire le sink', () => {
     const { registry } = setup({ turns: [[{ type: 'turn_done' }]] })
     const seen: unknown[] = []
-    const sink = (e: { sessionId: string }) => seen.push(e)
+    const sink = (e: StatusHubEvent) => seen.push(e)
     registry.onStatusConnect(sink)
     const before = seen.length
     registry.onStatusClose(sink)
