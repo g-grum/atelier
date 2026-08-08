@@ -10,7 +10,7 @@ export type Exec = (cmd: string[], cwd: string) => Promise<ExecResult>
 export type Workspace = {
   /** Crée `.worktrees/autopilot-<n>` sur la branche `autopilot/<n>` puis y lance `bun install` (un worktree vierge n'a pas de node_modules). */
   prepare: (issue: number) => Promise<{ path: string; branch: string }>
-  /** `worktree remove --force` puis `branch -D` — chaque échec est loggé mais non-fatal (nettoyage best-effort). */
+  /** `worktree remove --force`, `branch -D` puis suppression du fichier de verdict — chaque échec est non-fatal (nettoyage best-effort). */
   cleanup: (issue: number) => Promise<void>
 }
 
@@ -65,6 +65,9 @@ export function createWorkspace(repoRoot: string, exec: Exec = defaultExec): Wor
       if (branch.exitCode !== 0) {
         console.error(`[autopilot] branch -D a échoué (ignoré) : ${branch.stderr.trim()}`)
       }
+      // Fichier de verdict de review (spec 2026-08-07) — `rm -f` ne râle pas sur
+      // un fichier absent, donc pas de log d'échec ici.
+      await exec(['rm', '-f', `.worktrees/review-${issue}.json`], repoRoot)
     },
   }
 }
