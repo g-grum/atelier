@@ -4,7 +4,8 @@ import type { GithubService } from '../github/github-service'
 import type { SessionsService } from '../sessions/sessions-service'
 import type { SessionStreamRegistry } from '../stream/session-stream'
 import type { AppData } from '../store/app-data'
-import { buildItemPrompt, buildRetryPrompt } from './item-prompt'
+import { buildFixPrompt, buildItemPrompt, buildRetryPrompt, buildRetryVerdictPrompt, buildReviewPrompt, buildReReviewPrompt } from './item-prompt'
+import { readVerdict as defaultReadVerdict, removeVerdict as defaultRemoveVerdict, type ReadVerdict, type ReviewVerdict } from './review-verdict'
 import type { WorkspaceFactory } from './workspace'
 
 /** start() refusé : un run est déjà en cours (→ 409 côté route). */
@@ -16,6 +17,10 @@ export class AutopilotConflictError extends Error {
 }
 
 const DEFAULT_ITEM_TIMEOUT_MS = 30 * 60_000
+const DEFAULT_CI_TIMEOUT_MS = 20 * 60_000
+const DEFAULT_CI_POLL_MS = 30_000
+/** Rollup CI vide au-delà de ce délai → merge quand même (workflows parfois non déclenchés). */
+const DEFAULT_CI_GRACE_MS = 2 * 60_000
 /** Couleur des projets temporaires — l'indigo autopilot (l'ambre reste aux permissions). */
 const TEMP_PROJECT_COLOR = '#6366f1'
 
@@ -23,9 +28,14 @@ type Deps = {
   data: AppData
   sessions: Pick<SessionsService, 'createDraft' | 'setPermissionMode'>
   streams: Pick<SessionStreamRegistry, 'get' | 'onStatusConnect' | 'onStatusClose' | 'publish'>
-  github: Pick<GithubService, 'listAutopilotIssues' | 'prForBranch' | 'issueBody'>
+  github: Pick<GithubService, 'listAutopilotIssues' | 'prForBranch' | 'issueBody' | 'prCi' | 'mergePr'>
   workspace: WorkspaceFactory
   itemTimeoutMs?: number
+  readVerdict?: ReadVerdict
+  removeVerdict?: (path: string) => Promise<void>
+  ciTimeoutMs?: number
+  ciPollMs?: number
+  ciGraceMs?: number
 }
 
 type TurnOutcome = 'idle' | 'error' | 'timeout'
@@ -43,6 +53,13 @@ export class AutopilotRunner {
   private readonly github: Deps['github']
   private readonly workspace: WorkspaceFactory
   private readonly itemTimeoutMs: number
+  private readonly readVerdict: ReadVerdict
+  private readonly removeVerdict: (path: string) => Promise<void>
+  private readonly ciTimeoutMs: number
+  private readonly ciPollMs: number
+  private readonly ciGraceMs: number
+  /** Transporte le « stop run » de failItem à travers le retour typé de runReviewTurn. */
+  private lastFailStop = false
 
   /** Attente de fin de tour de l'item courant — résolue par le sink du hub. */
   private waiter: { match: (sessionId: string) => boolean; resolve: (outcome: TurnOutcome) => void } | null = null
@@ -55,13 +72,18 @@ export class AutopilotRunner {
     }
   }
 
-  constructor({ data, sessions, streams, github, workspace, itemTimeoutMs }: Deps) {
+  constructor({ data, sessions, streams, github, workspace, itemTimeoutMs, readVerdict, removeVerdict, ciTimeoutMs, ciPollMs, ciGraceMs }: Deps) {
     this.data = data
     this.sessions = sessions
     this.streams = streams
     this.github = github
     this.workspace = workspace
     this.itemTimeoutMs = itemTimeoutMs ?? DEFAULT_ITEM_TIMEOUT_MS
+    this.readVerdict = readVerdict ?? defaultReadVerdict
+    this.removeVerdict = removeVerdict ?? defaultRemoveVerdict
+    this.ciTimeoutMs = ciTimeoutMs ?? DEFAULT_CI_TIMEOUT_MS
+    this.ciPollMs = ciPollMs ?? DEFAULT_CI_POLL_MS
+    this.ciGraceMs = ciGraceMs ?? DEFAULT_CI_GRACE_MS
   }
 
   start({ projectId, repo, githubUser, maxItems }: { projectId: string; repo: string; githubUser: string; maxItems: number }): void {
@@ -85,7 +107,7 @@ export class AutopilotRunner {
 
   /** Nettoyage des items terminaux : worktree + branche + projet temporaire + item (action volontaire post-autopsie). */
   async cleanup(): Promise<void> {
-    const terminal = this.data.get().autopilot.items.filter((i) => i.status === 'pr_opened' || i.status === 'failed')
+    const terminal = this.data.get().autopilot.items.filter((i) => i.status === 'pr_opened' || i.status === 'failed' || i.status === 'merged')
     for (const item of terminal) {
       // repoRoot persisté sur l'item exprès : run null ici, et le path du projet temporaire est le worktree.
       await this.workspace(item.repoRoot).cleanup(item.issue)
@@ -172,29 +194,31 @@ export class AutopilotRunner {
       const stream = this.streams.get(draft.id, tempProjectId)
       stream.onMessage(JSON.stringify({ type: 'user_message', text: buildItemPrompt({ issue, title: item.title, body, branch }) }))
 
-      let outcome = await this.waitForTurnEnd(issue, stream)
+      let outcome = await this.waitForTurnEnd(issue, stream, 'sessionId')
       if (outcome !== 'idle') return this.failItem(issue, outcome)
 
       let pr = await this.github.prForBranch(repo, branch, githubUser)
       if (pr === null && this.data.get().autopilot.run?.state === 'running') {
         // UNE relance, jamais plus — le tour s'est fini sans PR (spec).
         stream.onMessage(JSON.stringify({ type: 'user_message', text: buildRetryPrompt(issue) }))
-        outcome = await this.waitForTurnEnd(issue, stream)
+        outcome = await this.waitForTurnEnd(issue, stream, 'sessionId')
         if (outcome !== 'idle') return this.failItem(issue, outcome)
         pr = await this.github.prForBranch(repo, branch, githubUser)
       }
 
-      this.updateItem(issue, (i) => {
-        i.endedAt = new Date().toISOString()
-        if (pr !== null) {
-          i.status = 'pr_opened'
-          i.prUrl = pr.url
-        } else {
+      if (pr === null) {
+        this.updateItem(issue, (i) => {
           i.status = 'failed'
           i.error = 'le tour s’est terminé sans PR ouverte'
-        }
+          i.endedAt = new Date().toISOString()
+        })
+        return false
+      }
+      this.updateItem(issue, (i) => {
+        i.status = 'pr_opened'
+        i.prUrl = pr.url
       })
-      return false
+      return await this.reviewAndMerge(issue, pr.number, { repo, githubUser, repoRoot, branch, stream, title: item.title, body })
     } catch (err) {
       this.updateItem(issue, (i) => {
         i.status = 'failed'
@@ -203,6 +227,133 @@ export class AutopilotRunner {
       })
       return false
     }
+  }
+
+  /**
+   * Review (session dédiée, verdict fichier), un cycle de correction au plus,
+   * attente CI puis merge. Retourne true si le RUN doit s'arrêter (rate limit).
+   * Toute sortie repose l'item dans un état terminal (merged/failed) ou le
+   * laisse en pr_opened (stop — la PR reste mergeable à la main).
+   */
+  private async reviewAndMerge(
+    issue: number,
+    prNumber: number,
+    ctx: { repo: string; githubUser: string; repoRoot: string; branch: string; stream: { onMessage: (raw: string) => void }; title: string; body: string },
+  ): Promise<boolean> {
+    if (this.stopRequested(issue)) return false // stop posé pendant le tour d'implémentation : pas de session de review
+    const verdictPath = `${ctx.repoRoot}/.worktrees/review-${issue}.json`
+    const item = this.getItem(issue)
+
+    // Session de review dédiée — même projet temporaire (même worktree).
+    const draft = this.sessions.createDraft(item.projectId, { name: `Review #${issue}` })
+    this.sessions.setPermissionMode(draft.id, 'bypassPermissions')
+    this.updateItem(issue, (i) => {
+      i.status = 'reviewing'
+      i.reviewSessionId = draft.id
+    })
+    const reviewStream = this.streams.get(draft.id, item.projectId)
+
+    let verdict = await this.runReviewTurn(issue, reviewStream, verdictPath,
+      buildReviewPrompt({ issue, title: ctx.title, body: ctx.body, branch: ctx.branch, verdictPath }))
+    if (verdict === 'turn_failed') return this.lastFailStop
+    if (this.stopRequested(issue)) return false
+    if (verdict === null) return this.terminalFail(issue, 'la review n’a pas rendu de verdict')
+
+    if (verdict.verdict === 'request_changes') {
+      this.updateItem(issue, (i) => {
+        i.status = 'fixing'
+      })
+      ctx.stream.onMessage(JSON.stringify({ type: 'user_message', text: buildFixPrompt(verdict.findings) }))
+      const outcome = await this.waitForTurnEnd(issue, ctx.stream, 'sessionId')
+      if (outcome !== 'idle') return this.failItem(issue, outcome)
+      if (this.stopRequested(issue)) return false
+
+      this.updateItem(issue, (i) => {
+        i.status = 'reviewing'
+      })
+      verdict = await this.runReviewTurn(issue, reviewStream, verdictPath, buildReReviewPrompt(verdictPath))
+      if (verdict === 'turn_failed') return this.lastFailStop
+      if (this.stopRequested(issue)) return false
+      if (verdict === null) return this.terminalFail(issue, 'la review n’a pas rendu de verdict')
+      if (verdict.verdict === 'request_changes') return this.terminalFail(issue, 'la review a rejeté la PR après correction')
+    }
+
+    return await this.waitCiAndMerge(issue, prNumber, ctx)
+  }
+
+  /** Un tour de review : purge du verdict périmé, prompt, fin de tour, lecture ; verdict absent → UNE relance. */
+  private async runReviewTurn(
+    issue: number,
+    reviewStream: { onMessage: (raw: string) => void },
+    verdictPath: string,
+    prompt: string,
+  ): Promise<ReviewVerdict | null | 'turn_failed'> {
+    await this.removeVerdict(verdictPath)
+    reviewStream.onMessage(JSON.stringify({ type: 'user_message', text: prompt }))
+    let outcome = await this.waitForTurnEnd(issue, reviewStream, 'reviewSessionId')
+    if (outcome !== 'idle') {
+      this.lastFailStop = this.failItem(issue, outcome)
+      return 'turn_failed'
+    }
+    const verdict = await this.readVerdict(verdictPath)
+    if (verdict !== null) return verdict
+    // Stop posé pendant le tour ? Pas de relance — le stopRequested de l'appelant tranche (avant le check null).
+    if (this.data.get().autopilot.run?.state !== 'running') return null
+    reviewStream.onMessage(JSON.stringify({ type: 'user_message', text: buildRetryVerdictPrompt(verdictPath) }))
+    outcome = await this.waitForTurnEnd(issue, reviewStream, 'reviewSessionId')
+    if (outcome !== 'idle') {
+      this.lastFailStop = this.failItem(issue, outcome)
+      return 'turn_failed'
+    }
+    return await this.readVerdict(verdictPath)
+  }
+
+  /** merging couvre l'attente CI PUIS la commande (spec). stop → retombe en pr_opened. */
+  private async waitCiAndMerge(issue: number, prNumber: number, ctx: { repo: string; githubUser: string }): Promise<boolean> {
+    this.updateItem(issue, (i) => {
+      i.status = 'merging'
+    })
+    const startedAt = Date.now()
+    while (true) {
+      if (this.stopRequested(issue)) return false
+      const ci = await this.github.prCi(ctx.repo, prNumber, ctx.githubUser)
+      if (ci === 'passed') break
+      if (ci === 'failed') return this.terminalFail(issue, 'CI rouge sur la PR')
+      if (ci === null && Date.now() - startedAt > this.ciGraceMs) break // CI muette (workflows parfois non déclenchés)
+      if (Date.now() - startedAt > this.ciTimeoutMs) return this.terminalFail(issue, 'timeout CI')
+      await new Promise((r) => setTimeout(r, this.ciPollMs))
+    }
+    try {
+      await this.github.mergePr(ctx.repo, prNumber, ctx.githubUser)
+    } catch (err) {
+      return this.terminalFail(issue, err instanceof Error ? err.message : String(err))
+    }
+    this.updateItem(issue, (i) => {
+      i.status = 'merged'
+      i.endedAt = new Date().toISOString()
+    })
+    return false
+  }
+
+  /** stop() demandé (spec : pendant review/fix → l'item retombe à pr_opened, la PR reste mergeable à la main). */
+  private stopRequested(issue: number): boolean {
+    if (this.data.get().autopilot.run?.state === 'running') return false
+    this.updateItem(issue, (i) => {
+      i.status = 'pr_opened'
+      i.error = 'run arrêté avant merge'
+      i.endedAt = new Date().toISOString()
+    })
+    return true
+  }
+
+  /** failed + endedAt, ne stoppe jamais le run. */
+  private terminalFail(issue: number, error: string): boolean {
+    this.updateItem(issue, (i) => {
+      i.status = 'failed'
+      i.error = error
+      i.endedAt = new Date().toISOString()
+    })
+    return false
   }
 
   /** Marque l'item failed selon l'issue de tour non-idle. Retourne true si le run doit s'arrêter (rate limit encore valide). */
@@ -222,12 +373,13 @@ export class AutopilotRunner {
   }
 
   /**
-   * Attend la fin du tour de l'item : transition hub → idle/error de SA session
-   * (remap draft→SDK suivi via resolveSessionId, item.sessionId réécrit au passage),
-   * ou timeout → abort de la session. La garde `status === 'running'` du sink est
-   * assurée par waiter/null : un idle tardif post-timeout ne re-déclenche rien.
+   * Attend la fin du tour de l'item : transition hub → idle/error de la session
+   * portée par `field` (remap draft→SDK suivi via resolveSessionId, item[field]
+   * réécrit au passage), ou timeout → abort de la session. La garde
+   * `status === 'running'` du sink est assurée par waiter/null : un idle tardif
+   * post-timeout ne re-déclenche rien.
    */
-  private waitForTurnEnd(issue: number, stream: { onMessage: (raw: string) => void }): Promise<TurnOutcome> {
+  private waitForTurnEnd(issue: number, stream: { onMessage: (raw: string) => void }, field: 'sessionId' | 'reviewSessionId'): Promise<TurnOutcome> {
     return new Promise<TurnOutcome>((resolve) => {
       const timer = setTimeout(() => {
         if (this.waiter === null) return
@@ -238,11 +390,11 @@ export class AutopilotRunner {
       this.waiter = {
         match: (sessionId) => {
           const item = this.getItem(issue)
-          const resolved = this.data.resolveSessionId(item.sessionId)
+          const resolved = this.data.resolveSessionId(item[field] ?? '')
           if (sessionId !== resolved) return false
-          if (item.sessionId !== resolved) {
+          if (item[field] !== resolved) {
             this.updateItem(issue, (i) => {
-              i.sessionId = resolved
+              i[field] = resolved
             })
           }
           return true
