@@ -1,8 +1,9 @@
 {
-  "version": "0.1.14",
+  "version": "0.1.15",
   "notes": [
-    "Démarrage plus léger : le rendu markdown (et sa coloration de code) est chargé à la demande — fini le warning de taille au build",
-    "Widget Pull Requests : naît « à configurer » et se préremplit avec le repo du projet ouvert",
-    "QCM : la preview des options s'affiche au survol et au focus clavier, avec un repli animé propre"
+    "Autopilot va jusqu'au bout : chaque PR est relue par un agent dédié, corrigée si besoin, puis mergée seule une fois la CI verte",
+    "Un seul cycle de correction — si la review rejette encore, l'item s'arrête en échec et la PR reste ouverte",
+    "Le widget suit tout le parcours : en review, en correction, merge en cours, mergée",
+    "Arrêter un run pendant la review laisse la PR ouverte et mergeable à la main"
   ]
 }
