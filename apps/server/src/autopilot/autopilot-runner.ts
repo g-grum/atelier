@@ -316,7 +316,9 @@ export class AutopilotRunner {
     const startedAt = Date.now()
     while (true) {
       if (this.stopRequested(issue)) return false
-      const ci = await this.github.prCi(ctx.repo, prNumber, ctx.githubUser)
+      // Une erreur de gh (blip réseau, timeout du runner) n'est PAS une CI rouge :
+      // on continue de poller comme un 'pending', toujours borné par ciTimeoutMs.
+      const ci = await this.github.prCi(ctx.repo, prNumber, ctx.githubUser).catch(() => 'pending' as const)
       if (ci === 'passed') break
       if (ci === 'failed') return this.terminalFail(issue, 'CI rouge sur la PR')
       if (ci === null && Date.now() - startedAt > this.ciGraceMs) break // CI muette (workflows parfois non déclenchés)

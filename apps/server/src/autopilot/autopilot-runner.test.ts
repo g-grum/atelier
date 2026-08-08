@@ -18,8 +18,8 @@ function makeDeps(overrides: {
   prepareError?: string
   /** File de verdicts consommée par le readVerdict fake ; absent → approve systématique ; épuisée → null. */
   verdicts?: Array<ReviewVerdict | null>
-  /** État CI : constante, ou file (le dernier élément se répète) ; défaut 'passed'. */
-  ci?: PrCi | PrCi[]
+  /** État CI : constante, ou file (le dernier élément se répète) ; une Error dans la file → prCi lève (blip réseau) ; défaut 'passed'. */
+  ci?: PrCi | Array<PrCi | Error>
   mergeError?: string
 } = {}) {
   const data = new AppData(join(mkdtempSync(join(tmpdir(), 'atelier-ap-')), 'data.json'))
@@ -82,8 +82,11 @@ function makeDeps(overrides: {
     issueBody: async (_repo: string, issue: number, _user: string) => `corps de #${issue}`,
     prCi: async (_repo: string, number: number, _user: string): Promise<PrCi> => {
       ghCalls.push(['ci', String(number)])
-      if (ciQueue !== null) return ciQueue.length > 1 ? (ciQueue.shift() as PrCi) : (ciQueue[0] ?? null)
-      return overrides.ci !== undefined ? (overrides.ci as PrCi) : 'passed'
+      const next = ciQueue !== null
+        ? (ciQueue.length > 1 ? ciQueue.shift() : (ciQueue[0] ?? null))
+        : (overrides.ci !== undefined ? overrides.ci : 'passed')
+      if (next instanceof Error) throw next
+      return (next ?? null) as PrCi
     },
     mergePr: async (repo: string, number: number, _user: string) => {
       mergeCalls.push({ repo, number })
@@ -283,6 +286,20 @@ describe('AutopilotRunner', () => {
     expect(item.status).toBe('failed')
     expect(item.error).toBe('timeout CI')
     expect(d.mergeCalls).toHaveLength(0)
+  })
+
+  test('erreur transitoire de prCi (blip réseau) → on continue de poller → merged', async () => {
+    const d = makeDeps({ ci: [new Error('gh a échoué pour o/r : réseau'), 'passed'] })
+    d.start()
+    await tick()
+    d.emit('draft-1', 'idle')
+    await tick()
+    d.emit('draft-2', 'idle') // approve → merging → prCi lève une fois, puis passed
+    await new Promise((r) => setTimeout(r, 20))
+    const item = d.data.get().autopilot.items[0]!
+    expect(item.status).toBe('merged')
+    expect(item.error).toBeUndefined()
+    expect(d.mergeCalls).toEqual([{ repo: 'o/r', number: 9 }])
   })
 
   test('CI muette (rollup vide) au-delà de la grâce → merge quand même → merged', async () => {
