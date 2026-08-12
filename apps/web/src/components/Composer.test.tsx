@@ -19,6 +19,7 @@ function renderComposer(overrides: Partial<ComposerProps> = {}) {
     },
     onAbort: () => aborts.push(true),
     commands: [],
+    files: [],
     ...overrides,
   }
   const view = render(<Composer {...props} />)
@@ -235,5 +236,58 @@ describe('Composer — autocomplétion des slash commands', () => {
     fireEvent.mouseMove(options()[1]!)
     expect(options()[1]?.getAttribute('aria-selected')).toBe('true')
     expect(options()[0]?.getAttribute('aria-selected')).toBe('false')
+  })
+})
+
+// ORDRE IMPORTANT : le dossier 'src' AVANT 'src/lib/utils.ts' — les deux sont
+// au palier 1 pour '@sr', et le test « dossier » complète l'option active (0).
+const FILES = [
+  { path: 'README.md', dir: false },
+  { path: 'src', dir: true },
+  { path: 'src/lib/utils.ts', dir: false },
+]
+
+describe('mentions de fichiers (@)', () => {
+  test('@ ouvre le popover fichiers ; Enter complète avec le chemin + espace', () => {
+    renderComposer({ files: FILES })
+    type('regarde @ut')
+    expect(options()).toHaveLength(1)
+    fireEvent.keyDown(textarea(), { key: 'Enter' })
+    expect((textarea() as HTMLTextAreaElement).value).toBe('regarde @src/lib/utils.ts ')
+  })
+
+  test('dossier : complétion avec / final, le popover reste ouvert sur les enfants', () => {
+    renderComposer({ files: FILES })
+    type('@sr')
+    fireEvent.keyDown(textarea(), { key: 'Tab' })
+    expect((textarea() as HTMLTextAreaElement).value).toBe('@src/')
+    // préfixe 'src/' toujours actif → utils.ts (sous-chaîne) reste proposé
+    expect(options().length).toBeGreaterThan(0)
+  })
+
+  test('email : pas de popover sur a@b', () => {
+    renderComposer({ files: FILES })
+    type('mail a@b')
+    expect(options()).toHaveLength(0)
+  })
+
+  test('Escape ferme le popover fichiers sans envoyer', () => {
+    const { sent } = renderComposer({ files: FILES })
+    type('@RE')
+    fireEvent.keyDown(textarea(), { key: 'Escape' })
+    expect(options()).toHaveLength(0)
+    expect(sent).toEqual([])
+  })
+
+  test('liste vide : @ ne déclenche rien (dégradation silencieuse)', () => {
+    renderComposer({ files: [] })
+    type('@src')
+    expect(options()).toHaveLength(0)
+  })
+
+  test('le popover commandes garde la priorité sur /', () => {
+    renderComposer({ files: FILES, commands: CMDS })
+    type('/rev')
+    expect(options()[0]?.textContent).toContain('/review')
   })
 })

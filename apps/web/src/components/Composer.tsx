@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SlashCommandInfo } from '@atelier/shared'
+import { completeMention, matchFiles, mentionPrefix, type FileEntry } from '../lib/file-mentions'
 import { commandPrefix, completeCommand, matchCommands } from '../lib/slash-commands'
 import type { StreamState } from '../state/stream-reducer'
 
@@ -14,12 +15,14 @@ export type ComposerProps = {
   onAbort: () => void
   /** Liste pour l'autocomplétion. Vide ⇒ aucun popover (dégradation silencieuse). */
   commands: SlashCommandInfo[]
+  /** Fichiers/dossiers du projet pour l'autocomplétion @. Vide ⇒ pas de popover. */
+  files: FileEntry[]
 }
 
 /** Growth cap (~8 lines) — beyond it the textarea scrolls internally. */
 const MAX_TEXTAREA_HEIGHT_PX = 200
 
-export function Composer({ disabled, status, onSend, onAbort, commands }: ComposerProps) {
+export function Composer({ disabled, status, onSend, onAbort, commands, files }: ComposerProps) {
   const [text, setText] = useState('')
   const streaming = status === 'streaming'
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -33,8 +36,11 @@ export function Composer({ disabled, status, onSend, onAbort, commands }: Compos
   const [dismissed, setDismissed] = useState(false)
   const activeRef = useRef<HTMLLIElement>(null)
 
-  const prefix = dismissed ? null : commandPrefix(text, caret)
-  const matches = prefix === null ? [] : matchCommands(commands, prefix)
+  const cmdPrefix = dismissed ? null : commandPrefix(text, caret)
+  const cmdMatches = cmdPrefix === null ? [] : matchCommands(commands, cmdPrefix)
+  const filePrefix = dismissed || cmdMatches.length > 0 ? null : mentionPrefix(text, caret)
+  const fileMatches = filePrefix === null ? [] : matchFiles(files, filePrefix)
+  const matches = cmdMatches.length > 0 ? cmdMatches : fileMatches
   const open = matches.length > 0
 
   // Garde la sélection clavier visible quand la liste dépasse la hauteur du
@@ -49,6 +55,21 @@ export function Composer({ disabled, status, onSend, onAbort, commands }: Compos
     setCaret(next.length)
     setDismissed(true)
     textareaRef.current?.focus()
+  }
+
+  const completeFile = (entry: FileEntry) => {
+    const next = completeMention(text, caret, entry)
+    setText(next.text)
+    setCaret(next.caret)
+    // Fichier : fermer (le chemin complété rematcherait). Dossier : rester
+    // ouvert pour descendre dans l'arborescence.
+    setDismissed(!entry.dir)
+    setActive(0)
+    const el = textareaRef.current
+    el?.focus()
+    // React replace la valeur ⇒ le caret DOM saute en fin ; on le repose au
+    // point d'insertion (mention en milieu de phrase). happy-dom : optionnel.
+    requestAnimationFrame(() => el?.setSelectionRange?.(next.caret, next.caret))
   }
 
   // Autofocus when a session becomes active (fresh draft or opened session):
@@ -79,10 +100,10 @@ export function Composer({ disabled, status, onSend, onAbort, commands }: Compos
 
   return (
     <div className="composer">
-      {open && (
+      {cmdMatches.length > 0 && (
         // Popover écrit à la main : components/ui/ n'a aucune primitive listbox.
         <ul className="command-popover" role="listbox" aria-label="Commandes disponibles">
-          {matches.map((command, index) => (
+          {cmdMatches.map((command, index) => (
             <li
               key={command.name}
               ref={index === active ? activeRef : undefined}
@@ -103,6 +124,26 @@ export function Composer({ disabled, status, onSend, onAbort, commands }: Compos
               <span className="cmd-name">/{command.name}</span>
               {command.argumentHint !== '' && <span className="cmd-hint">{command.argumentHint}</span>}
               <span className="cmd-desc">{command.description}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && cmdMatches.length === 0 && (
+        <ul className="command-popover" role="listbox" aria-label="Fichiers du projet">
+          {fileMatches.map((entry, index) => (
+            <li
+              key={entry.path}
+              ref={index === active ? activeRef : undefined}
+              role="option"
+              aria-selected={index === active}
+              className={index === active ? 'active' : undefined}
+              onMouseMove={() => setActive(index)}
+              onMouseDown={(event) => {
+                event.preventDefault()
+                completeFile(entry)
+              }}
+            >
+              <span className="cmd-name">{entry.path}{entry.dir ? '/' : ''}</span>
             </li>
           ))}
         </ul>
@@ -139,7 +180,8 @@ export function Composer({ disabled, status, onSend, onAbort, commands }: Compos
               }
               if (event.key === 'Enter' || event.key === 'Tab') {
                 event.preventDefault()
-                complete(matches[active]!.name)
+                if (cmdMatches.length > 0) complete(cmdMatches[active]!.name)
+                else completeFile(fileMatches[active]!)
                 return
               }
               if (event.key === 'Escape') {

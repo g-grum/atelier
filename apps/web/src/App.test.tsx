@@ -60,6 +60,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     getPreferences: async () => ({ ...DEFAULT_PREFERENCES }),
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
     listCommands: async () => [],
+    listFiles: async () => ({ files: [], dirs: [] }),
     listRules: async () => [],
     deleteRule: async () => {},
     deleteProject: async () => {},

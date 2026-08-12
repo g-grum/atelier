@@ -1,4 +1,4 @@
-import type { AlwaysRule, AutopilotState, ChatMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, AutopilotState, ChatMessage, Preferences, ProjectFileList, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, SessionPermissionMode, SessionSummary, SlashCommandInfo, VersionInfo, WidgetInstance } from '@atelier/shared'
 
 // ── Auth token ──
 // Read from location.search ONCE at startup and persisted to sessionStorage so
@@ -174,6 +174,11 @@ export function getProjectGithubAccount(projectId: string): Promise<ProjectGithu
  */
 export function listCommands(projectId: string): Promise<SlashCommandInfo[]> {
   return request<SlashCommandInfo[]>('GET', `/projects/${encodeURIComponent(projectId)}/commands`)
+}
+
+/** Fichiers + dossiers du projet — l'autocomplétion @ du composer. */
+export function listFiles(projectId: string): Promise<ProjectFileList> {
+  return request<ProjectFileList>('GET', `/projects/${encodeURIComponent(projectId)}/files`)
 }
 
 // ── Autopilot (spec 2026-08-05) ──

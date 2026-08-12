@@ -19,6 +19,7 @@ import { AutopilotConfigDialog } from './components/widgets/AutopilotConfigDialo
 import { AutopilotWidget } from './components/widgets/AutopilotWidget'
 import { PrConfigDialog } from './components/widgets/PrConfigDialog'
 import { PrListWidget } from './components/widgets/PrListWidget'
+import type { FileEntry } from './lib/file-mentions'
 import { clearLastSession, readLastSession, writeLastSession } from './lib/last-session'
 import { applyTheme, currentTheme } from './lib/theme'
 import { errorMessage } from './lib/utils'
@@ -232,6 +233,26 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   })
+
+  // Fichiers du projet pour l'autocomplétion @ (spec 2026-08-12). staleTime
+  // court (le repo bouge pendant la session), silencieux sur échec — sans
+  // liste, @ ne déclenche simplement rien.
+  const filesQuery = useQuery({
+    queryKey: ['files', commandsProjectId],
+    queryFn: () => backend.listFiles(commandsProjectId ?? ''),
+    enabled: commandsProjectId !== null,
+    staleTime: 30_000,
+    retry: false,
+  })
+  // Fusion { files, dirs } → FileEntry[] mémoïsée : une prop stable pour Composer.
+  const fileEntries = useMemo<FileEntry[]>(() => {
+    const list = filesQuery.data
+    if (list === undefined) return []
+    return [
+      ...list.files.map((path) => ({ path, dir: false })),
+      ...list.dirs.map((path) => ({ path, dir: true })),
+    ]
+  }, [filesQuery.data])
 
   const openSession = useCallback(
     (sessionId: string, projectId: string) => {
@@ -518,6 +539,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             // Précédence, pas de fusion (spec §5) : les deux listes viennent du
             // même producteur (le SDK), celle du WS est juste plus fraîche.
             commands={stream.commands ?? commandsQuery.data ?? []}
+            files={fileEntries}
             onSend={(text) => controller.sendMessage(text)}
             // Explicit abort — the only ClientMessage that stops a turn.
             onAbort={() => controller.abort()}
