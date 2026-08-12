@@ -12,6 +12,7 @@ describe('mentionPrefix', () => {
   test('email : @ collé à un mot ne déclenche PAS', () => expect(mentionPrefix('mail a@b', 8)).toBeNull())
   test('pas de @ avant le caret', () => expect(mentionPrefix('hello', 5)).toBeNull())
   test('caret revenu AVANT le @ : null', () => expect(mentionPrefix('x @src', 1)).toBeNull())
+  test('caret 0 : null même si le texte commence par @', () => expect(mentionPrefix('@src', 0)).toBeNull())
   test('espace entre @ et caret : token clos, null', () => expect(mentionPrefix('@src ok', 7)).toBeNull())
   test('caret au milieu du token : préfixe partiel', () => expect(mentionPrefix('@src/lib', 4)).toBe('src'))
 })

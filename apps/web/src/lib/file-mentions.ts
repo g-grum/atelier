@@ -11,6 +11,9 @@ export const MAX_FILE_MATCHES = 15
  * contenant des espaces ne re-matchent pas si le caret y revient.
  */
 export function mentionPrefix(text: string, caret: number): string | null {
+  // Garde caret <= 0 : lastIndexOf clampe un fromIndex négatif à 0, donc sans
+  // ça `mentionPrefix('@x', 0)` (caret AVANT le @) ouvrirait le popover à tort.
+  if (caret <= 0) return null
   const at = text.lastIndexOf('@', caret - 1)
   if (at === -1) return null
   if (at > 0 && !/\s/.test(text[at - 1]!)) return null
