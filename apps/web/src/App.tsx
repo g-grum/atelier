@@ -245,12 +245,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     retry: false,
   })
   // Fusion { files, dirs } → FileEntry[] mémoïsée : une prop stable pour Composer.
+  // Dossiers en tête : à palier égal (ex. `@src` matche le dossier `src` ET
+  // `src/lib/…`), le dossier sort en premier — on descend dans l'arborescence
+  // plutôt que de sauter au premier fichier qui le contient.
   const fileEntries = useMemo<FileEntry[]>(() => {
     const list = filesQuery.data
     if (list === undefined) return []
     return [
-      ...list.files.map((path) => ({ path, dir: false })),
       ...list.dirs.map((path) => ({ path, dir: true })),
+      ...list.files.map((path) => ({ path, dir: false })),
     ]
   }, [filesQuery.data])
 

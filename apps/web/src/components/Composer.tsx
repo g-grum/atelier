@@ -180,8 +180,12 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files }:
               }
               if (event.key === 'Enter' || event.key === 'Tab') {
                 event.preventDefault()
-                if (cmdMatches.length > 0) complete(cmdMatches[active]!.name)
-                else completeFile(fileMatches[active]!)
+                // `active` peut dépasser la liste si `commands`/`files` a rétréci
+                // (refetch, push WS) depuis la dernière frappe — on garde l'accès.
+                const cmd = cmdMatches[active]
+                const file = fileMatches[active]
+                if (cmd !== undefined) complete(cmd.name)
+                else if (file !== undefined) completeFile(file)
                 return
               }
               if (event.key === 'Escape') {
