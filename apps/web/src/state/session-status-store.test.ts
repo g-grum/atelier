@@ -71,4 +71,20 @@ describe('SessionStatusStore', () => {
     s.handle(ev('a', 'streaming'))
     expect(n).toBe(1)
   })
+
+  it('onTurnSettled : déclenché sur streaming → idle|error, jamais sur le snapshot initial ni error → idle', () => {
+    const s = new SessionStatusStore()
+    const settled: string[] = []
+    s.onTurnSettled = (id) => settled.push(id)
+    s.handle(ev('a', 'idle')) // snapshot initial : pas une fin de tour
+    expect(settled).toEqual([])
+    s.handle(ev('a', 'streaming'))
+    s.handle(ev('a', 'idle'))
+    expect(settled).toEqual(['a'])
+    s.handle(ev('b', 'streaming'))
+    s.handle(ev('b', 'error'))
+    expect(settled).toEqual(['a', 'b'])
+    s.handle(ev('b', 'idle')) // retombée error → idle : pas une fin de tour
+    expect(settled).toEqual(['a', 'b'])
+  })
 })

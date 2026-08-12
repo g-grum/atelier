@@ -309,7 +309,7 @@ export class SessionStream {
     this.onRekey?.(draftId, sdkSessionId)
     // Re-emits under the SDK id. NB: the `streaming` emission under the DRAFT id (line ~120)
     // is not retracted → a stale `draftId → streaming` entry may linger in the client's `statuses`.
-    // Harmless: the `mapping` remap removes the draft from the session list, so it never renders
+    // Harmless: the `mapping` remap re-keys the sidebar row to the SDK id, so the draft id never renders
     // nor transitions to `waiting`; any new hub connection snapshots the re-keyed `streams` map cleanly.
     this.onStatusChange?.(sdkSessionId, this.state)
     // The rename itself must WAIT for turn end: at session_started the SDK CLI

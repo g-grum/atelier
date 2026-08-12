@@ -747,6 +747,74 @@ describe('App launch restore (spec 2026-07-24)', () => {
   })
 })
 
+describe('Sidebar au fil de la matérialisation du draft', () => {
+  const draft: SessionSummary = {
+    ...session,
+    id: 'd1',
+    name: null,
+    isDraft: true,
+    messageCount: 0,
+    updatedAt: '2026-07-16T09:00:00.000Z', // plus récent que s1 → le restore l'ouvre
+  }
+
+  test('la conversation reste listée après le mapping, même si la liste serveur ne la renvoie pas encore', async () => {
+    let emit: ((event: ServerEvent) => void) | null = null
+    // Après la matérialisation, le serveur a retiré le draft mais n'a PAS
+    // encore le JSONL sur disque : la liste ne contient ni d1 ni sdk-1.
+    let materialized = false
+    renderApp(
+      fakeBackend({
+        listSessions: async () => (materialized ? [session] : [session, draft]),
+        createSocket: () => ({
+          ...idleSocket,
+          on: (handler: (event: ServerEvent) => void) => {
+            emit = handler
+            return () => {}
+          },
+        }),
+      }),
+    )
+
+    // le draft est dans la sidebar (le même libellé apparaît aussi dans la topbar → scope .sess)
+    const sidebarRow = () => screen.queryAllByText('Nouvelle session').find((el) => el.closest('.sess') !== null)
+    await waitFor(() => expect(sidebarRow()).not.toBeUndefined())
+    materialized = true
+    await waitFor(() => expect(emit).not.toBeNull())
+    act(() => emit!({ type: 'status', sessionId: 'sdk-1', state: 'streaming', mapping: { draftId: 'd1', sessionId: 'sdk-1' } }))
+
+    // Laisse un éventuel refetch (racé) atterrir — la ligne doit survivre.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(sidebarRow()).not.toBeUndefined()
+  })
+
+  test('la fin du tour (hub streaming → idle) refetch la liste des sessions', async () => {
+    let hubEmit: ((event: import('@atelier/shared').StatusHubEvent) => void) | null = null
+    let listCalls = 0
+    renderApp(
+      fakeBackend({
+        listSessions: async () => {
+          listCalls++
+          return [session]
+        },
+        createStatusSocket: (handler) => {
+          hubEmit = handler
+          return { close: () => {} }
+        },
+      }),
+    )
+
+    await screen.findByRole('button', { name: /renommer la session/i })
+    const before = listCalls
+    act(() => {
+      hubEmit!({ type: 'session_status', sessionId: 'sdk-1', state: 'streaming' })
+      hubEmit!({ type: 'session_status', sessionId: 'sdk-1', state: 'idle' })
+    })
+    await waitFor(() => expect(listCalls).toBeGreaterThan(before))
+  })
+})
+
 describe('App theme boot resync', () => {
   afterEach(() => document.documentElement.removeAttribute('data-theme'))
 

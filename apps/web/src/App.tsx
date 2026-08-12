@@ -73,7 +73,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         fetchMessages: backend.getMessages,
         createSocket: backend.createSocket,
         onSessionRemapped: (mapping) => {
-          // Draft handover: re-key the selection and refresh the session list.
+          // Draft handover: re-key the selection and re-key the cached list row.
           setSelected((current) =>
             current !== null && current.sessionId === mapping.draftId ? { ...current, sessionId: mapping.sessionId } : current,
           )
@@ -81,7 +81,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           // draft materializes should reopen the real session, not a dead draft id.
           const stored = readLastSession()
           if (stored !== null && stored.sessionId === mapping.draftId) writeLastSession({ ...stored, sessionId: mapping.sessionId })
-          void queryClient.invalidateQueries({ queryKey: ['sessions'] })
+          // NO refetch here: at session_started the server has already dropped
+          // the draft but the SDK CLI has not flushed the session JSONL yet — a
+          // refetch would return a list with NEITHER row and the conversation
+          // would vanish from the sidebar until an unrelated invalidation.
+          // Re-key the cached row in place; the real refetch happens at turn
+          // end via statusStore.onTurnSettled (JSONL flushed by then).
+          queryClient.setQueriesData<SessionSummary[]>({ queryKey: ['sessions'] }, (list) =>
+            list?.map((s) => (s.id === mapping.draftId ? { ...s, id: mapping.sessionId, isDraft: false, messageCount: 1 } : s)),
+          )
         },
         // Live plan gauges: each rate_limit event replaces its window in the
         // query cache — the panel moves during the turn, no refetch round-trip.
@@ -99,6 +107,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   // Hub des pastilles de statut (spec 2026-08-02) : un socket receive-only
   // séparé du flux de chat, dédié au fan-out multi-session.
   const statusStore = useMemo(() => new SessionStatusStore(), [])
+  // Fin de tour = JSONL flushé côté SDK : refetch la liste (session fraîchement
+  // matérialisée visible, updatedAt/messageCount à jour pour le tri).
+  useEffect(() => {
+    statusStore.onTurnSettled = () => void queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    return () => {
+      statusStore.onTurnSettled = undefined
+    }
+  }, [statusStore, queryClient])
   const [autopilot, setAutopilot] = useState<AutopilotState | null>(null)
   useEffect(() => {
     // Dispatch par type : le hub transporte les transitions de session ET l'état autopilot (spec 2026-08-05).

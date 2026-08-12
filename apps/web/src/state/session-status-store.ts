@@ -17,6 +17,15 @@ export class SessionStatusStore {
   private snapshot: SessionStatusSnapshot = { statuses: this.statuses, waiting: this.waiting }
   private readonly listeners = new Set<() => void>()
 
+  /**
+   * Fin de tour (transition streaming → idle|error) : c'est le SEUL moment où
+   * le JSONL de session est garanti flushé côté SDK — App s'en sert pour
+   * refetcher la liste des sessions (session fraîchement matérialisée,
+   * updatedAt, messageCount). Jamais déclenché par le snapshot initial du hub
+   * (prev absent ≠ streaming).
+   */
+  onTurnSettled?: (sessionId: string) => void
+
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -40,6 +49,7 @@ export class SessionStatusStore {
     }
     this.waiting = waiting
     this.commit()
+    if (prev === 'streaming') this.onTurnSettled?.(sessionId)
   }
 
   setActive(sessionId: string | null): void {
