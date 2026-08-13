@@ -1,4 +1,4 @@
-import type { AlwaysRule, AutopilotState, ChatMessage, ClientMessage, Preferences, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, SlashCommandInfo, StatusHubEvent, VersionInfo, WidgetInstance } from '@atelier/shared'
+import type { AlwaysRule, AutopilotState, ChatMessage, ClientMessage, Preferences, ProjectFileList, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, SlashCommandInfo, StatusHubEvent, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
 import { fixtureAutopilot, fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
@@ -42,6 +42,8 @@ export type Backend = {
   patchPreferences: (patch: Partial<Preferences>) => Promise<Preferences>
   /** Slash commands du projet — alimente l'autocomplétion du composer. */
   listCommands: (projectId: string) => Promise<SlashCommandInfo[]>
+  /** Fichiers du projet — alimente l'autocomplétion @ du composer. */
+  listFiles: (projectId: string) => Promise<ProjectFileList>
   /** Règles « toujours autoriser » persistées — la section permissions des Réglages. */
   listRules: () => Promise<AlwaysRule[]>
   deleteRule: (id: string) => Promise<void>
@@ -85,6 +87,7 @@ const realBackend: Backend = {
   getPreferences: client.getPreferences,
   patchPreferences: client.patchPreferences,
   listCommands: client.listCommands,
+  listFiles: client.listFiles,
   listRules: client.listRules,
   deleteRule: client.deleteRule,
   deleteProject: client.deleteProject,
@@ -183,6 +186,8 @@ export function createFixtureBackend(): Backend {
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
     // Demo mode: aucune sonde SDK à disposition → pas d'autocomplétion.
     listCommands: async () => [],
+    // Mode démo : pas de projet réel sur disque → pas d'autocomplétion fichiers.
+    listFiles: async () => ({ files: [], dirs: [] }),
     listRules: async () => rules,
     deleteRule: async (id) => {
       rules = rules.filter((rule) => rule.id !== id)

@@ -10,6 +10,7 @@ import { settingsRoutes } from './routes/settings-routes'
 import type { SessionStreamRegistry } from './stream/session-stream'
 import { githubRoutes } from './github/github-routes'
 import { commandsRoutes } from './commands/commands-routes'
+import { filesRoutes } from './files/files-routes'
 import type { GithubService } from './github/github-service'
 import { autopilotRoutes } from './autopilot/autopilot-routes'
 import type { AutopilotRunner } from './autopilot/autopilot-runner'
@@ -41,6 +42,7 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
   api.route('/', settingsRoutes(data, sessions))
   api.route('/', githubRoutes(github, data))
   api.route('/', commandsRoutes(data, sdk))
+  api.route('/', filesRoutes(data))
   // Optionnel : les tests d'app existants n'ont pas besoin de construire un runner.
   if (autopilot !== undefined) api.route('/', autopilotRoutes(autopilot, data))
 

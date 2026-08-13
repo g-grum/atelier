@@ -31,6 +31,8 @@ export type Project = { id: string; path: string; color: string }
 export type ProjectGithubAccount = { account: string | null; repo: string | null }
 /** REST shape of GET/POST /api/projects. The persisted Project stays count-free — a derived count goes stale instantly, so the routes enrich through SessionsService.countSessions at response time; never persist it. */
 export type ProjectSummary = Project & { sessionCount: number }
+/** Listing des fichiers d'un projet — l'autocomplétion @ du composer (spec 2026-08-12). */
+export type ProjectFileList = { files: string[]; dirs: string[] }
 export type Theme = 'dark' | 'light'
 export const THEMES: readonly Theme[] = ['dark', 'light']
 
