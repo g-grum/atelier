@@ -52,4 +52,30 @@ describe('POST /projects/:id/uploads', () => {
     const res = await app.request('/projects/p1/uploads', { method: 'POST', body: new FormData() })
     expect(res.status).toBe(400)
   })
+
+  test('fichier vide (size 0) → 400', async () => {
+    const { app } = freshRoutes()
+    const form = new FormData()
+    form.append('file', new File([], 'x.png', { type: 'image/png' }))
+    const res = await app.request('/projects/p1/uploads', { method: 'POST', body: form })
+    expect(res.status).toBe(400)
+  })
+
+  test('anti-traversal : nom malicieux → uuid.png sous .atelier/uploads, rien hors du dossier', async () => {
+    const { app, projectPath } = freshRoutes()
+    const res = await upload(app, 'p1', new Uint8Array([1, 2, 3]), 'image/png', '../../evil.png')
+    expect(res.status).toBe(200)
+    const { path } = (await res.json()) as { path: string }
+    expect(path).toMatch(/^\.atelier\/uploads\/[0-9a-f-]+\.png$/)
+    expect(existsSync(join(projectPath, '..', 'evil.png'))).toBe(false)
+    expect(existsSync(join(projectPath, 'evil.png'))).toBe(false)
+  })
+
+  test('MIME avec charset → normalisé → 200', async () => {
+    const { app } = freshRoutes()
+    const res = await upload(app, 'p1', new Uint8Array([1, 2, 3]), 'image/png; codecs=avc1')
+    expect(res.status).toBe(200)
+    const { path } = (await res.json()) as { path: string }
+    expect(path).toMatch(/^\.atelier\/uploads\/[0-9a-f-]+\.png$/)
+  })
 })

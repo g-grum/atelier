@@ -18,11 +18,14 @@ export function uploadsRoutes(data: AppData): Hono {
     const project = data.get().projects.find((p) => p.id === c.req.param('id'))
     if (!project) return c.json({ error: 'Not found' }, 404)
 
-    const form = await c.req.formData()
+    let form: FormData
+    try { form = await c.req.formData() } catch { return c.json({ error: 'Requête invalide' }, 400) }
     const file = form.get('file')
     if (!(file instanceof File) || file.size === 0) return c.json({ error: 'Aucun fichier' }, 400)
 
-    const ext = extensionForMime(file.type)
+    // Un file.type du genre `image/png; codecs=...` casserait le lookup exact.
+    const mime = file.type.split(';')[0]!.trim()
+    const ext = extensionForMime(mime)
     if (ext === null) return c.json({ error: 'Type de fichier non supporté' }, 400)
     if (file.size > MAX_IMAGE_BYTES) return c.json({ error: 'Image trop volumineuse (max 10 Mo)' }, 400)
 
