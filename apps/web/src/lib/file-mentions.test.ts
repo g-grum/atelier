@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { completeMention, matchFiles, mentionPrefix, type FileEntry } from './file-mentions'
+import { completeMention, insertMention, matchFiles, mentionPrefix, type FileEntry } from './file-mentions'
 
 const f = (path: string): FileEntry => ({ path, dir: false })
 const d = (path: string): FileEntry => ({ path, dir: true })
@@ -52,5 +52,24 @@ describe('completeMention', () => {
   test('en fin de texte', () => {
     expect(completeMention('lis @ut', 7, f('src/lib/utils.ts')))
       .toEqual({ text: 'lis @src/lib/utils.ts ', caret: 22 })
+  })
+})
+
+describe('insertMention', () => {
+  test('début de texte : pas d’espace de tête, espace de fin', () => {
+    expect(insertMention('', 0, '.atelier/uploads/a.png'))
+      .toEqual({ text: '@.atelier/uploads/a.png ', caret: 24 })
+  })
+  test('après un blanc : pas d’espace de tête', () => {
+    expect(insertMention('voici ', 6, 'a.png'))
+      .toEqual({ text: 'voici @a.png ', caret: 13 })
+  })
+  test('après un mot non-blanc : espace de tête ajouté', () => {
+    expect(insertMention('voici', 5, 'a.png'))
+      .toEqual({ text: 'voici @a.png ', caret: 13 })
+  })
+  test('insertion au caret au milieu du texte', () => {
+    expect(insertMention('a b', 1, 'x.png'))
+      .toEqual({ text: 'a @x.png  b', caret: 9 })
   })
 })
