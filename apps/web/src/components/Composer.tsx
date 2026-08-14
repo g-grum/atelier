@@ -292,8 +292,8 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
           )}
         </button>
       </div>
-      {uploading && <p className="composer-upload-status">Envoi de l'image…</p>}
-      {uploadError !== null && <p className="composer-upload-error">{uploadError}</p>}
+      {uploading && <p className="composer-upload-status" aria-live="polite">Envoi de l'image…</p>}
+      {uploadError !== null && <p className="composer-upload-error" role="alert">{uploadError}</p>}
     </div>
   )
 }
