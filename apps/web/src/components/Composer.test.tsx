@@ -20,6 +20,7 @@ function renderComposer(overrides: Partial<ComposerProps> = {}) {
     onAbort: () => aborts.push(true),
     commands: [],
     files: [],
+    onUploadImage: async () => ({ path: '.atelier/uploads/x.png' }),
     ...overrides,
   }
   const view = render(<Composer {...props} />)
@@ -289,5 +290,54 @@ describe('mentions de fichiers (@)', () => {
     renderComposer({ files: FILES, commands: CMDS })
     type('/rev')
     expect(options()[0]?.textContent).toContain('/review')
+  })
+})
+
+/** Fabrique un File image jetable. */
+const imageFile = (name = 'shot.png') => new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' })
+const fileInput = () => document.querySelector('input[type="file"]') as HTMLInputElement
+
+describe('upload d’image', () => {
+  test('bouton parcourir : sélectionne un fichier → onUploadImage appelé, @path inséré', async () => {
+    const calls: File[] = []
+    renderComposer({ onUploadImage: async (f) => { calls.push(f); return { path: '.atelier/uploads/x.png' } } })
+    fireEvent.change(fileInput(), { target: { files: [imageFile()] } })
+    await screen.findByDisplayValue(/@\.atelier\/uploads\/x\.png/)
+    expect(calls).toHaveLength(1)
+  })
+
+  test('coller une image : onUploadImage appelé, @path inséré', async () => {
+    renderComposer()
+    fireEvent.paste(textarea(), {
+      clipboardData: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => imageFile() }], files: [imageFile()] },
+    })
+    await screen.findByDisplayValue(/@\.atelier\/uploads\/x\.png/)
+  })
+
+  test('glisser-déposer une image : onUploadImage appelé, @path inséré', async () => {
+    const calls: File[] = []
+    renderComposer({ onUploadImage: async (f) => { calls.push(f); return { path: '.atelier/uploads/x.png' } } })
+    fireEvent.drop(textarea(), { dataTransfer: { files: [imageFile()] } })
+    await screen.findByDisplayValue(/@\.atelier\/uploads\/x\.png/)
+    expect(calls).toHaveLength(1)
+  })
+
+  test('échec d’upload : message inline, brouillon conservé', async () => {
+    renderComposer({ onUploadImage: async () => { throw new Error('boom') } })
+    fireEvent.change(textarea(), { target: { value: 'garde-moi', selectionStart: 9 } })
+    fireEvent.change(fileInput(), { target: { files: [imageFile()] } })
+    expect(await screen.findByText(/image/i)).toBeTruthy()
+    expect((textarea() as HTMLTextAreaElement).value).toBe('garde-moi')
+  })
+
+  test('upload concurrent bloqué : un second déclenchement pendant l’envoi est ignoré', async () => {
+    let resolve!: (v: { path: string }) => void
+    const calls: File[] = []
+    renderComposer({ onUploadImage: (f) => { calls.push(f); return new Promise((r) => { resolve = r }) } })
+    fireEvent.change(fileInput(), { target: { files: [imageFile()] } })
+    fireEvent.change(fileInput(), { target: { files: [imageFile('second.png')] } })
+    expect(calls).toHaveLength(1)
+    resolve({ path: '.atelier/uploads/x.png' })
+    await screen.findByDisplayValue(/@\.atelier\/uploads\/x\.png/)
   })
 })

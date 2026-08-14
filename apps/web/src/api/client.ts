@@ -181,6 +181,24 @@ export function listFiles(projectId: string): Promise<ProjectFileList> {
   return request<ProjectFileList>('GET', `/projects/${encodeURIComponent(projectId)}/files`)
 }
 
+/** Upload d'une image dans le projet (multipart) — répond { path } relatif. */
+export async function uploadImage(projectId: string, file: File): Promise<{ path: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  // Pas de Content-Type manuel : le navigateur pose le boundary multipart.
+  const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/uploads`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  if (!response.ok) {
+    let detail: string | null = null
+    try { detail = ((await response.json()) as { error?: string }).error ?? null } catch { /* non-JSON */ }
+    throw new ApiError(response.status, detail ?? `POST /uploads → ${response.status}`)
+  }
+  return (await response.json()) as { path: string }
+}
+
 // ── Autopilot (spec 2026-08-05) ──
 
 export function getAutopilot(): Promise<AutopilotState> {

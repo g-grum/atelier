@@ -66,3 +66,16 @@ export function completeMention(text: string, caret: number, entry: FileEntry): 
     caret: at + inserted.length,
   }
 }
+
+/**
+ * Insère une mention `@path` au caret pour un upload (aucun `@` préexistant,
+ * contrairement à completeMention). Préfixe un espace si le caractère avant le
+ * caret n'est ni un blanc ni le début — sinon `@` collé à un mot violerait la
+ * règle « `@` précédé d'un blanc » de mentionPrefix. Suffixe : un espace.
+ */
+export function insertMention(text: string, caret: number, path: string): { text: string; caret: number } {
+  const before = text.slice(0, caret)
+  const needsSpace = before.length > 0 && !/\s$/.test(before)
+  const inserted = `${needsSpace ? ' ' : ''}@${path} `
+  return { text: before + inserted + text.slice(caret), caret: caret + inserted.length }
+}

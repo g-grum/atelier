@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SlashCommandInfo } from '@atelier/shared'
-import { completeMention, matchFiles, mentionPrefix, type FileEntry } from '../lib/file-mentions'
+import { completeMention, insertMention, matchFiles, mentionPrefix, type FileEntry } from '../lib/file-mentions'
 import { commandPrefix, completeCommand, matchCommands } from '../lib/slash-commands'
 import type { StreamState } from '../state/stream-reducer'
 
@@ -17,15 +17,23 @@ export type ComposerProps = {
   commands: SlashCommandInfo[]
   /** Fichiers/dossiers du projet pour l'autocomplétion @. Vide ⇒ pas de popover. */
   files: FileEntry[]
+  /** Upload d'une image (coller/glisser/parcourir) — répond le chemin relatif inséré au caret. */
+  onUploadImage: (file: File) => Promise<{ path: string }>
 }
 
 /** Growth cap (~8 lines) — beyond it the textarea scrolls internally. */
 const MAX_TEXTAREA_HEIGHT_PX = 200
 
-export function Composer({ disabled, status, onSend, onAbort, commands, files }: ComposerProps) {
+export function Composer({ disabled, status, onSend, onAbort, commands, files, onUploadImage }: ComposerProps) {
   const [text, setText] = useState('')
   const streaming = status === 'streaming'
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Upload d'image : un seul en vol à la fois ; l'erreur s'affiche en ligne et
+  // le brouillon est conservé (échec non destructif).
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Position du curseur : le déclenchement du popover en dépend (revenir dans
   // le premier mot rouvre l'autocomplétion, en sortir la ferme).
@@ -48,6 +56,25 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files }:
   useEffect(() => {
     activeRef.current?.scrollIntoView?.({ block: 'nearest' })
   }, [active])
+
+  const uploadFile = async (file: File) => {
+    if (uploading) return
+    setUploadError(null)
+    setUploading(true)
+    try {
+      const { path } = await onUploadImage(file)
+      // Insère au caret courant (l'état `caret` est géré par le composer).
+      const next = insertMention(text, caret, path)
+      setText(next.text)
+      setCaret(next.caret)
+      setDismissed(true)
+      textareaRef.current?.focus()
+    } catch {
+      setUploadError("Échec de l'envoi de l'image.")
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const complete = (name: string) => {
     const next = completeCommand(text, name)
@@ -161,6 +188,25 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files }:
             setCaret(event.target.selectionStart ?? 0)
             setActive(0)
             setDismissed(false)
+            setUploadError(null)
+          }}
+          onPaste={(event) => {
+            const item = Array.from(event.clipboardData?.items ?? []).find(
+              (i) => i.kind === 'file' && i.type.startsWith('image/'),
+            )
+            const file = item?.getAsFile()
+            if (file) {
+              event.preventDefault()
+              void uploadFile(file)
+            }
+          }}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            const file = Array.from(event.dataTransfer?.files ?? []).find((f) => f.type.startsWith('image/'))
+            if (file) {
+              event.preventDefault()
+              void uploadFile(file)
+            }
           }}
           onKeyDown={(event) => {
             // Deux échappatoires INCONDITIONNELLES, même popover ouvert :
@@ -204,6 +250,30 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files }:
         <kbd>⌘↵</kbd>
         <button
           type="button"
+          className="attach"
+          disabled={disabled || uploading}
+          aria-label="Ajouter une image"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="m21 15-5-5L5 21" />
+          </svg>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void uploadFile(file)
+            event.target.value = ''
+          }}
+        />
+        <button
+          type="button"
           className={`action${streaming ? ' stop' : ''}`}
           disabled={disabled}
           aria-label={streaming ? 'Arrêter la génération' : 'Envoyer le message'}
@@ -222,6 +292,8 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files }:
           )}
         </button>
       </div>
+      {uploading && <p className="composer-upload-status" aria-live="polite">Envoi de l'image…</p>}
+      {uploadError !== null && <p className="composer-upload-error" role="alert">{uploadError}</p>}
     </div>
   )
 }
