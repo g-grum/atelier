@@ -103,3 +103,24 @@ describe('parseStatusHubEvent', () => {
     expect(parseStatusHubEvent('pas du json')).toBeNull()
   })
 })
+
+describe('parseStatusHubEvent — artifacts & dev servers', () => {
+  test('accepts artifacts_status with a full payload', () => {
+    const artifacts = [{ path: 'shots/home.png', addedAt: '2026-08-14T10:00:00Z' }]
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'artifacts_status', sessionId: 's1', projectId: 'p1', artifacts })))
+      .toEqual({ type: 'artifacts_status', sessionId: 's1', projectId: 'p1', artifacts })
+  })
+
+  test('accepts dev_servers_status with a full payload', () => {
+    const servers = [{ port: 4518, pid: 123, label: 'vite', command: 'bun run dev', killable: true }]
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'dev_servers_status', servers })))
+      .toEqual({ type: 'dev_servers_status', servers })
+  })
+
+  test('rejects malformed artifacts/dev-servers events', () => {
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'artifacts_status', sessionId: 's1' }))).toBeNull()
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'artifacts_status', projectId: 'p1', artifacts: [] }))).toBeNull()
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'dev_servers_status' }))).toBeNull()
+    expect(parseStatusHubEvent(JSON.stringify({ type: 'dev_servers_status', servers: 'nope' }))).toBeNull()
+  })
+})

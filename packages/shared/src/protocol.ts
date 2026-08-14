@@ -210,22 +210,40 @@ export type AutopilotState = {
 }
 /** Diffusé sur le hub /api/sessions-status à chaque mutation d'état autopilot. */
 export type AutopilotStatusEvent = { type: 'autopilot_status'; autopilot: AutopilotState }
-export type StatusHubEvent = SessionStatusEvent | AutopilotStatusEvent
+// ── Session artifacts & dev servers (2026-08-14) ──
+/** Image produced by a tool call during a session — `path` is relative to the project root. */
+export type SessionArtifact = { path: string; addedAt: string }
+/** Broadcast on the status hub whenever a session's artifact list changes. Images are served by GET /api/projects/:id/artifacts?path=<rel>. */
+export type ArtifactsStatusEvent = { type: 'artifacts_status'; sessionId: string; projectId: string; artifacts: SessionArtifact[] }
+/** A TCP server listening locally while a session runs. `killable` = descendant of an Atelier session process (safe to stop). */
+export type DevServer = { port: number; pid: number; label: string; command: string; killable: boolean }
+/** Broadcast on the status hub on every dev-server scan diff. */
+export type DevServersStatusEvent = { type: 'dev_servers_status'; servers: DevServer[] }
+
+export type StatusHubEvent = SessionStatusEvent | AutopilotStatusEvent | ArtifactsStatusEvent | DevServersStatusEvent
 
 export function parseStatusHubEvent(raw: string): StatusHubEvent | null {
   const session = parseSessionStatus(raw)
   if (session !== null) return session
   try {
     const v = JSON.parse(raw) as Record<string, unknown>
-    if (v?.type !== 'autopilot_status' || typeof v.autopilot !== 'object' || v.autopilot === null) return null
-    return { type: 'autopilot_status', autopilot: v.autopilot as AutopilotState }
+    if (v?.type === 'autopilot_status' && typeof v.autopilot === 'object' && v.autopilot !== null) {
+      return { type: 'autopilot_status', autopilot: v.autopilot as AutopilotState }
+    }
+    if (v?.type === 'artifacts_status' && typeof v.sessionId === 'string' && typeof v.projectId === 'string' && Array.isArray(v.artifacts)) {
+      return { type: 'artifacts_status', sessionId: v.sessionId, projectId: v.projectId, artifacts: v.artifacts as SessionArtifact[] }
+    }
+    if (v?.type === 'dev_servers_status' && Array.isArray(v.servers)) {
+      return { type: 'dev_servers_status', servers: v.servers as DevServer[] }
+    }
+    return null
   } catch {
     return null
   }
 }
 
 // ── Widget dashboard (spec 2026-07-21) ──
-export type WidgetType = 'github-prs' | 'rate-limits' | 'modified-files' | 'autopilot'
+export type WidgetType = 'github-prs' | 'rate-limits' | 'modified-files' | 'autopilot' | 'session-visuals' | 'dev-servers'
 export type WidgetHeight = 'S' | 'M' | 'L'
 /** Union par type de widget — consommateurs : narrowing STRUCTUREL (`'repo' in config`), le `type` du widget ne narrowe pas `config`. */
 export type GithubPrsConfig = { repo: string; limit?: number }
@@ -243,7 +261,7 @@ export type WidgetInstance = {
 }
 
 /** Types that may appear at most once in a layout. */
-export const SINGLETON_WIDGET_TYPES: readonly WidgetType[] = ['rate-limits', 'modified-files', 'autopilot']
+export const SINGLETON_WIDGET_TYPES: readonly WidgetType[] = ['rate-limits', 'modified-files', 'autopilot', 'session-visuals', 'dev-servers']
 
 /** owner/repo — shared by PUT /api/widgets, GET /api/github/prs and the config dialog. Anchored: no slashes inside segments, no query strings. */
 export const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/
