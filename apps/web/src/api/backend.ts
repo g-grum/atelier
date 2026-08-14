@@ -44,6 +44,8 @@ export type Backend = {
   listCommands: (projectId: string) => Promise<SlashCommandInfo[]>
   /** Fichiers du projet — alimente l'autocomplétion @ du composer. */
   listFiles: (projectId: string) => Promise<ProjectFileList>
+  /** Upload d'une image dans le projet — l'agent la lit via Read. */
+  uploadImage: (projectId: string, file: File) => Promise<{ path: string }>
   /** Règles « toujours autoriser » persistées — la section permissions des Réglages. */
   listRules: () => Promise<AlwaysRule[]>
   deleteRule: (id: string) => Promise<void>
@@ -88,6 +90,7 @@ const realBackend: Backend = {
   patchPreferences: client.patchPreferences,
   listCommands: client.listCommands,
   listFiles: client.listFiles,
+  uploadImage: client.uploadImage,
   listRules: client.listRules,
   deleteRule: client.deleteRule,
   deleteProject: client.deleteProject,
@@ -188,6 +191,8 @@ export function createFixtureBackend(): Backend {
     listCommands: async () => [],
     // Mode démo : pas de projet réel sur disque → pas d'autocomplétion fichiers.
     listFiles: async () => ({ files: [], dirs: [] }),
+    // Mode démo : pas d'écriture disque réelle.
+    uploadImage: async () => ({ path: '.atelier/uploads/demo.png' }),
     listRules: async () => rules,
     deleteRule: async (id) => {
       rules = rules.filter((rule) => rule.id !== id)

@@ -543,6 +543,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             // même producteur (le SDK), celle du WS est juste plus fraîche.
             commands={stream.commands ?? commandsQuery.data ?? []}
             files={fileEntries}
+            onUploadImage={(file) => backend.uploadImage(commandsProjectId ?? '', file)}
             onSend={(text) => controller.sendMessage(text)}
             // Explicit abort — the only ClientMessage that stops a turn.
             onAbort={() => controller.abort()}

@@ -61,6 +61,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     patchPreferences: async (patch) => ({ ...DEFAULT_PREFERENCES, ...patch }),
     listCommands: async () => [],
     listFiles: async () => ({ files: [], dirs: [] }),
+    uploadImage: async () => ({ path: '.atelier/uploads/demo.png' }),
     listRules: async () => [],
     deleteRule: async () => {},
     deleteProject: async () => {},
