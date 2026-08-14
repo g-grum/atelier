@@ -22,11 +22,11 @@ export function MessageItem({ role, text, queued = false, children }: MessageIte
   return (
     <div className={`msg ${role}${queued ? ' queued' : ''}`}>
       <div className="avatar" aria-hidden="true">
-        {role === 'user' ? 'G' : '◆'}
+        {role === 'user' ? 'U' : '◆'}
       </div>
       <div className="col">
         <div className="who">
-          <b>{role === 'user' ? 'Germain' : 'Claude'}</b>
+          <b>{role === 'user' ? 'You' : 'Claude'}</b>
           {queued && <span className="queued-tag">En attente</span>}
         </div>
         {text !== '' &&
