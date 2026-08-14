@@ -10,6 +10,11 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/g-grum/atelier/actions/workflows/ci.yml"><img src="https://github.com/g-grum/atelier/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license" /></a>
+</p>
+
+<p align="center">
   <img src="assets/readme/demo.gif" width="900" alt="Atelier demo — opening a session, sending a message, streaming reply" />
 </p>
 
