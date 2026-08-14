@@ -103,7 +103,7 @@ describe('ChatView permissions', () => {
         onQuestionAnswer={() => {}}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Autoriser une fois' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }))
     expect(calls).toEqual([['req-1', 'allow']])
   })
 })
@@ -157,7 +157,7 @@ describe('ChatView questions (QCM)', () => {
 })
 
 describe('ChatView queued messages', () => {
-  test('a queued user message is marked « En attente » until it actually goes out', () => {
+  test('a queued user message is marked Queued until it actually goes out', () => {
     const { rerender } = render(
       <ChatView
         items={[{ kind: 'user', text: 'à envoyer plus tard', queued: true }]}
@@ -167,7 +167,7 @@ describe('ChatView queued messages', () => {
         onQuestionAnswer={() => {}}
       />,
     )
-    expect(screen.getByText('En attente')).toBeTruthy()
+    expect(screen.getByText('Queued')).toBeTruthy()
 
     rerender(
       <ChatView
@@ -178,6 +178,6 @@ describe('ChatView queued messages', () => {
         onQuestionAnswer={() => {}}
       />,
     )
-    expect(screen.queryByText('En attente')).toBeNull()
+    expect(screen.queryByText('Queued')).toBeNull()
   })
 })

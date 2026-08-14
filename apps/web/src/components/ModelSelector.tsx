@@ -43,7 +43,7 @@ export function ModelSelector({ session, api = defaultApi, toastFailure = defaul
   const changeModel = useMutation({
     mutationFn: ({ sessionId, model }: { sessionId: string; model: string }) => api.patchSession(sessionId, { model }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
-    onError: (error) => toastFailure(`Impossible de changer le modèle : ${errorMessage(error)}`),
+    onError: (error) => toastFailure(`Could not change the model: ${errorMessage(error)}`),
   })
 
   if (session === null) return null
@@ -51,7 +51,7 @@ export function ModelSelector({ session, api = defaultApi, toastFailure = defaul
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="model-chip" aria-label={`Changer de modèle — actuel : ${modelLabel(session.model)}`}>
+        <button type="button" className="model-chip" aria-label={`Change model — current: ${modelLabel(session.model)}`}>
           <span className="md" aria-hidden="true" /> {modelLabel(session.model)} <span aria-hidden="true">▾</span>
         </button>
       </DropdownMenuTrigger>
@@ -75,7 +75,7 @@ export function ModelSelector({ session, api = defaultApi, toastFailure = defaul
           )}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
-        <p className="m-0 px-2 py-1.5 text-[11px] text-faint">S’applique au prochain tour.</p>
+        <p className="m-0 px-2 py-1.5 text-[11px] text-faint">Applies from the next turn.</p>
       </DropdownMenuContent>
     </DropdownMenu>
   )

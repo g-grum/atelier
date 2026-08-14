@@ -42,25 +42,25 @@ describe('DeleteSessionDialog', () => {
   test('shows the definitive warning with the session name', () => {
     renderDialog()
     const dialog = screen.getByRole('dialog')
-    expect(dialog.textContent).toContain('Supprimer la conversation ?')
-    expect(dialog.textContent).toContain('« Refresh token expiré » sera définitivement supprimée.')
+    expect(dialog.textContent).toContain('Delete this conversation?')
+    expect(dialog.textContent).toContain('“Refresh token expiré” will be permanently deleted.')
   })
 
-  test('a null name falls back to « Nouvelle session »', () => {
+  test('a null name falls back to “New session”', () => {
     renderDialog({ ...session, name: null })
-    expect(screen.getByRole('dialog').textContent).toContain('« Nouvelle session » sera définitivement supprimée.')
+    expect(screen.getByRole('dialog').textContent).toContain('“New session” will be permanently deleted.')
   })
 
-  test('Supprimer confirms with the session', () => {
+  test('Delete confirms with the session', () => {
     const calls = renderDialog()
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(calls.confirmed).toEqual([session])
     expect(calls.cancelled).toBe(0)
   })
 
-  test('Annuler cancels without confirming', () => {
+  test('Cancel cancels without confirming', () => {
     const calls = renderDialog()
-    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(calls.cancelled).toBe(1)
     expect(calls.confirmed).toEqual([])
   })

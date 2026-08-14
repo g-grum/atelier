@@ -27,7 +27,7 @@ export function MessageItem({ role, text, queued = false, children }: MessageIte
       <div className="col">
         <div className="who">
           <b>{role === 'user' ? 'You' : 'Claude'}</b>
-          {queued && <span className="queued-tag">En attente</span>}
+          {queued && <span className="queued-tag">Queued</span>}
         </div>
         {text !== '' &&
           (role === 'assistant' ? (
@@ -49,7 +49,7 @@ export function MessageItem({ role, text, queued = false, children }: MessageIte
 /** Three pulsing dots — shown while Claude streams but no text has arrived yet. */
 export function TypingIndicator() {
   return (
-    <div className="typing" aria-label="Claude écrit">
+    <div className="typing" aria-label="Claude is typing">
       <i />
       <i />
       <i />

@@ -21,7 +21,7 @@ describe('Topbar', () => {
     render(
       withClient(<Topbar project={null} session={null} status="idle" githubAccount={null} onRename={() => {}} patchPreferences={async () => ({})} />),
     )
-    const logo = screen.getByAltText('Logo Atelier')
+    const logo = screen.getByAltText('Atelier logo')
     expect(logo.getAttribute('src')).toBe('/favicon.svg')
   })
 

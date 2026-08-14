@@ -70,7 +70,7 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
       setDismissed(true)
       textareaRef.current?.focus()
     } catch {
-      setUploadError("Échec de l'envoi de l'image.")
+      setUploadError("Image upload failed.")
     } finally {
       setUploading(false)
     }
@@ -129,7 +129,7 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
     <div className="composer">
       {cmdMatches.length > 0 && (
         // Popover écrit à la main : components/ui/ n'a aucune primitive listbox.
-        <ul className="command-popover" role="listbox" aria-label="Commandes disponibles">
+        <ul className="command-popover" role="listbox" aria-label="Available commands">
           {cmdMatches.map((command, index) => (
             <li
               key={command.name}
@@ -156,7 +156,7 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
         </ul>
       )}
       {open && cmdMatches.length === 0 && (
-        <ul className="command-popover" role="listbox" aria-label="Fichiers du projet">
+        <ul className="command-popover" role="listbox" aria-label="Project files">
           {fileMatches.map((entry, index) => (
             <li
               key={entry.path}
@@ -181,8 +181,8 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
           rows={1}
           value={text}
           disabled={disabled}
-          placeholder="Répondre à Claude…"
-          aria-label="Répondre à Claude"
+          placeholder="Reply to Claude…"
+          aria-label="Reply to Claude"
           onChange={(event) => {
             setText(event.target.value)
             setCaret(event.target.selectionStart ?? 0)
@@ -252,7 +252,7 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
           type="button"
           className="attach"
           disabled={disabled || uploading}
-          aria-label="Ajouter une image"
+          aria-label="Add an image"
           onClick={() => fileInputRef.current?.click()}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -276,7 +276,7 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
           type="button"
           className={`action${streaming ? ' stop' : ''}`}
           disabled={disabled}
-          aria-label={streaming ? 'Arrêter la génération' : 'Envoyer le message'}
+          aria-label={streaming ? 'Stop generation' : 'Send message'}
           onClick={streaming ? onAbort : trySend}
         >
           {streaming ? (
@@ -292,7 +292,7 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
           )}
         </button>
       </div>
-      {uploading && <p className="composer-upload-status" aria-live="polite">Envoi de l'image…</p>}
+      {uploading && <p className="composer-upload-status" aria-live="polite">Uploading image…</p>}
       {uploadError !== null && <p className="composer-upload-error" role="alert">{uploadError}</p>}
     </div>
   )

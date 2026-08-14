@@ -25,7 +25,7 @@ function renderPrompt(overrides: Partial<PermissionChatItem> = {}) {
   return decisions
 }
 
-const alwaysButton = () => screen.getByRole('button', { name: /toujours/i })
+const alwaysButton = () => screen.getByRole('button', { name: /always/i })
 
 describe('PermissionPrompt', () => {
   test('renders the command to run inside a <code> element', () => {
@@ -38,7 +38,7 @@ describe('PermissionPrompt', () => {
   // and non-modal); the announcement duty falls to a live region inside it.
   test('the card is a labelled group and an unresolved request announces the command assertively', () => {
     renderPrompt()
-    expect(screen.getByRole('group', { name: 'Demande de permission' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'Permission request' })).toBeTruthy()
     // role="alert" is an assertive live region: inserting the card mid-turn is
     // announced — without it a screen-reader user hears the turn silently hang.
     expect(screen.getByRole('alert').textContent).toContain('git push --force-with-lease origin main')
@@ -49,38 +49,38 @@ describe('PermissionPrompt', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  test('a resolved card states the decision taken, in French', () => {
+  test('a resolved card states the decision taken', () => {
     renderPrompt({ resolved: 'deny' })
-    expect(screen.getByText('Refusé')).toBeTruthy()
+    expect(screen.getByText('Denied')).toBeTruthy()
     cleanup()
     renderPrompt({ resolved: 'allow' })
-    expect(screen.getByText('Autorisé')).toBeTruthy()
+    expect(screen.getByText('Allowed')).toBeTruthy()
     cleanup()
     renderPrompt({ resolved: 'always' })
-    expect(screen.getByText('Toujours autorisé')).toBeTruthy()
+    expect(screen.getByText('Always allowed')).toBeTruthy()
   })
 
   test('no outcome line while the request is pending', () => {
     renderPrompt()
-    expect(screen.queryByText(/^(Autorisé|Refusé|Toujours autorisé)$/)).toBeNull()
+    expect(screen.queryByText(/^(Allowed|Denied|Always allowed)$/)).toBeNull()
   })
 
   test('deciding parks focus on the card — never dropped to <body> when the button disables', () => {
     renderPrompt()
-    const button = screen.getByRole('button', { name: 'Autoriser une fois' })
+    const button = screen.getByRole('button', { name: 'Allow once' })
     button.focus()
     fireEvent.click(button)
-    expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Demande de permission' }))
+    expect(document.activeElement).toBe(screen.getByRole('group', { name: 'Permission request' }))
   })
 
   // The spec's safety display: the user must see exactly what "Always" will
-  // allow BEFORE clicking — never a bare "Toujours" that silently allows more.
-  test('the Toujours button shows the Bash command prefix the rule will allow', () => {
+  // allow BEFORE clicking — never a bare "Always" that silently allows more.
+  test('the Always button shows the Bash command prefix the rule will allow', () => {
     renderPrompt()
     expect(alwaysButton().textContent).toContain('git push')
   })
 
-  test('the Toujours button shows the path glob for file-tool rules', () => {
+  test('the Always button shows the path glob for file-tool rules', () => {
     renderPrompt({
       toolName: 'Edit',
       rendered: 'Edit src/auth/refresh.ts',
@@ -89,7 +89,7 @@ describe('PermissionPrompt', () => {
     expect(alwaysButton().textContent).toContain('src/auth/**')
   })
 
-  test('the Toujours button falls back to the tool name when the matcher is null', () => {
+  test('the Always button falls back to the tool name when the matcher is null', () => {
     renderPrompt({
       toolName: 'Read',
       rendered: 'Read /etc/hosts',
@@ -98,19 +98,19 @@ describe('PermissionPrompt', () => {
     expect(alwaysButton().textContent).toContain('Read')
   })
 
-  test('no Toujours button when no safe rule can be proposed (proposedRule null)', () => {
+  test('no Always button when no safe rule can be proposed (proposedRule null)', () => {
     renderPrompt({ proposedRule: null })
-    expect(screen.queryByRole('button', { name: /toujours/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /always/i })).toBeNull()
     // The one-shot decisions stay available.
-    expect(screen.getByRole('button', { name: 'Refuser' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Autoriser une fois' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Allow once' })).toBeTruthy()
   })
 
   test('each button reports its decision exactly once per click', () => {
     const decisions = renderPrompt()
-    fireEvent.click(screen.getByRole('button', { name: 'Refuser' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }))
     expect(decisions).toEqual(['deny'])
-    fireEvent.click(screen.getByRole('button', { name: 'Autoriser une fois' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Allow once' }))
     expect(decisions).toEqual(['deny', 'allow'])
     fireEvent.click(alwaysButton())
     expect(decisions).toEqual(['deny', 'allow', 'always'])
@@ -123,7 +123,7 @@ describe('PermissionPrompt', () => {
     for (const button of buttons) {
       expect((button as HTMLButtonElement).disabled).toBe(true)
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Refuser' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }))
     expect(decisions).toEqual([])
   })
 })

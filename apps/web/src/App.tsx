@@ -168,7 +168,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     const latest = versionQuery.data
     if (latest === undefined || latest.version === currentVersion.version || notifiedVersion.current === latest.version) return
     notifiedVersion.current = latest.version
-    toast('Une nouvelle version est disponible', {
+    toast('A new version is available', {
       duration: Number.POSITIVE_INFINITY,
       closeButton: true,
       description: (
@@ -176,7 +176,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           {latest.notes.map((note) => (
             <div key={note}>• {note}</div>
           ))}
-          <div>Redémarre Atelier pour l’appliquer.</div>
+          <div>Restart Atelier to apply it.</div>
         </>
       ),
     })
@@ -321,7 +321,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
       void queryClient.invalidateQueries({ queryKey: ['sessions'] })
       selectSession(draft)
     },
-    onError: (error) => setNotice(`Impossible de créer la session : ${errorMessage(error)}`),
+    onError: (error) => setNotice(`Could not create the session: ${errorMessage(error)}`),
   })
 
   const deleteSession = useMutation({
@@ -339,13 +339,13 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
         clearLastSession()
       }
     },
-    onError: (error) => setNotice(`Impossible de supprimer la session : ${errorMessage(error)}`),
+    onError: (error) => setNotice(`Could not delete the session: ${errorMessage(error)}`),
   })
 
   const renameSession = useMutation({
     mutationFn: ({ sessionId, name }: { sessionId: string; name: string }) => backend.patchSession(sessionId, { name }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
-    onError: (error) => setNotice(`Échec du renommage : ${errorMessage(error)}`),
+    onError: (error) => setNotice(`Rename failed: ${errorMessage(error)}`),
   })
 
   const setPermissionMode = useMutation({
@@ -353,7 +353,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
       backend.patchSession(sessionId, { permissionMode: mode }),
     // The gate unlocks when the refetched session carries the recorded choice.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
-    onError: (error) => setNotice(`Impossible d’enregistrer le choix de permissions : ${errorMessage(error)}`),
+    onError: (error) => setNotice(`Could not save the permissions choice: ${errorMessage(error)}`),
   })
 
   // « Se souvenir » du gate — PATCH préférences indépendant du PATCH session :
@@ -361,7 +361,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   const rememberPermissionDefault = useMutation({
     mutationFn: (mode: SessionPermissionMode) => backend.patchPreferences({ defaultPermissionMode: mode }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['preferences'] }),
-    onError: (error) => setNotice(`Impossible d’enregistrer le défaut de permissions : ${errorMessage(error)}`),
+    onError: (error) => setNotice(`Could not save the permissions default: ${errorMessage(error)}`),
   })
 
   // Dashboard layout — fallback to the shared default so a fetch failure
@@ -385,7 +385,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     },
     onError: (error, _next, context) => {
       queryClient.setQueryData(['widgets'], context?.previous)
-      setNotice(`Impossible d’enregistrer le layout : ${errorMessage(error)}`)
+      setNotice(`Could not save the layout: ${errorMessage(error)}`)
     },
     onSuccess: (stored) => queryClient.setQueryData(['widgets'], stored),
   })
@@ -487,15 +487,15 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             <div className="banner" role="alert">
               <span className="banner-text">{notice}</span>
               <button type="button" className="banner-btn" onClick={() => setNotice(null)}>
-                Fermer
+                Close
               </button>
             </div>
           )}
           {openFailure !== null && (
             <div className="banner" role="alert">
-              <span className="banner-text">Impossible de charger la session : {openFailure.message}</span>
+              <span className="banner-text">Could not load the session: {openFailure.message}</span>
               <button type="button" className="banner-btn" onClick={() => openSession(openFailure.sessionId, openFailure.projectId)}>
-                Réessayer
+                Retry
               </button>
             </div>
           )}
@@ -512,9 +512,9 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
               // must reach the user, or the click silently does nothing.
               backend.openInIde({ file, line }).then(
                 (result) => {
-                  if (!result.ok) setNotice(`Impossible d’ouvrir dans l’IDE : ${result.reason}`)
+                  if (!result.ok) setNotice(`Could not open in the IDE: ${result.reason}`)
                 },
-                (error: unknown) => setNotice(`Impossible d’ouvrir dans l’IDE : ${errorMessage(error)}`),
+                (error: unknown) => setNotice(`Could not open in the IDE: ${errorMessage(error)}`),
               )
             }}
           />
@@ -531,7 +531,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             <div
               className="perm-bypass-chip"
               role="status"
-              title="Défini pour cette session — le défaut se gère dans les réglages"
+              title="Set for this session — the default is managed in settings"
             >
               Skip permissions
             </div>
@@ -549,7 +549,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             onAbort={() => controller.abort()}
           />
         </main>
-        <aside className="dash" aria-label="Tableau de bord">
+        <aside className="dash" aria-label="Dashboard">
           <DashboardGrid widgets={widgets} onSave={(next) => saveWidgets.mutate(next)} renderWidget={renderWidget} onConfigure={setConfiguring} />
         </aside>
       </div>

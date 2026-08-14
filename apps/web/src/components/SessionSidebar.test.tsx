@@ -79,7 +79,7 @@ describe('SessionSidebar sessions', () => {
     // Real session with history, not streaming → outlined "done" dot.
     expect(dotState('Refresh token expiré')).toBe('done')
     // Draft (no messages yet) → faint filled "idle" dot; null name gets the French fallback.
-    expect(dotState('Nouvelle session')).toBe('idle')
+    expect(dotState('New session')).toBe('idle')
 
     cleanup()
     renderSidebar({ streamingSessionId: 's1' })
@@ -112,8 +112,8 @@ describe('SessionSidebar sessions', () => {
 
   test('every row shows a delete button — draft vs conversation label', () => {
     const { calls } = renderSidebar()
-    const draftDelete = within(rowOf('Nouvelle session')).getByRole('button', { name: 'Supprimer le brouillon' })
-    const realDelete = within(rowOf('Refresh token expiré')).getByRole('button', { name: 'Supprimer la conversation' })
+    const draftDelete = within(rowOf('New session')).getByRole('button', { name: 'Delete the draft' })
+    const realDelete = within(rowOf('Refresh token expiré')).getByRole('button', { name: 'Delete the conversation' })
 
     // Deleting must not also select the row.
     fireEvent.click(draftDelete)
@@ -125,8 +125,8 @@ describe('SessionSidebar sessions', () => {
 
   test('select and draft-delete are sibling native buttons — no interactive ancestor', () => {
     renderSidebar()
-    const draftRow = rowOf('Nouvelle session')
-    const deleteButton = within(draftRow).getByRole('button', { name: /supprimer le brouillon/i })
+    const draftRow = rowOf('New session')
+    const deleteButton = within(draftRow).getByRole('button', { name: /delete the draft/i })
     // Conforming HTML: ARIA `button` has presentational children, so nesting
     // the delete control inside a role="button" row would flatten it away from
     // assistive tech. It must be a real <button> with no interactive ancestor.
@@ -134,7 +134,7 @@ describe('SessionSidebar sessions', () => {
     expect(deleteButton.parentElement?.closest('button, [role="button"], [tabindex]')).toBeNull()
     // The select affordance is its own native sibling button, so both are
     // independent tab stops (the delete becomes keyboard-reachable at all).
-    const selectButton = within(draftRow).getByRole('button', { name: /nouvelle session/i })
+    const selectButton = within(draftRow).getByRole('button', { name: /new session/i })
     expect(selectButton.tagName).toBe('BUTTON')
     expect(selectButton === deleteButton).toBe(false)
     expect(selectButton.parentElement?.closest('button, [role="button"], [tabindex]')).toBeNull()
@@ -158,38 +158,38 @@ describe('SessionSidebar projects', () => {
     expect(projectRowOf('atelier').querySelector('.count')?.textContent).toBe('2')
   })
 
-  test('« + Projet » toggles the register form and submitting registers the typed path', () => {
+  test('“+ Project” toggles the register form and submitting registers the typed path', () => {
     const { calls } = renderSidebar({ projects: [project, otherProject] })
 
     // Discreet permanent affordance: the form stays hidden until asked for.
-    const toggle = screen.getByRole('button', { name: '+ Projet' })
-    expect(screen.queryByPlaceholderText('/chemin/absolu/du/projet')).toBeNull()
+    const toggle = screen.getByRole('button', { name: '+ Project' })
+    expect(screen.queryByPlaceholderText('/absolute/path/to/project')).toBeNull()
 
     // Same RegisterProjectForm as the first-launch empty state.
     fireEvent.click(toggle)
-    const input = screen.getByPlaceholderText('/chemin/absolu/du/projet')
+    const input = screen.getByPlaceholderText('/absolute/path/to/project')
     fireEvent.change(input, { target: { value: '/Users/demo/workspace/demoapp-frontend' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
     expect(calls.registered).toEqual(['/Users/demo/workspace/demoapp-frontend'])
 
     // Toggling again hides the form.
     fireEvent.click(toggle)
-    expect(screen.queryByPlaceholderText('/chemin/absolu/du/projet')).toBeNull()
+    expect(screen.queryByPlaceholderText('/absolute/path/to/project')).toBeNull()
   })
 
   test('the register form auto-closes when the registration lands (projects list grows)', () => {
     const { view, props } = renderSidebar({ projects: [project] })
-    fireEvent.click(screen.getByRole('button', { name: '+ Projet' }))
-    expect(screen.getByPlaceholderText('/chemin/absolu/du/projet')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '+ Project' }))
+    expect(screen.getByPlaceholderText('/absolute/path/to/project')).toBeTruthy()
 
     // The POST landed: the refetched projects list grew by one.
     view.rerender(<SessionSidebar {...props} projects={[project, otherProject]} />)
-    expect(screen.queryByPlaceholderText('/chemin/absolu/du/projet')).toBeNull()
+    expect(screen.queryByPlaceholderText('/absolute/path/to/project')).toBeNull()
   })
 
   test('a failed registration is surfaced inside the footer form', () => {
     renderSidebar({ projects: [project], registerError: 'POST /api/projects → 500' })
-    fireEvent.click(screen.getByRole('button', { name: '+ Projet' }))
+    fireEvent.click(screen.getByRole('button', { name: '+ Project' }))
     expect(screen.getByRole('alert').textContent).toContain('POST /api/projects → 500')
   })
 })
@@ -198,10 +198,10 @@ describe('SessionSidebar empty state', () => {
   test('with no registered project, shows the folder-path register form directly (no toggle)', () => {
     const { calls } = renderSidebar({ projects: [], sessions: [], openProjectId: null, activeSessionId: null })
 
-    // First launch: the form IS the sidebar content — no « + Projet » detour.
-    expect(screen.queryByRole('button', { name: '+ Projet' })).toBeNull()
-    const input = screen.getByPlaceholderText('/chemin/absolu/du/projet')
-    const button = screen.getByRole('button', { name: 'Enregistrer' })
+    // First launch: the form IS the sidebar content — no “+ Project” detour.
+    expect(screen.queryByRole('button', { name: '+ Project' })).toBeNull()
+    const input = screen.getByPlaceholderText('/absolute/path/to/project')
+    const button = screen.getByRole('button', { name: 'Register' })
     fireEvent.change(input, { target: { value: '/Users/germain/workspace/atelier' } })
     fireEvent.click(button)
     expect(calls.registered).toEqual(['/Users/germain/workspace/atelier'])
@@ -209,13 +209,13 @@ describe('SessionSidebar empty state', () => {
 
   test('the register form is absent once a project exists', () => {
     renderSidebar()
-    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Register' })).toBeNull()
     expect(screen.getByText('atelier')).toBeTruthy() // project row: basename of the path
   })
 
   test('the register form never shows while the projects query is still loading', () => {
     renderSidebar({ projects: [], sessions: [], openProjectId: null, activeSessionId: null, projectsStatus: 'pending' })
-    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Register' })).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull() // loading is not an error either
   })
 
@@ -232,9 +232,9 @@ describe('SessionSidebar empty state', () => {
         retries += 1
       },
     })
-    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Register' })).toBeNull()
     expect(screen.getByRole('alert').textContent).toContain('GET /api/projects → 401')
-    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(retries).toBe(1)
   })
 
@@ -246,7 +246,7 @@ describe('SessionSidebar empty state', () => {
       activeSessionId: null,
       registerError: 'POST /api/projects → 500',
     })
-    expect(screen.getByRole('button', { name: 'Enregistrer' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Register' })).toBeTruthy()
     expect(screen.getByRole('alert').textContent).toContain('POST /api/projects → 500')
   })
 })

@@ -30,7 +30,7 @@ export function AutopilotConfigDialog({ instance, projects, onSave, onClose }: A
 
   const save = () => {
     if (projectId === '') {
-      setError('choisis un projet cible')
+      setError('pick a target project')
       return
     }
     onSave({ ...instance, config: { projectId, maxItems: clampMaxItems(maxItemsRaw) } })
@@ -46,7 +46,7 @@ export function AutopilotConfigDialog({ instance, projects, onSave, onClose }: A
     >
       <DialogContent className="bg-surface sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">Configurer le widget Autopilot</DialogTitle>
+          <DialogTitle className="text-[15px]">Configure the Autopilot widget</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           {error !== null && (
@@ -56,7 +56,7 @@ export function AutopilotConfigDialog({ instance, projects, onSave, onClose }: A
           )}
           <div className="flex flex-col gap-2">
             <label className={LABEL_CLASS} htmlFor="autopilot-config-project">
-              Projet cible
+              Target project
             </label>
             <select
               id="autopilot-config-project"
@@ -73,7 +73,7 @@ export function AutopilotConfigDialog({ instance, projects, onSave, onClose }: A
           </div>
           <div className="flex flex-col gap-2">
             <label className={LABEL_CLASS} htmlFor="autopilot-config-max">
-              Items max par run
+              Max items per run
             </label>
             <input
               id="autopilot-config-max"
@@ -88,10 +88,10 @@ export function AutopilotConfigDialog({ instance, projects, onSave, onClose }: A
         </div>
         <DialogFooter>
           <button type="button" className="dialog-btn" onClick={onClose}>
-            Annuler
+            Cancel
           </button>
           <button type="button" className="dialog-btn" onClick={save}>
-            Enregistrer
+            Save
           </button>
         </DialogFooter>
       </DialogContent>

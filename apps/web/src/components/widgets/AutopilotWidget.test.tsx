@@ -73,29 +73,29 @@ function renderWidget(props: Partial<Parameters<typeof AutopilotWidget>[0]> = {}
 }
 
 describe('AutopilotWidget', () => {
-  test('run null : bouton « Lancer le backlog », désactivé sans projectId', async () => {
+  test('run null: "Run the backlog" button, disabled without projectId', async () => {
     renderWidget({ hubState: IDLE_STATE, projectId: '' })
-    const button = await screen.findByRole('button', { name: 'Lancer le backlog' })
+    const button = await screen.findByRole('button', { name: 'Run the backlog' })
     expect(button.hasAttribute('disabled')).toBe(true)
   })
 
-  test('Lancer appelle startAutopilot avec projet et maxItems', async () => {
+  test('Run calls startAutopilot with project and maxItems', async () => {
     const { api } = renderWidget({ hubState: IDLE_STATE })
-    fireEvent.click(await screen.findByRole('button', { name: 'Lancer le backlog' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Run the backlog' }))
     await waitFor(() => expect(api.calls).toContain('start:p1:3'))
   })
 
-  test('run actif : état + Arrêter ; les items s’affichent avec leur statut', async () => {
+  test('active run: state + Stop; items render with their status', async () => {
     const { api } = renderWidget({ hubState: RUN_STATE })
-    expect(screen.getByText('run en cours')).toBeTruthy()
+    expect(screen.getByText('run in progress')).toBeTruthy()
     expect(screen.getByText('#12 — Raccourci ⌘K')).toBeTruthy()
-    expect(screen.getByText('en cours')).toBeTruthy()
-    expect(screen.getByText('en attente')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Arrêter' }))
+    expect(screen.getByText('running')).toBeTruthy()
+    expect(screen.getByText('queued')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
     await waitFor(() => expect(api.calls).toContain('stop'))
   })
 
-  test('items terminaux : lien PR (navigateur système), lien session, erreur affichée, Nettoyer', async () => {
+  test('terminal items: PR link (system browser), session link, error shown, Clean up', async () => {
     const opened: string[] = []
     const selected: string[] = []
     const { api } = renderWidget({
@@ -104,59 +104,59 @@ describe('AutopilotWidget', () => {
       onOpenSession: (sessionId, projectId) => selected.push(`${sessionId}:${projectId}`),
     })
     expect(screen.getByText('timeout (30 min)')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir la PR de l’issue #12 sur GitHub' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open the PR for issue #12 on GitHub' }))
     expect(opened).toEqual(['https://github.com/o/r/pull/91'])
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir la session de l’issue #15' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open the session for issue #15' }))
     expect(selected).toEqual(['s-15:tp2'])
-    fireEvent.click(screen.getByRole('button', { name: 'Nettoyer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up' }))
     await waitFor(() => expect(api.calls).toContain('cleanup'))
   })
 
-  test('item mergé : libellé « mergée », pastille verte et terminal (Nettoyer visible)', async () => {
+  test('merged item: "merged" label, green dot and terminal (Clean up visible)', async () => {
     const { api } = renderWidget({ hubState: MERGED_STATE })
-    expect(screen.getByText('mergée')).toBeTruthy()
+    expect(screen.getByText('merged')).toBeTruthy()
     expect(document.querySelector('.pr-dot.merged')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Nettoyer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clean up' }))
     await waitFor(() => expect(api.calls).toContain('cleanup'))
   })
 
-  test('états review/correction/merge : libellés dédiés, non terminaux (pas de Nettoyer)', () => {
+  test('review/fixing/merging states: dedicated labels, non-terminal (no Clean up)', () => {
     renderWidget({ hubState: REVIEW_STATE })
-    expect(screen.getByText('en review')).toBeTruthy()
-    expect(screen.getByText('en correction')).toBeTruthy()
-    expect(screen.getByText('merge en cours')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Nettoyer' })).toBeNull()
+    expect(screen.getByText('in review')).toBeTruthy()
+    expect(screen.getByText('fixing')).toBeTruthy()
+    expect(screen.getByText('merging')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Clean up' })).toBeNull()
   })
 
-  test('PR ouverte non mergée : libellé explicite et pastille distincte du merged', () => {
+  test('open PR not merged: explicit label and dot distinct from merged', () => {
     renderWidget({ hubState: DONE_STATE })
-    expect(screen.getByText('PR ouverte (non mergée)')).toBeTruthy()
+    expect(screen.getByText('PR opened (not merged)')).toBeTruthy()
     expect(document.querySelector('.pr-dot.merged')).toBeNull()
     expect(document.querySelector('.pr-dot.open')).toBeTruthy()
     expect(document.querySelector('.pr-dot.closed')).toBeTruthy()
   })
 
-  test('erreur d’action (start 409) affichée dans le widget', async () => {
+  test('action error (start 409) shown inside the widget', async () => {
     renderWidget({
       hubState: IDLE_STATE,
       api: makeApi({
         startAutopilot: async () => {
-          throw new Error('un run autopilot est déjà en cours')
+          throw new Error('an autopilot run is already in progress')
         },
       }),
     })
-    fireEvent.click(await screen.findByRole('button', { name: 'Lancer le backlog' }))
-    await screen.findByText('un run autopilot est déjà en cours')
+    fireEvent.click(await screen.findByRole('button', { name: 'Run the backlog' }))
+    await screen.findByText('an autopilot run is already in progress')
   })
 
-  test('lastError du run précédent affichée quand idle', () => {
-    renderWidget({ hubState: { run: null, items: [], lastError: 'aucune issue ouverte labellisée autopilot' } })
-    expect(screen.getByText('aucune issue ouverte labellisée autopilot')).toBeTruthy()
+  test('lastError from the previous run shown when idle', () => {
+    renderWidget({ hubState: { run: null, items: [], lastError: 'no open issues labeled autopilot' } })
+    expect(screen.getByText('no open issues labeled autopilot')).toBeTruthy()
   })
 
-  test('sans hubState, fetch initial via getAutopilot (message vide)', async () => {
+  test('without hubState, initial fetch via getAutopilot (empty message)', async () => {
     const { api } = renderWidget({ hubState: null })
-    await screen.findByText(/Aucun item/)
+    await screen.findByText(/No items/)
     expect(api.calls).toContain('get')
   })
 })

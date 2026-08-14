@@ -78,17 +78,17 @@ describe('QuestionPrompt', () => {
   test('mono-question : « Autre » ouvre le champ, l’envoi passe par le bouton', () => {
     const onAnswer = mock()
     render(<QuestionPrompt item={MONO} onAnswer={onAnswer} />)
-    fireEvent.click(screen.getByRole('button', { name: /Autre/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Other/ }))
     expect(onAnswer).not.toHaveBeenCalled()
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'ma réponse' } })
-    fireEvent.click(screen.getByRole('button', { name: /Envoyer/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Send answers/ }))
     expect(onAnswer).toHaveBeenCalledWith({ 'Quelle approche ?': 'ma réponse' })
   })
 
   test('multi-questions : bouton Envoyer inactif tant que tout n’est pas répondu', () => {
     const onAnswer = mock()
     render(<QuestionPrompt item={MULTI} onAnswer={onAnswer} />)
-    const submit = screen.getByRole('button', { name: /Envoyer/ }) as HTMLButtonElement
+    const submit = screen.getByRole('button', { name: /Send answers/ }) as HTMLButtonElement
     expect(submit.disabled).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /la première/ }))
     expect(submit.disabled).toBe(true)
@@ -111,7 +111,7 @@ describe('QuestionPrompt', () => {
   test('résolu answered : options figées, réponse mise en évidence', () => {
     render(<QuestionPrompt item={{ ...MONO, resolved: 'answered', answers: { 'Quelle approche ?': 'A' } }} onAnswer={mock()} />)
     for (const button of screen.getAllByRole('button')) expect((button as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('Répondu')).toBeTruthy()
+    expect(screen.getByText('Answered')).toBeTruthy()
     // La réponse choisie est bien surlignée, et elle seule.
     expect(screen.getByRole('button', { name: /la première/ }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: /la seconde/ }).getAttribute('aria-pressed')).toBe('false')
@@ -144,7 +144,7 @@ describe('QuestionPrompt', () => {
 
   test('résolu dismissed : mention « Répondu dans le chat »', () => {
     render(<QuestionPrompt item={{ ...MONO, resolved: 'dismissed' }} onAnswer={mock()} />)
-    expect(screen.getByText('Répondu dans le chat')).toBeTruthy()
+    expect(screen.getByText('Answered in chat')).toBeTruthy()
   })
 
   test('preview : le survol d’une option l’affiche, la sortie replie la zone (contenu monté pour l’animation)', () => {

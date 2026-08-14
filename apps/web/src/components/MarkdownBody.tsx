@@ -17,7 +17,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   return (
     <div className="codeblock">
       <button type="button" className="codeblock-copy" onClick={copy}>
-        {copied ? 'Copié' : 'Copier'}
+        {copied ? 'Copied' : 'Copy'}
       </button>
       <pre ref={ref}>{children}</pre>
     </div>

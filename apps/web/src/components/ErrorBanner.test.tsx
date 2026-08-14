@@ -18,11 +18,11 @@ describe('ErrorBanner', () => {
     const at = new Date(state.error!.resetAt!)
     const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
     const banner = screen.getByRole('alert')
-    expect(banner.textContent).toBe(`Limite d’usage atteinte — réinitialisation à ${hhmm}`)
+    expect(banner.textContent).toBe(`Usage limit reached — resets at ${hhmm}`)
     expect(banner.textContent).not.toContain('usage_limit')
   })
 
-  test('usage_limit without resetAt → « Limite d’usage atteinte » (time-less), never the raw slug', () => {
+  test('usage_limit without resetAt → « Usage limit reached » (time-less), never the raw slug', () => {
     const state = reduce(initialState(), {
       type: 'status',
       sessionId: 'ses-1',
@@ -31,7 +31,7 @@ describe('ErrorBanner', () => {
     })
     render(<ErrorBanner status={state.status} error={state.error} />)
     const banner = screen.getByRole('alert')
-    expect(banner.textContent).toBe('Limite d’usage atteinte')
+    expect(banner.textContent).toBe('Usage limit reached')
     expect(banner.textContent).not.toContain('usage_limit')
   })
 

@@ -21,7 +21,7 @@ export function Topbar({ project, session, status, githubAccount, onRename, patc
   return (
     <header className="topbar">
       <div className="brand">
-        <img className="logo" src="/favicon.svg" alt="Logo Atelier" width={22} height={22} />
+        <img className="logo" src="/favicon.svg" alt="Atelier logo" width={22} height={22} />
         Atelier
       </div>
       {project !== null && (
@@ -48,7 +48,7 @@ export function Topbar({ project, session, status, githubAccount, onRename, patc
 function SessionTitle({ session, onRename }: { session: SessionSummary; onRename: (name: string) => void }) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState('')
-  const displayName = session.name ?? 'Nouvelle session'
+  const displayName = session.name ?? 'New session'
 
   const startEditing = () => {
     setValue(session.name ?? '')
@@ -72,8 +72,8 @@ function SessionTitle({ session, onRename }: { session: SessionSummary; onRename
             if (event.key === 'Enter') commit()
             if (event.key === 'Escape') setEditing(false)
           }}
-          aria-label="Renommer la session"
-          placeholder="Nom de la session"
+          aria-label="Rename the session"
+          placeholder="Session name"
           autoFocus
         />
       </div>
@@ -92,7 +92,7 @@ function SessionTitle({ session, onRename }: { session: SessionSummary; onRename
           startEditing()
         }
       }}
-      aria-label={`Renommer la session « ${displayName} »`}
+      aria-label={`Rename the session “${displayName}”`}
     >
       {displayName} <span className="pen">✎</span>
     </div>

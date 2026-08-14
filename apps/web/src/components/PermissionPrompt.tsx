@@ -11,9 +11,9 @@ export type PermissionPromptProps = {
 
 /** French outcome line shown once the one-shot decision has been taken. */
 const OUTCOME_LABELS: Record<PermissionDecision, string> = {
-  allow: 'Autorisé',
-  deny: 'Refusé',
-  always: 'Toujours autorisé',
+  allow: 'Allowed',
+  deny: 'Denied',
+  always: 'Always allowed',
 }
 
 /**
@@ -52,23 +52,23 @@ export function PermissionPrompt({ item, onDecision }: PermissionPromptProps) {
   }
 
   return (
-    <div ref={cardRef} tabIndex={-1} className="permission" role="group" aria-label="Demande de permission">
+    <div ref={cardRef} tabIndex={-1} className="permission" role="group" aria-label="Permission request">
       <div role={disabled ? undefined : 'alert'}>
         <div className="p-head">
-          <span className="k">Permission</span> Claude veut exécuter :
+          <span className="k">Permission</span> Claude wants to run:
         </div>
         <code className="cmd">{item.rendered}</code>
       </div>
       <div className="p-actions">
         <button type="button" className="deny" disabled={disabled} onClick={() => decide('deny')}>
-          Refuser
+          Deny
         </button>
         <button type="button" disabled={disabled} onClick={() => decide('allow')}>
-          Autoriser une fois
+          Allow once
         </button>
         {item.proposedRule !== null && (
           <button type="button" className="allow" disabled={disabled} onClick={() => decide('always')}>
-            Toujours pour ce projet : {ruleLabel(item.proposedRule)}
+            Always for this project: {ruleLabel(item.proposedRule)}
           </button>
         )}
       </div>

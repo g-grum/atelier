@@ -27,7 +27,7 @@ function renderItem() {
 describe('ToolCallItem', () => {
   test('the IDE affordance is a native button, not nested inside another interactive element', () => {
     renderItem()
-    const ide = screen.getByRole('button', { name: /ouvrir dans l/i })
+    const ide = screen.getByRole('button', { name: /open in the ide/i })
     // Conforming HTML: a real <button>, with no interactive ancestor (buttons
     // must not contain interactive or tabindex-bearing descendants).
     expect(ide.tagName).toBe('BUTTON')
@@ -36,7 +36,7 @@ describe('ToolCallItem', () => {
 
   test('clicking the IDE button opens the file at its line without toggling the detail', () => {
     const calls = renderItem()
-    fireEvent.click(screen.getByRole('button', { name: /ouvrir dans l/i }))
+    fireEvent.click(screen.getByRole('button', { name: /open in the ide/i }))
     expect(calls).toEqual([['src/auth/refresh.ts', 42]])
     expect(screen.queryByText('diff appliqué')).toBeNull()
   })

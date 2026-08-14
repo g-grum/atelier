@@ -28,9 +28,9 @@ function renderComposer(overrides: Partial<ComposerProps> = {}) {
   return { sent, aborts, rerenderWith }
 }
 
-const textarea = () => screen.getByLabelText('Répondre à Claude')
-const sendButton = () => screen.getByRole('button', { name: 'Envoyer le message' })
-const stopButton = () => screen.getByRole('button', { name: 'Arrêter la génération' })
+const textarea = () => screen.getByLabelText('Reply to Claude')
+const sendButton = () => screen.getByRole('button', { name: 'Send message' })
+const stopButton = () => screen.getByRole('button', { name: 'Stop generation' })
 
 const CMDS = [
   { name: 'review', description: 'Relire', argumentHint: '<file>', aliases: [] },
@@ -56,12 +56,12 @@ describe('Composer', () => {
 
   test('idle: no stop affordance', () => {
     renderComposer()
-    expect(screen.queryByRole('button', { name: 'Arrêter la génération' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop generation' })).toBeNull()
   })
 
   test('streaming: the button becomes Stop and clicking it aborts exactly once, never sends', () => {
     const { sent, aborts } = renderComposer({ status: 'streaming' })
-    expect(screen.queryByRole('button', { name: 'Envoyer le message' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull()
     fireEvent.click(stopButton())
     expect(aborts).toHaveLength(1)
     expect(sent).toEqual([])
@@ -89,7 +89,7 @@ describe('Composer', () => {
     const { sent, rerenderWith } = renderComposer({ status: 'streaming' })
     fireEvent.change(textarea(), { target: { value: 'Encore une chose' } })
     rerenderWith({ status: 'idle' })
-    expect(screen.queryByRole('button', { name: 'Arrêter la génération' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop generation' })).toBeNull()
     fireEvent.keyDown(textarea(), { key: 'Enter' })
     expect(sent).toEqual(['Encore une chose'])
   })

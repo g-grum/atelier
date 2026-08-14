@@ -35,12 +35,12 @@ describe('MessageItem markdown', () => {
     })
   })
 
-  test('bouton Copier : écrit le code dans le clipboard et affiche « Copié »', async () => {
+  test('Copy button: writes the code to the clipboard and shows Copied', async () => {
     const writeText = mock(() => Promise.resolve())
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     render(<MessageItem role="assistant" text={'```ts\nconst a = 1\n```'} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Copier' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy' }))
     expect(writeText).toHaveBeenCalledWith('const a = 1\n')
-    expect(await screen.findByText('Copié')).toBeTruthy()
+    expect(await screen.findByText('Copied')).toBeTruthy()
   })
 })

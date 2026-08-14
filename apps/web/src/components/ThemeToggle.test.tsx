@@ -15,16 +15,16 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('ThemeToggle', () => {
-  test('en mode sombre : glyphe ☾ et aria « Passer en mode clair »', () => {
+  test('en mode sombre : glyphe ☾ et aria « Switch to light mode »', () => {
     render(<ThemeToggle patchPreferences={async () => ({})} />)
-    const btn = screen.getByRole('button', { name: 'Passer en mode clair' })
+    const btn = screen.getByRole('button', { name: 'Switch to light mode' })
     expect(btn.textContent).toBe('☾')
   })
 
-  test('en mode clair : glyphe ☀︎ et aria « Passer en mode sombre »', () => {
+  test('en mode clair : glyphe ☀︎ et aria « Switch to dark mode »', () => {
     applyTheme('light')
     render(<ThemeToggle patchPreferences={async () => ({})} />)
-    const btn = screen.getByRole('button', { name: 'Passer en mode sombre' })
+    const btn = screen.getByRole('button', { name: 'Switch to dark mode' })
     expect(btn.textContent).toBe('☀︎')
   })
 
@@ -32,13 +32,13 @@ describe('ThemeToggle', () => {
     const patches: { theme: Theme }[] = []
     render(<ThemeToggle patchPreferences={async (patch) => (patches.push(patch), {})} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Passer en mode clair' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }))
 
     // Appliqué localement tout de suite (data-theme posé) + PATCH avec le thème suivant.
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     await waitFor(() => expect(patches).toEqual([{ theme: 'light' }]))
     // Le glyphe a suivi le thème appliqué.
-    expect(screen.getByRole('button', { name: 'Passer en mode sombre' }).textContent).toBe('☀︎')
+    expect(screen.getByRole('button', { name: 'Switch to dark mode' }).textContent).toBe('☀︎')
   })
 
   test('si le PATCH échoue : le thème reste appliqué (pas de rollback) et un toast d’erreur s’affiche', async () => {
@@ -46,7 +46,7 @@ describe('ThemeToggle', () => {
     try {
       render(<ThemeToggle patchPreferences={async () => Promise.reject(new Error('PATCH /api/preferences → 500'))} />)
 
-      fireEvent.click(screen.getByRole('button', { name: 'Passer en mode clair' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }))
 
       expect(document.documentElement.getAttribute('data-theme')).toBe('light')
       await waitFor(() => expect(errorSpy).toHaveBeenCalled())

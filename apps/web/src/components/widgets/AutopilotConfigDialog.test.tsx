@@ -22,29 +22,29 @@ function renderDialog(inst: WidgetInstance = instance) {
 }
 
 describe('AutopilotConfigDialog', () => {
-  test('préremplit projet et maxItems', () => {
+  test('prefills project and maxItems', () => {
     renderDialog()
-    expect((screen.getByLabelText('Projet cible') as HTMLSelectElement).value).toBe('p2')
-    expect((screen.getByLabelText('Items max par run') as HTMLInputElement).value).toBe('5')
+    expect((screen.getByLabelText('Target project') as HTMLSelectElement).value).toBe('p2')
+    expect((screen.getByLabelText('Max items per run') as HTMLInputElement).value).toBe('5')
   })
 
-  test('instance fraîche (projectId vide) : défaut = premier projet', () => {
+  test('fresh instance (empty projectId): defaults to the first project', () => {
     renderDialog(fresh)
-    expect((screen.getByLabelText('Projet cible') as HTMLSelectElement).value).toBe('p1')
+    expect((screen.getByLabelText('Target project') as HTMLSelectElement).value).toBe('p1')
   })
 
-  test('enregistrer clampe maxItems (1-10) et sauve la config', () => {
+  test('save clamps maxItems (1-10) and stores the config', () => {
     const { saved, closed } = renderDialog()
-    fireEvent.change(screen.getByLabelText('Items max par run'), { target: { value: '99' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    fireEvent.change(screen.getByLabelText('Max items per run'), { target: { value: '99' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(saved).toEqual([{ ...instance, config: { projectId: 'p2', maxItems: 10 } }])
     expect(closed).toEqual([true])
   })
 
-  test('changer de projet est pris en compte', () => {
+  test('changing the project is applied', () => {
     const { saved } = renderDialog()
-    fireEvent.change(screen.getByLabelText('Projet cible'), { target: { value: 'p1' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    fireEvent.change(screen.getByLabelText('Target project'), { target: { value: 'p1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(saved[0]!.config).toEqual({ projectId: 'p1', maxItems: 5 })
   })
 })

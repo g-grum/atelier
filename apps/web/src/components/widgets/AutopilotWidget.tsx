@@ -24,14 +24,14 @@ export type AutopilotWidgetProps = {
 }
 
 const STATUS_LABEL: Record<AutopilotItem['status'], string> = {
-  queued: 'en attente',
-  running: 'en cours',
-  pr_opened: 'PR ouverte (non mergée)',
-  reviewing: 'en review',
-  fixing: 'en correction',
-  merging: 'merge en cours',
-  merged: 'mergée',
-  failed: 'échec',
+  queued: 'queued',
+  running: 'running',
+  pr_opened: 'PR opened (not merged)',
+  reviewing: 'in review',
+  fixing: 'fixing',
+  merging: 'merging',
+  merged: 'merged',
+  failed: 'failed',
 }
 
 /** États sur lesquels l'item ne bougera plus — seuls eux autorisent le nettoyage. */
@@ -74,7 +74,7 @@ export function AutopilotWidget({ projectId, maxItems, hubState, api, onOpenSess
       <div className="pr-error" role="alert">
         <span>{errorMessage(query.error)}</span>
         <button type="button" className="banner-btn" onClick={() => void query.refetch()}>
-          Réessayer
+          Retry
         </button>
       </div>
     )
@@ -90,10 +90,10 @@ export function AutopilotWidget({ projectId, maxItems, hubState, api, onOpenSess
         {running ? (
           <>
             <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-indigo">
-              {state.run?.state === 'stopping' ? 'arrêt en cours…' : 'run en cours'}
+              {state.run?.state === 'stopping' ? 'stopping…' : 'run in progress'}
             </span>
             <button type="button" className="banner-btn" onClick={() => act(api.stopAutopilot)}>
-              Arrêter
+              Stop
             </button>
           </>
         ) : (
@@ -101,15 +101,15 @@ export function AutopilotWidget({ projectId, maxItems, hubState, api, onOpenSess
             type="button"
             className="banner-btn"
             disabled={projectId === ''}
-            title={projectId === '' ? 'Configure d’abord le projet cible' : undefined}
+            title={projectId === '' ? 'Configure the target project first' : undefined}
             onClick={() => act(() => api.startAutopilot(projectId, maxItems))}
           >
-            Lancer le backlog
+            Run the backlog
           </button>
         )}
         {hasTerminal && !running && (
           <button type="button" className="banner-btn" onClick={() => act(api.cleanupAutopilot)}>
-            Nettoyer
+            Clean up
           </button>
         )}
       </div>
@@ -122,24 +122,24 @@ export function AutopilotWidget({ projectId, maxItems, hubState, api, onOpenSess
       )}
 
       {state.items.length === 0 ? (
-        <p className="pr-empty">Aucun item — labellise des issues « autopilot » puis lance le backlog</p>
+        <p className="pr-empty">No items — label issues “autopilot” then run the backlog</p>
       ) : (
         <ul className="pr-list">
           {state.items.map((item) => (
             <li key={item.issue} className="pr-item">
               <div className="pr-row">
-                <span className="pr-line" aria-label={`Issue #${item.issue} : ${STATUS_LABEL[item.status]}`}>
+                <span className="pr-line" aria-label={`Issue #${item.issue}: ${STATUS_LABEL[item.status]}`}>
                   <span className={`pr-dot ${dotClass(item.status)}`} title={STATUS_LABEL[item.status]} />
                   <span className="pr-title">#{item.issue} — {item.title}</span>
                   <span className="pr-age">{STATUS_LABEL[item.status]}</span>
                 </span>
                 {item.sessionId !== '' && onOpenSession !== undefined && (
-                  <button type="button" className="pr-open" aria-label={`Ouvrir la session de l’issue #${item.issue}`} onClick={() => onOpenSession(item.sessionId, item.projectId)}>
+                  <button type="button" className="pr-open" aria-label={`Open the session for issue #${item.issue}`} onClick={() => onOpenSession(item.sessionId, item.projectId)}>
                     ▸
                   </button>
                 )}
                 {item.prUrl !== undefined && (
-                  <button type="button" className="pr-open" aria-label={`Ouvrir la PR de l’issue #${item.issue} sur GitHub`} onClick={() => openUrl(item.prUrl as string)}>
+                  <button type="button" className="pr-open" aria-label={`Open the PR for issue #${item.issue} on GitHub`} onClick={() => openUrl(item.prUrl as string)}>
                     ↗
                   </button>
                 )}

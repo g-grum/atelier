@@ -45,11 +45,11 @@ export function ToolCallItem({ item, onOpenInIde }: ToolCallItemProps) {
           <span className="status">
             {item.result !== undefined &&
               (item.result.ok ? (
-                <span className="okt" aria-label="succès">
+                <span className="okt" aria-label="success">
                   ✓
                 </span>
               ) : (
-                <span className="failt" aria-label="échec">
+                <span className="failt" aria-label="failure">
                   ✗
                 </span>
               ))}
@@ -64,7 +64,7 @@ export function ToolCallItem({ item, onOpenInIde }: ToolCallItemProps) {
           <button
             type="button"
             className="ide-btn"
-            aria-label={`Ouvrir dans l’IDE${line !== undefined ? ` à la ligne ${line}` : ''}`}
+            aria-label={`Open in the IDE${line !== undefined ? ` at line ${line}` : ''}`}
             onClick={() => onOpenInIde(file, line)}
           >
             <svg className="i" viewBox="0 0 24 24" aria-hidden="true">
@@ -80,7 +80,7 @@ export function ToolCallItem({ item, onOpenInIde }: ToolCallItemProps) {
 }
 
 function detail(item: ToolChatItem): string {
-  if (item.result === undefined) return 'en cours…'
+  if (item.result === undefined) return 'running…'
   if (item.result.summary !== '') return item.result.summary
-  return item.result.ok ? 'terminé' : 'échec'
+  return item.result.ok ? 'done' : 'failed'
 }

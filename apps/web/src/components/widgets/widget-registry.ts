@@ -11,12 +11,12 @@ export type WidgetMeta = {
 
 export const WIDGET_META: Partial<Record<WidgetType, WidgetMeta>> = {
   'rate-limits': {
-    title: 'Limites du plan',
+    title: 'Plan limits',
     multiInstance: false,
     create: () => ({ id: crypto.randomUUID(), type: 'rate-limits', span: 2, height: 'M' }),
   },
   'modified-files': {
-    title: 'Fichiers modifiés — session',
+    title: 'Modified files — session',
     multiInstance: false,
     create: () => ({ id: crypto.randomUUID(), type: 'modified-files', span: 2, height: 'M' }),
   },

@@ -33,30 +33,30 @@ describe('DashboardGrid', () => {
   test('renders one framed widget per instance, in order, with registry titles', () => {
     renderGrid()
     const groups = screen.getAllByRole('group')
-    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['Limites du plan', 'Fichiers modifiés — session'])
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['Plan limits', 'Modified files — session'])
     screen.getByTestId('body-rate-limits')
     screen.getByTestId('body-modified-files')
   })
 
   test('remove emits the layout without the widget', async () => {
     const { saved } = renderGrid()
-    await openMenuOn(screen.getAllByRole('button', { name: /Options du widget/ })[0]!)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Retirer' }))
+    await openMenuOn(screen.getAllByRole('button', { name: /Widget options/ })[0]!)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
     expect(saved).toEqual([[layout[1]!]])
   })
 
   test('size change emits the patched layout', async () => {
     const { saved } = renderGrid()
-    await openMenuOn(screen.getAllByRole('button', { name: /Options du widget/ })[1]!)
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Hauteur L' }))
+    await openMenuOn(screen.getAllByRole('button', { name: /Widget options/ })[1]!)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Height L' }))
     expect(saved).toEqual([[layout[0]!, { ...layout[1]!, height: 'L' }]])
   })
 
   test('palette: present singletons disabled; adding appends a fresh instance', async () => {
     const { saved } = renderGrid([layout[0]!])
     await openMenuOn(screen.getByRole('button', { name: '+ Widget' }))
-    expect(screen.getByRole('menuitem', { name: 'Limites du plan' }).getAttribute('aria-disabled')).toBe('true')
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Fichiers modifiés — session' }))
+    expect(screen.getByRole('menuitem', { name: 'Plan limits' }).getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Modified files — session' }))
     expect(saved).toHaveLength(1)
     expect(saved[0]![1]!.type).toBe('modified-files')
   })

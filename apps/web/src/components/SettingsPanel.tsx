@@ -52,8 +52,8 @@ export function SettingsPanel({ api = defaultApi }: { api?: SettingsApi }) {
       <DialogTrigger asChild>
         <button
           type="button"
-          aria-label="Réglages"
-          title="Réglages"
+          aria-label="Settings"
+          title="Settings"
           className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[7px] border border-transparent bg-transparent p-0 text-muted hover:border-line hover:bg-surface-2 hover:text-text"
         >
           <Settings className="h-4 w-4" aria-hidden="true" />
@@ -61,8 +61,8 @@ export function SettingsPanel({ api = defaultApi }: { api?: SettingsApi }) {
       </DialogTrigger>
       <DialogContent className="bg-surface sm:max-w-[460px]">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">Réglages</DialogTitle>
-          <DialogDescription>Préférences de l’atelier et règles d’autorisation.</DialogDescription>
+          <DialogTitle className="text-[15px]">Settings</DialogTitle>
+          <DialogDescription>Workspace preferences and permission rules.</DialogDescription>
         </DialogHeader>
         <SettingsBody api={api} />
       </DialogContent>
@@ -101,7 +101,7 @@ function SettingsBody({ api }: { api: SettingsApi }) {
     },
     onSuccess: (prefs) => queryClient.setQueryData(['preferences'], prefs),
     onError: (error) => {
-      setNotice(`Impossible d’enregistrer la préférence : ${errorMessage(error)}`)
+      setNotice(`Could not save the preference: ${errorMessage(error)}`)
       void queryClient.invalidateQueries({ queryKey: ['preferences'] }) // restore server truth
     },
   })
@@ -112,7 +112,7 @@ function SettingsBody({ api }: { api: SettingsApi }) {
       setNotice(null)
       return queryClient.invalidateQueries({ queryKey: ['rules'] })
     },
-    onError: (error) => setNotice(`Impossible de supprimer la règle : ${errorMessage(error)}`),
+    onError: (error) => setNotice(`Could not delete the rule: ${errorMessage(error)}`),
   })
 
   const removeProject = useMutation({
@@ -124,7 +124,7 @@ function SettingsBody({ api }: { api: SettingsApi }) {
     },
     onError: (error) => {
       setArmedProjectId(null) // a failed retrait must be re-confirmed from scratch
-      setNotice(`Impossible de retirer le projet : ${errorMessage(error)}`)
+      setNotice(`Could not remove the project: ${errorMessage(error)}`)
     },
   })
 
@@ -140,12 +140,12 @@ function SettingsBody({ api }: { api: SettingsApi }) {
 
       <section className="flex flex-col gap-2">
         <label className={LABEL_CLASS} htmlFor="settings-ide">
-          IDE préféré
+          Preferred IDE
         </label>
         {prefsQuery.isPending ? (
-          <p className={HINT_CLASS}>Chargement…</p>
+          <p className={HINT_CLASS}>Loading…</p>
         ) : prefs === undefined ? (
-          <LoadError what="les préférences" error={prefsQuery.error} onRetry={() => void prefsQuery.refetch()} />
+          <LoadError what="the preferences" error={prefsQuery.error} onRetry={() => void prefsQuery.refetch()} />
         ) : (
           <select
             id="settings-ide"
@@ -161,15 +161,15 @@ function SettingsBody({ api }: { api: SettingsApi }) {
             ))}
           </select>
         )}
-        <p className={HINT_CLASS}>Utilisé pour « Ouvrir dans l’IDE ».</p>
+        <p className={HINT_CLASS}>Used for “Open in IDE”.</p>
       </section>
 
       <section className="flex flex-col gap-2">
         <label className={LABEL_CLASS} htmlFor="settings-model">
-          Modèle par défaut
+          Default model
         </label>
         {prefsQuery.isPending ? (
-          <p className={HINT_CLASS}>Chargement…</p>
+          <p className={HINT_CLASS}>Loading…</p>
         ) : prefs === undefined ? null : (
           <select
             id="settings-model"
@@ -189,15 +189,15 @@ function SettingsBody({ api }: { api: SettingsApi }) {
             )}
           </select>
         )}
-        <p className={HINT_CLASS}>Appliqué aux nouvelles sessions.</p>
+        <p className={HINT_CLASS}>Applied to new sessions.</p>
       </section>
 
       <section className="flex flex-col gap-2">
         <label className={LABEL_CLASS} htmlFor="settings-theme">
-          Thème
+          Theme
         </label>
         {prefsQuery.isPending ? (
-          <p className={HINT_CLASS}>Chargement…</p>
+          <p className={HINT_CLASS}>Loading…</p>
         ) : prefs === undefined ? null : (
           <select
             id="settings-theme"
@@ -210,19 +210,19 @@ function SettingsBody({ api }: { api: SettingsApi }) {
               patchPrefs.mutate({ theme }) // persiste (optimiste, comme les autres rangées)
             }}
           >
-            <option value="dark">Sombre</option>
-            <option value="light">Clair</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
           </select>
         )}
-        <p className={HINT_CLASS}>Bascule aussi via l’icône ☀︎/☾ de la barre du haut.</p>
+        <p className={HINT_CLASS}>Also toggled via the ☀︎/☾ icon in the top bar.</p>
       </section>
 
       <section className="flex flex-col gap-2">
         <label className={LABEL_CLASS} htmlFor="settings-permissions">
-          Permissions des nouvelles sessions
+          New-session permissions
         </label>
         {prefsQuery.isPending ? (
-          <p className={HINT_CLASS}>Chargement…</p>
+          <p className={HINT_CLASS}>Loading…</p>
         ) : prefs === undefined ? null : (
           <select
             id="settings-permissions"
@@ -237,22 +237,22 @@ function SettingsBody({ api }: { api: SettingsApi }) {
               })
             }
           >
-            <option value="">Demander à chaque session</option>
-            <option value="default">Permissions normales</option>
-            <option value="bypassPermissions">Skip permissions (dangereux)</option>
+            <option value="">Ask for each session</option>
+            <option value="default">Normal permissions</option>
+            <option value="bypassPermissions">Skip permissions (dangerous)</option>
           </select>
         )}
-        <p className={HINT_CLASS}>Appliqué aux nouvelles sessions uniquement — les sessions existantes gardent leur mode.</p>
+        <p className={HINT_CLASS}>Applies to new sessions only — existing sessions keep their mode.</p>
       </section>
 
       <section className="flex flex-col gap-2">
-        <h3 className={`m-0 ${LABEL_CLASS}`}>Règles « toujours autoriser »</h3>
+        <h3 className={`m-0 ${LABEL_CLASS}`}>“Always allow” rules</h3>
         {rulesQuery.isPending ? (
-          <p className={HINT_CLASS}>Chargement…</p>
+          <p className={HINT_CLASS}>Loading…</p>
         ) : rulesQuery.data === undefined ? (
-          <LoadError what="les règles" error={rulesQuery.error} onRetry={() => void rulesQuery.refetch()} />
+          <LoadError what="the rules" error={rulesQuery.error} onRetry={() => void rulesQuery.refetch()} />
         ) : rulesQuery.data.length === 0 ? (
-          <p className="m-0 text-xs text-muted">Aucune règle « toujours autoriser » enregistrée.</p>
+          <p className="m-0 text-xs text-muted">No “always allow” rule recorded.</p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
             {rulesQuery.data.map((rule) => (
@@ -265,17 +265,17 @@ function SettingsBody({ api }: { api: SettingsApi }) {
             ))}
           </ul>
         )}
-        <p className={HINT_CLASS}>Supprimer une règle rétablit la demande de permission au prochain usage.</p>
+        <p className={HINT_CLASS}>Deleting a rule restores the permission prompt on next use.</p>
       </section>
 
       <section className="flex flex-col gap-2">
-        <h3 className={`m-0 ${LABEL_CLASS}`}>Projets</h3>
+        <h3 className={`m-0 ${LABEL_CLASS}`}>Projects</h3>
         {projectsQuery.isPending ? (
-          <p className={HINT_CLASS}>Chargement…</p>
+          <p className={HINT_CLASS}>Loading…</p>
         ) : projectsQuery.data === undefined ? (
-          <LoadError what="les projets" error={projectsQuery.error} onRetry={() => void projectsQuery.refetch()} />
+          <LoadError what="the projects" error={projectsQuery.error} onRetry={() => void projectsQuery.refetch()} />
         ) : projectsQuery.data.length === 0 ? (
-          <p className="m-0 text-xs text-muted">Aucun projet enregistré.</p>
+          <p className="m-0 text-xs text-muted">No registered projects.</p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
             {projectsQuery.data.map((project) => (
@@ -290,24 +290,24 @@ function SettingsBody({ api }: { api: SettingsApi }) {
             ))}
           </ul>
         )}
-        <p className={HINT_CLASS}>Retirer le projet (les conversations restent dans ~/.claude)</p>
+        <p className={HINT_CLASS}>Removing a project keeps its conversations in ~/.claude</p>
       </section>
     </div>
   )
 }
 
 function RuleRow({ rule, deleting, onDelete }: { rule: AlwaysRule; deleting: boolean; onDelete: () => void }) {
-  const matcherLabel = rule.matcher ?? 'outil entier'
+  const matcherLabel = rule.matcher ?? 'entire tool'
   return (
     <li className="flex items-center gap-2 rounded-lg border border-line-soft bg-ground px-3 py-2 font-mono text-[11.5px] text-muted">
       <span className="min-w-0 [overflow-wrap:anywhere]">
         <span className="font-bold text-text">{rule.toolName}</span>
         <span className="text-faint"> : </span>
-        {rule.matcher !== null ? rule.matcher : <span className="italic text-faint">outil entier</span>}
+        {rule.matcher !== null ? rule.matcher : <span className="italic text-faint">entire tool</span>}
       </span>
       <button
         type="button"
-        aria-label={`Supprimer la règle « ${rule.toolName} : ${matcherLabel} »`}
+        aria-label={`Delete the rule “${rule.toolName}: ${matcherLabel}”`}
         disabled={deleting}
         onClick={onDelete}
         className="ml-auto flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[5px] border-0 bg-transparent p-0 text-sm leading-none text-faint hover:bg-red/10 hover:text-red disabled:cursor-default disabled:opacity-50"
@@ -340,17 +340,17 @@ function ProjectRow({
       {armed ? (
         <button
           type="button"
-          aria-label={`Confirmer le retrait de « ${name} »`}
+          aria-label={`Confirm removing “${name}”`}
           disabled={deleting}
           onClick={onConfirm}
           className="ml-auto flex-shrink-0 cursor-pointer rounded-[5px] border-0 bg-red/10 px-2 py-0.5 text-[11px] font-bold text-red hover:bg-red/20 disabled:cursor-default disabled:opacity-50"
         >
-          Confirmer le retrait ?
+          Confirm removal?
         </button>
       ) : (
         <button
           type="button"
-          aria-label={`Retirer le projet « ${name} »`}
+          aria-label={`Remove the project “${name}”`}
           disabled={deleting}
           onClick={onArm}
           className="ml-auto flex h-5 w-5 flex-shrink-0 cursor-pointer items-center justify-center rounded-[5px] border-0 bg-transparent p-0 text-sm leading-none text-faint hover:bg-red/10 hover:text-red disabled:cursor-default disabled:opacity-50"
@@ -366,14 +366,14 @@ function LoadError({ what, error, onRetry }: { what: string; error: unknown; onR
   return (
     <div role="alert" className="flex items-center gap-2.5 rounded-lg border border-red/40 border-l-[3px] border-l-red bg-surface-2 px-3 py-2 text-xs">
       <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-        Impossible de charger {what} : {errorMessage(error)}
+        Could not load {what}: {errorMessage(error)}
       </span>
       <button
         type="button"
         onClick={onRetry}
         className="flex-shrink-0 cursor-pointer rounded-[7px] border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-bold text-text hover:border-red hover:text-red"
       >
-        Réessayer
+        Retry
       </button>
     </div>
   )

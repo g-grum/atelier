@@ -53,9 +53,9 @@ export function SessionSidebar(props: SessionSidebarProps) {
   }
 
   return (
-    <nav className="sidebar" aria-label="Projets et sessions">
+    <nav className="sidebar" aria-label="Projects and sessions">
       <div className="sidebar-head">
-        <span className="label">Projets</span>
+        <span className="label">Projects</span>
         {projects.length > 0 && (
           <button type="button" className="new-btn" onClick={onCreateDraft}>
             + Session
@@ -63,17 +63,17 @@ export function SessionSidebar(props: SessionSidebarProps) {
         )}
       </div>
       {projectsStatus === 'pending' ? (
-        <p className="side-note">Chargement des projets…</p>
+        <p className="side-note">Loading projects…</p>
       ) : projectsStatus === 'error' ? (
         <div className="side-error" role="alert">
-          <p>Impossible de charger les projets{projectsError !== undefined ? ` : ${projectsError}` : ''}</p>
+          <p>Could not load projects{projectsError !== undefined ? `: ${projectsError}` : ''}</p>
           <button type="button" className="new-btn" onClick={onRetryProjects}>
-            Réessayer
+            Retry
           </button>
         </div>
       ) : projects.length === 0 ? (
         <RegisterProjectForm
-          intro="Aucun projet enregistré. Indiquez le dossier d’un dépôt pour commencer."
+          intro="No registered projects. Enter a repository folder to get started."
           onRegister={props.onRegisterProject}
           error={props.registerError ?? null}
           pending={props.registerPending ?? false}
@@ -113,7 +113,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
               aria-expanded={registerOpen}
               onClick={() => setRegisterOpen((open) => !open)}
             >
-              + Projet
+              + Project
             </button>
             {registerOpen && (
               <RegisterProjectForm
@@ -189,16 +189,16 @@ function RegisterProjectForm({
       <input
         value={path}
         onChange={(event) => setPath(event.target.value)}
-        placeholder="/chemin/absolu/du/projet"
-        aria-label="Chemin du dossier du projet"
+        placeholder="/absolute/path/to/project"
+        aria-label="Project folder path"
         spellCheck={false}
       />
       <button type="submit" className="new-btn" disabled={pending}>
-        {pending ? 'Enregistrement…' : 'Enregistrer'}
+        {pending ? 'Registering…' : 'Register'}
       </button>
       {error !== null && (
         <p className="form-error" role="alert">
-          Échec de l’enregistrement : {error}
+          Registration failed: {error}
         </p>
       )}
     </form>

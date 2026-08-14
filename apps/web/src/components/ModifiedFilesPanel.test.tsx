@@ -33,34 +33,34 @@ function renderPanel(entries: ModifiedFiles, result: Awaited<ReturnType<Modified
 describe('ModifiedFilesPanel', () => {
   test('renders one row per file: basename, full path in title, diffstat +N/−N', () => {
     renderPanel(files)
-    const row = screen.getByRole('button', { name: 'Ouvrir apps/web/src/TodoColumn.tsx dans l’IDE' })
+    const row = screen.getByRole('button', { name: 'Open apps/web/src/TodoColumn.tsx in the IDE' })
     expect(row.title).toBe('apps/web/src/TodoColumn.tsx')
     expect(row.textContent).toContain('TodoColumn.tsx')
     expect(row.textContent).toContain('+43')
     expect(row.textContent).toContain('−12')
 
     // Zero-removed diffstat renders only the added side.
-    const jsonRow = screen.getByRole('button', { name: 'Ouvrir i18n/en/submissions.json dans l’IDE' })
+    const jsonRow = screen.getByRole('button', { name: 'Open i18n/en/submissions.json in the IDE' })
     expect(jsonRow.textContent).toContain('+1')
     expect(jsonRow.textContent).not.toContain('−')
   })
 
-  test('empty session: shows the empty state, no rows, no « tout ouvrir »', () => {
+  test('empty session: shows the empty state, no rows, no « open all »', () => {
     renderPanel(new Map())
-    screen.getByText('Aucun fichier modifié pendant cette session.')
+    screen.getByText('No files modified during this session.')
     expect(screen.queryByRole('button')).toBeNull()
   })
 
   test('row click POSTs { file, line: lastLine }', async () => {
     const { calls, toasts } = renderPanel(files)
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir apps/web/src/TodoColumn.tsx dans l’IDE' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open apps/web/src/TodoColumn.tsx in the IDE' }))
     await waitFor(() => expect(calls).toEqual([{ file: 'apps/web/src/TodoColumn.tsx', line: 128 }]))
     expect(toasts).toEqual([])
   })
 
-  test('« tout ouvrir » POSTs every listed file (with its lastLine)', async () => {
+  test('« open all » POSTs every listed file (with its lastLine)', async () => {
     const { calls } = renderPanel(files)
-    fireEvent.click(screen.getByRole('button', { name: 'tout ouvrir' }))
+    fireEvent.click(screen.getByRole('button', { name: 'open all' }))
     await waitFor(() =>
       expect(calls).toEqual([
         { file: 'apps/web/src/TodoColumn.tsx', line: 128 },
@@ -70,12 +70,12 @@ describe('ModifiedFilesPanel', () => {
   })
 
   test('{ ok: false, reason } → toast with the reason and a copy-path action', async () => {
-    const { toasts } = renderPanel(files, { ok: false, reason: 'aucun IDE détecté' })
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir apps/web/src/TodoColumn.tsx dans l’IDE' }))
+    const { toasts } = renderPanel(files, { ok: false, reason: 'no IDE detected' })
+    fireEvent.click(screen.getByRole('button', { name: 'Open apps/web/src/TodoColumn.tsx in the IDE' }))
 
     await waitFor(() => expect(toasts.length).toBe(1))
-    expect(toasts[0]!.message).toContain('aucun IDE détecté')
-    expect(toasts[0]!.action.label).toBe('Copier le chemin')
+    expect(toasts[0]!.message).toContain('no IDE detected')
+    expect(toasts[0]!.action.label).toBe('Copy path')
 
     // The action copies the FULL path to the clipboard.
     const written: string[] = []
@@ -93,7 +93,7 @@ describe('ModifiedFilesPanel', () => {
       openInIde: async () => Promise.reject(new Error('POST /api/open-in-ide → 401')),
     }
     render(<ModifiedFilesPanel files={files} api={api} toastFailure={(message) => void toasts.push(message)} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir apps/web/src/TodoColumn.tsx dans l’IDE' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open apps/web/src/TodoColumn.tsx in the IDE' }))
     await waitFor(() => expect(toasts).toEqual([expect.stringContaining('POST /api/open-in-ide → 401')]))
   })
 })

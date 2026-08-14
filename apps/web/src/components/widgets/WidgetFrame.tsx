@@ -32,34 +32,34 @@ export function WidgetFrame({ instance, title, onChange, onRemove, onConfigure, 
   return (
     <section ref={frameRef} style={style} className={`widget span-${instance.span} h-${instance.height}`} role="group" aria-label={title}>
       <header className="widget-head">
-        <button type="button" className="widget-drag" aria-label={`Déplacer ${title}`} {...dragHandleProps}>
+        <button type="button" className="widget-drag" aria-label={`Move ${title}`} {...dragHandleProps}>
           ⠿
         </button>
         <h3>{title}</h3>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="widget-menu-btn" aria-label={`Options du widget — ${title}`}>
+            <button type="button" className="widget-menu-btn" aria-label={`Widget options — ${title}`}>
               ⋯
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="widget-menu">
             <DropdownMenuItem onSelect={() => onChange({ ...instance, span: isFull ? 1 : 2 })}>
-              {isFull ? 'Demi-largeur' : 'Pleine largeur'}
+              {isFull ? 'Half width' : 'Full width'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {HEIGHTS.filter((height) => height !== instance.height).map((height) => (
               <DropdownMenuItem key={height} onSelect={() => onChange({ ...instance, height })}>
-                Hauteur {height}
+                Height {height}
               </DropdownMenuItem>
             ))}
             {onConfigure !== undefined && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => onConfigure()}>Configurer…</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onConfigure()}>Configure…</DropdownMenuItem>
               </>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => onRemove(instance.id)}>Retirer</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onRemove(instance.id)}>Remove</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </header>

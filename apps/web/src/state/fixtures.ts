@@ -21,7 +21,7 @@ export const fixtureSessions: SessionSummary[] = [
   {
     id: FIXTURE_SESSION_ID,
     projectId: FIXTURE_PROJECT_ID,
-    name: 'Refresh token expiré',
+    name: 'Expired refresh token',
     updatedAt: '2026-07-15T09:41:00.000Z',
     messageCount: 5,
     isDraft: false,
@@ -46,10 +46,10 @@ export const fixtureMessages: Record<string, ChatMessage[]> = {
   [FIXTURE_SESSION_ID]: [
     {
       role: 'user',
-      text: 'Les sessions expirent au bout d’une heure — le refresh token ne se renouvelle jamais.',
+      text: 'Sessions expire after an hour — the refresh token never renews.',
       at: '2026-07-15T09:30:00.000Z',
     },
-    { role: 'assistant', text: 'Je regarde la gestion du refresh token.', at: '2026-07-15T09:30:04.000Z' },
+    { role: 'assistant', text: 'Let me look at the refresh token handling.', at: '2026-07-15T09:30:04.000Z' },
     {
       role: 'tool',
       toolUseId: 'tu-h1',
@@ -72,7 +72,7 @@ export const fixtureMessages: Record<string, ChatMessage[]> = {
     },
     {
       role: 'assistant',
-      text: 'Le renouvellement était court-circuité quand `expiresAt` était déjà dépassé. Corrigé : le token se rafraîchit dès qu’il reste moins de cinq minutes.',
+      text: 'The renewal was short-circuited when `expiresAt` was already past. Fixed: the token now refreshes as soon as fewer than five minutes remain.',
       at: '2026-07-15T09:30:30.000Z',
     },
   ],
@@ -86,8 +86,8 @@ export const fixtureMessages: Record<string, ChatMessage[]> = {
  */
 export const fixtureTurn: ServerEvent[] = [
   { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'streaming' },
-  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Je relance la suite de tests' },
-  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: ' pour vérifier le correctif.' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Rerunning the test suite' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: ' to verify the fix.' },
   {
     type: 'tool_use',
     sessionId: FIXTURE_SESSION_ID,
@@ -104,8 +104,8 @@ export const fixtureTurn: ServerEvent[] = [
     rendered: 'git push origin main',
     proposedRule: { toolName: 'Bash', matcher: 'git push' },
   },
-  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Tous les tests passent.' },
-  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: ' Il ne reste qu’à pousser la branche.' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'All tests pass.' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: ' Only the branch push remains.' },
   {
     type: 'usage',
     sessionId: FIXTURE_SESSION_ID,
@@ -120,21 +120,21 @@ export const fixtureTurn: ServerEvent[] = [
     requestId: 'fixture-q-1',
     questions: [
       {
-        question: 'Quelle approche préfères-tu ?',
-        header: 'Approche',
+        question: 'Which approach do you prefer?',
+        header: 'Approach',
         options: [
-          { label: 'Broker dédié', description: 'Un QuestionBroker séparé, sémantique claire' },
-          { label: 'Étendre le broker', description: 'Moins de fichiers, plus de gardes' },
+          { label: 'Dedicated broker', description: 'A separate QuestionBroker, clear semantics' },
+          { label: 'Extend the broker', description: 'Fewer files, more guards' },
         ],
         multiSelect: false,
       },
       {
-        question: 'Quelles plateformes cibler ?',
-        header: 'Plateformes',
+        question: 'Which platforms to target?',
+        header: 'Platforms',
         options: [
-          { label: 'macOS', description: 'Le daily driver' },
-          { label: 'Linux', description: 'Un jour peut-être' },
-          { label: 'Windows', description: 'Non prioritaire' },
+          { label: 'macOS', description: 'The daily driver' },
+          { label: 'Linux', description: 'Maybe someday' },
+          { label: 'Windows', description: 'Not a priority' },
         ],
         multiSelect: true,
       },
@@ -150,7 +150,7 @@ export const fixtureTurn: ServerEvent[] = [
  */
 export const fixtureErrorTurn: ServerEvent[] = [
   { type: 'status', sessionId: FIXTURE_SESSION_ID, state: 'streaming' },
-  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Je reprends l’analyse des tests restants.' },
+  { type: 'assistant_delta', sessionId: FIXTURE_SESSION_ID, text: 'Resuming the analysis of the remaining tests.' },
   {
     type: 'status',
     sessionId: FIXTURE_SESSION_ID,
@@ -161,9 +161,9 @@ export const fixtureErrorTurn: ServerEvent[] = [
 
 /** Demo PRs — one of each visual state so the widget is fully exercisable offline. */
 export const fixturePrs: PrSummary[] = [
-  { number: 1281, title: 'PRO-2044 - Nouveau système de filtres', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1281', author: 'alice-dev', state: 'open', updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), branch: 'feat/pro-2044', ci: 'pending', review: 'required' },
+  { number: 1281, title: 'PRO-2044 - New filter system', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1281', author: 'alice-dev', state: 'open', updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), branch: 'feat/pro-2044', ci: 'pending', review: 'required' },
   { number: 1280, title: 'Fix - Workspace switcher crash', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1280', author: 'carol-dev', state: 'open', updatedAt: new Date(Date.now() - 5 * 3600_000).toISOString(), branch: 'fix/switcher', ci: 'failed', review: 'changes_requested' },
-  { number: 1279, title: 'Draft - Exploration virtualisation', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1279', author: 'bob-dev', state: 'draft', updatedAt: new Date(Date.now() - 8 * 3600_000).toISOString(), branch: 'spike/virtualization', ci: null, review: null },
+  { number: 1279, title: 'Draft - Virtualization exploration', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1279', author: 'bob-dev', state: 'draft', updatedAt: new Date(Date.now() - 8 * 3600_000).toISOString(), branch: 'spike/virtualization', ci: null, review: null },
   { number: 1276, title: 'SUP-90 - Fix frozen page after closing clause modal', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1276', author: 'alice-dev', state: 'merged', updatedAt: new Date(Date.now() - 26 * 3600_000).toISOString(), branch: 'fix/sup-90', ci: 'passed', review: 'approved' },
   { number: 1274, title: 'Chore - Update @jsfns', url: 'https://github.com/acme-corp/demoapp-frontend/pull/1274', author: 'bob-dev', state: 'closed', updatedAt: new Date(Date.now() - 30 * 3600_000).toISOString(), branch: 'chore/jsfns', ci: 'passed', review: null },
 ]
@@ -175,7 +175,7 @@ export const fixtureWidgets: WidgetInstance[] = [...DEFAULT_WIDGETS, { id: 'fixt
 export const fixtureAutopilot: AutopilotState = {
   run: null,
   items: [
-    { issue: 12, title: 'Ajouter le raccourci ⌘K', branch: 'autopilot/12', projectId: 'proj-atelier', repoRoot: '/work/atelier', sessionId: 'fixture-session-1', status: 'pr_opened', prUrl: 'https://github.com/g-grum/atelier/pull/91', startedAt: '2026-08-05T09:00:00Z', endedAt: '2026-08-05T09:18:00Z' },
-    { issue: 15, title: 'Corriger le scroll du composer', branch: 'autopilot/15', projectId: 'proj-atelier', repoRoot: '/work/atelier', sessionId: 'fixture-session-2', status: 'failed', error: 'le tour s’est terminé sans PR ouverte', startedAt: '2026-08-05T09:20:00Z', endedAt: '2026-08-05T09:50:00Z' },
+    { issue: 12, title: 'Add the ⌘K shortcut', branch: 'autopilot/12', projectId: 'proj-atelier', repoRoot: '/work/atelier', sessionId: 'fixture-session-1', status: 'pr_opened', prUrl: 'https://github.com/g-grum/atelier/pull/91', startedAt: '2026-08-05T09:00:00Z', endedAt: '2026-08-05T09:18:00Z' },
+    { issue: 15, title: 'Fix the composer scrolling', branch: 'autopilot/15', projectId: 'proj-atelier', repoRoot: '/work/atelier', sessionId: 'fixture-session-2', status: 'failed', error: 'the turn ended without an open PR', startedAt: '2026-08-05T09:20:00Z', endedAt: '2026-08-05T09:50:00Z' },
   ],
 }

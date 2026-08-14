@@ -22,7 +22,7 @@ const EMPTY_DRAFT: Draft = { selected: [], other: '', useOther: false }
  *
  * Mono-question single-select : cliquer une option prédéfinie envoie
  * directement (friction zéro). « Autre » et tous les autres cas passent par le
- * bouton « Envoyer les réponses », actif quand chaque question a une réponse.
+ * bouton « Send answers », actif quand chaque question a une réponse.
  *
  * Preview (issue #5) : la preview d'une option s'affiche au survol et au focus
  * clavier — indispensable en direct-send où le clic répond immédiatement —
@@ -83,10 +83,10 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
   }
 
   return (
-    <div ref={cardRef} tabIndex={-1} className="question" role="group" aria-label="Question de Claude">
+    <div ref={cardRef} tabIndex={-1} className="question" role="group" aria-label="Question from Claude">
       <div role={disabled ? undefined : 'alert'}>
         <div className="q-head">
-          <span className="k">Question</span> Claude a besoin de ton avis :
+          <span className="k">Question</span> Claude needs your input:
         </div>
       </div>
       {item.questions.map((q) => {
@@ -156,8 +156,8 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
                 disabled={disabled}
                 onClick={() => setDraft(q, { useOther: !draft.useOther, selected: [] })}
               >
-                <span className="q-label">Autre…</span>
-                <span className="q-desc">Réponse libre</span>
+                <span className="q-label">Other…</span>
+                <span className="q-desc">Free-form answer</span>
               </button>
             </div>
             {q.options.some((o) => o.preview !== undefined) && (
@@ -171,8 +171,8 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
               <input
                 type="text"
                 className="q-other"
-                aria-label="Réponse libre"
-                placeholder="Ta réponse…"
+                aria-label="Free-form answer"
+                placeholder="Your answer…"
                 value={draft.other}
                 onChange={(e) => setDraft(q, { other: e.target.value })}
               />
@@ -183,12 +183,12 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
       {!disabled && !(directSend && !draftOf(item.questions[0]!).useOther) && (
         <div className="q-actions">
           <button type="button" className="q-submit" disabled={!complete} onClick={submit}>
-            Envoyer les réponses
+            Send answers
           </button>
         </div>
       )}
-      {resolved === 'answered' && <div className="q-outcome">Répondu</div>}
-      {resolved === 'dismissed' && <div className="q-outcome">Répondu dans le chat</div>}
+      {resolved === 'answered' && <div className="q-outcome">Answered</div>}
+      {resolved === 'dismissed' && <div className="q-outcome">Answered in chat</div>}
     </div>
   )
 }

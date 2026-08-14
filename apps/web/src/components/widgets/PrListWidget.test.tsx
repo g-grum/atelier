@@ -36,9 +36,9 @@ describe('PrListWidget', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open pending/ }))
     screen.getByText('#1')
     screen.getByText('b1')
-    screen.getByText(/CI en cours/)
-    screen.getByText(/review requise/i)
-    screen.getByRole('button', { name: /Ouvrir sur GitHub/ }) // second ↗ inside the expansion (spec)
+    screen.getByText(/CI running/)
+    screen.getByText(/review required/i)
+    screen.getByRole('button', { name: /Open on GitHub/ }) // second ↗ inside the expansion (spec)
     fireEvent.click(screen.getByRole('button', { name: /Open pending/ }))
     expect(screen.queryByText('#1')).toBeNull()
   })
@@ -46,7 +46,7 @@ describe('PrListWidget', () => {
   test('↗ opens the PR url without toggling the row', async () => {
     const { opened } = renderWidget(async () => prs)
     await waitFor(() => screen.getByText('Open pending'))
-    fireEvent.click(screen.getByRole('button', { name: 'Ouvrir la PR #1 sur GitHub' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open PR #1 on GitHub' }))
     expect(opened).toEqual(['https://x/1'])
     expect(screen.queryByText('b1')).toBeNull()
   })
@@ -54,20 +54,20 @@ describe('PrListWidget', () => {
   test('error state shows the server message and retries on click', async () => {
     let failures = 1
     renderWidget(async () => {
-      if (failures-- > 0) throw new Error("gh n'est pas authentifié pour « alice-dev »")
+      if (failures-- > 0) throw new Error('gh is not authenticated for "alice-dev"')
       return prs
     })
-    await waitFor(() => screen.getByText(/authentifié/))
-    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    await waitFor(() => screen.getByText(/authenticated/))
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => screen.getByText('Open pending'))
   })
 
   test('empty state', async () => {
     renderWidget(async () => [])
-    await waitFor(() => screen.getByText('Aucune PR récente'))
+    await waitFor(() => screen.getByText('No recent PRs'))
   })
 
-  test('repo vide → état « à configurer » sans appel gh, le bouton ouvre la config', () => {
+  test('empty repo: "needs configuration" state without a gh call, button opens the config', () => {
     const calls: number[] = []
     const configured: boolean[] = []
     renderWidget(
@@ -77,10 +77,10 @@ describe('PrListWidget', () => {
       },
       { repo: '', onConfigure: () => configured.push(true) },
     )
-    screen.getByText(/à configurer/i)
-    fireEvent.click(screen.getByRole('button', { name: 'Configurer…' }))
+    screen.getByText(/needs configuration/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Configure…' }))
     expect(configured).toEqual([true])
-    expect(calls).toEqual([]) // pas de requête gh tant que le repo n'est pas défini
+    expect(calls).toEqual([]) // no gh request until the repo is set
   })
 })
 
@@ -89,6 +89,6 @@ describe('formatAge', () => {
     const now = new Date('2026-07-21T12:00:00Z')
     expect(formatAge('2026-07-21T11:58:00Z', now)).toBe('2 min')
     expect(formatAge('2026-07-21T09:00:00Z', now)).toBe('3 h')
-    expect(formatAge('2026-07-18T09:00:00Z', now)).toBe('3 j')
+    expect(formatAge('2026-07-18T09:00:00Z', now)).toBe('3 d')
   })
 })

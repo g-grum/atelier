@@ -20,11 +20,11 @@ export function ThemeToggle({ patchPreferences }: ThemeToggleProps) {
     <button
       type="button"
       className="theme-btn"
-      aria-label={dark ? 'Passer en mode clair' : 'Passer en mode sombre'}
+      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
       onClick={() => {
         const next = toggleValue(theme)
         applyTheme(next)
-        patchPreferences({ theme: next }).catch(() => toast.error('Impossible d’enregistrer le thème.'))
+        patchPreferences({ theme: next }).catch(() => toast.error('Could not save the theme.'))
       }}
     >
       {dark ? '☾' : '☀︎'}

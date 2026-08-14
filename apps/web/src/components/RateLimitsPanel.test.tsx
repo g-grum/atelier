@@ -30,9 +30,9 @@ describe('RateLimitsPanel', () => {
   test('renders one gauge per window — label, percent, and a bar sized to the utilization', () => {
     const { container } = render(<RateLimitsPanel limits={[sevenDay, fiveHour]} />)
 
-    expect(screen.getByText('Session (5 h)')).toBeTruthy()
+    expect(screen.getByText('Session (5 hr)')).toBeTruthy()
     expect(screen.getByText('34 %')).toBeTruthy()
-    expect(screen.getByText('Semaine — tous modèles')).toBeTruthy()
+    expect(screen.getByText('Week — all models')).toBeTruthy()
     expect(screen.getByText('92 %')).toBeTruthy()
 
     const bars = container.querySelectorAll('.gauge > i')
@@ -51,7 +51,7 @@ describe('RateLimitsPanel', () => {
 
   test('no data → honest empty state, no fake gauges', () => {
     render(<RateLimitsPanel limits={[]} />)
-    expect(screen.getByText(/Aucune donnée/)).toBeTruthy()
+    expect(screen.getByText(/No limit data/)).toBeTruthy()
   })
 })
 
@@ -66,7 +66,7 @@ describe('RateLimitsPanel staleness', () => {
       />,
     )
     // The expired snapshot loses its bar/percent claim and says so.
-    expect(screen.getByText(/fenêtre réinitialisée/i)).toBeTruthy()
+    expect(screen.getByText(/window reset/i)).toBeTruthy()
     expect(screen.queryByText('98 %')).toBeNull()
     // The fresh seven_day gauge still renders normally.
     expect(screen.getByText('61 %')).toBeTruthy()
@@ -85,9 +85,9 @@ const fiveHourFresh: RateLimitSnapshot = {
 describe('formatReset', () => {
   test('same day → time only; another day → weekday + time', () => {
     const now = new Date('2026-07-17T12:00:00.000Z')
-    expect(formatReset('2026-07-17T16:00:00.000Z', now)).toBe(`réinit. ${new Date('2026-07-17T16:00:00.000Z').toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`)
+    expect(formatReset('2026-07-17T16:00:00.000Z', now)).toBe(`resets ${new Date('2026-07-17T16:00:00.000Z').toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`)
     const other = formatReset('2026-07-24T00:00:00.000Z', now)
-    expect(other.startsWith('réinit. ')).toBe(true)
-    expect(other.length).toBeGreaterThan('réinit. 00:00'.length) // carries the day part
+    expect(other.startsWith('resets ')).toBe(true)
+    expect(other.length).toBeGreaterThan(`resets ${new Date('2026-07-24T00:00:00.000Z').toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`.length) // carries the day part
   })
 })

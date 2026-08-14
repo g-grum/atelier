@@ -15,15 +15,15 @@ export type PrListWidgetProps = {
   openUrl?: (url: string) => void
 }
 
-const STATE_LABEL: Record<PrSummary['state'], string> = { open: 'ouverte', merged: 'mergée', closed: 'fermée', draft: 'brouillon' }
-const CI_LABEL = { passed: 'CI verte', failed: 'CI en échec', pending: 'CI en cours' } as const
-const REVIEW_LABEL = { approved: 'review approuvée', changes_requested: 'changements demandés', required: 'review requise' } as const
+const STATE_LABEL: Record<PrSummary['state'], string> = { open: 'open', merged: 'merged', closed: 'closed', draft: 'draft' }
+const CI_LABEL = { passed: 'CI passing', failed: 'CI failing', pending: 'CI running' } as const
+const REVIEW_LABEL = { approved: 'review approved', changes_requested: 'changes requested', required: 'review required' } as const
 
 export function formatAge(updatedAt: string, now: Date = new Date()): string {
   const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(updatedAt)) / 60_000))
   if (minutes < 60) return `${minutes} min`
   if (minutes < 24 * 60) return `${Math.round(minutes / 60)} h`
-  return `${Math.round(minutes / (24 * 60))} j`
+  return `${Math.round(minutes / (24 * 60))} d`
 }
 
 /**
@@ -46,10 +46,10 @@ export function PrListWidget({ repo, limit, api, onConfigure, openUrl = (url) =>
   if (repo === '') {
     return (
       <div className="pr-setup">
-        <span>Widget à configurer — choisis un repo GitHub.</span>
+        <span>Widget needs configuration — pick a GitHub repo.</span>
         {onConfigure !== undefined && (
           <button type="button" className="banner-btn" onClick={onConfigure}>
-            Configurer…
+            Configure…
           </button>
         )}
       </div>
@@ -61,12 +61,12 @@ export function PrListWidget({ repo, limit, api, onConfigure, openUrl = (url) =>
       <div className="pr-error" role="alert">
         <span>{errorMessage(query.error)}</span>
         <button type="button" className="banner-btn" onClick={() => void query.refetch()}>
-          Réessayer
+          Retry
         </button>
       </div>
     )
   }
-  if (query.data.length === 0) return <p className="pr-empty">Aucune PR récente</p>
+  if (query.data.length === 0) return <p className="pr-empty">No recent PRs</p>
 
   return (
     <ul className="pr-list">
@@ -83,7 +83,7 @@ export function PrListWidget({ repo, limit, api, onConfigure, openUrl = (url) =>
               <span className="pr-title">{pr.title}</span>
               <span className="pr-age">{formatAge(pr.updatedAt)}</span>
             </button>
-            <button type="button" className="pr-open" aria-label={`Ouvrir la PR #${pr.number} sur GitHub`} onClick={() => openUrl(pr.url)}>
+            <button type="button" className="pr-open" aria-label={`Open PR #${pr.number} on GitHub`} onClick={() => openUrl(pr.url)}>
               ↗
             </button>
           </div>
@@ -92,9 +92,9 @@ export function PrListWidget({ repo, limit, api, onConfigure, openUrl = (url) =>
               <span>#{pr.number}</span> · <span>{pr.author}</span> · <span>{pr.branch}</span> · <span>{STATE_LABEL[pr.state]}</span>
               {pr.ci !== null && <> · <span>{CI_LABEL[pr.ci]}</span></>}
               {pr.review !== null && <> · <span>{REVIEW_LABEL[pr.review]}</span></>}
-              {' · '}<span>{new Date(pr.updatedAt).toLocaleString('fr-FR')}</span>
+              {' · '}<span>{new Date(pr.updatedAt).toLocaleString('en-US')}</span>
               <button type="button" className="pr-open-detail" onClick={() => openUrl(pr.url)}>
-                Ouvrir sur GitHub ↗
+                Open on GitHub ↗
               </button>
             </div>
           )}

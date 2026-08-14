@@ -43,7 +43,7 @@ function renderSelector(target: SessionSummary | null = session, overrides: Part
 }
 
 function openMenu(): HTMLElement {
-  const chip = screen.getByRole('button', { name: /changer de modèle/i })
+  const chip = screen.getByRole('button', { name: /change model/i })
   // Radix triggers open on pointerdown (not click) or on Enter/Space keydown.
   fireEvent.keyDown(chip, { key: 'Enter' })
   return chip
@@ -52,7 +52,7 @@ function openMenu(): HTMLElement {
 describe('ModelSelector', () => {
   test('the chip shows the active session model label', () => {
     renderSelector()
-    const chip = screen.getByRole('button', { name: /changer de modèle/i })
+    const chip = screen.getByRole('button', { name: /change model/i })
     expect(chip.textContent).toContain('Fable 5')
   })
 
@@ -69,7 +69,7 @@ describe('ModelSelector', () => {
     expect(current.getAttribute('aria-checked')).toBe('true')
     expect(screen.getByRole('menuitemradio', { name: 'Opus 4.8' }).getAttribute('aria-checked')).toBe('false')
     expect(screen.getByRole('menuitemradio', { name: 'Sonnet 4.6' }).getAttribute('aria-checked')).toBe('false')
-    screen.getByText('S’applique au prochain tour.')
+    screen.getByText('Applies from the next turn.')
   })
 
   test('selecting a model PATCHes { model } for the session and invalidates the sessions list', async () => {
@@ -93,7 +93,7 @@ describe('ModelSelector', () => {
 
   test('a model no longer in MODELS stays visible and checked, not silently remapped', async () => {
     renderSelector({ ...session, model: 'claude-legacy-1' })
-    expect(screen.getByRole('button', { name: /changer de modèle/i }).textContent).toContain('claude-legacy-1')
+    expect(screen.getByRole('button', { name: /change model/i }).textContent).toContain('claude-legacy-1')
     openMenu()
 
     const legacy = await screen.findByRole('menuitemradio', { name: 'claude-legacy-1' })
@@ -108,6 +108,6 @@ describe('ModelSelector', () => {
 
     fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Opus 4.8' }))
     await waitFor(() => expect(toasts).toEqual([expect.stringContaining('PATCH /api/sessions/s1 → 500')]))
-    expect(toasts[0]).toContain('Impossible de changer le modèle')
+    expect(toasts[0]).toContain('Could not change the model')
   })
 })

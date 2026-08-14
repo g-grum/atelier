@@ -26,11 +26,11 @@ function message(error: NonNullable<StreamState['error']>): string {
     // An unparseable resetAt falls through to the time-less cases below.
     if (!Number.isNaN(at.getTime())) {
       const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
-      return `Limite d’usage atteinte — réinitialisation à ${hhmm}`
+      return `Usage limit reached — resets at ${hhmm}`
     }
   }
   // The machine slug must never leak into the French UI: a usage_limit without
   // a (parseable) resetAt still reads as the human message, just time-less.
-  if (error.reason === 'usage_limit') return 'Limite d’usage atteinte'
+  if (error.reason === 'usage_limit') return 'Usage limit reached'
   return error.reason
 }

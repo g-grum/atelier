@@ -33,9 +33,9 @@ export type ModifiedFilesPanelProps = {
  */
 export function ModifiedFilesPanel({ files, api = defaultApi, toastFailure = defaultToastFailure }: ModifiedFilesPanelProps) {
   const notifyFailure = (file: string, reason: string): void => {
-    toastFailure(`Impossible d’ouvrir ${basename(file)} dans l’IDE : ${reason}`, {
+    toastFailure(`Could not open ${basename(file)} in the IDE: ${reason}`, {
       action: {
-        label: 'Copier le chemin',
+        label: 'Copy path',
         // Clipboard denial has no further fallback — the reason stays visible in the toast.
         onClick: () => void navigator.clipboard.writeText(file).catch(() => {}),
       },
@@ -60,9 +60,9 @@ export function ModifiedFilesPanel({ files, api = defaultApi, toastFailure = def
   }
 
   return (
-    <section aria-label="Fichiers modifiés">
+    <section aria-label="Modified files">
       {files.size === 0 ? (
-        <p className="file-empty">Aucun fichier modifié pendant cette session.</p>
+        <p className="file-empty">No files modified during this session.</p>
       ) : (
         <>
           {[...files].map(([file, stat]) => (
@@ -71,7 +71,7 @@ export function ModifiedFilesPanel({ files, api = defaultApi, toastFailure = def
               type="button"
               className="file-row"
               title={file}
-              aria-label={`Ouvrir ${file} dans l’IDE`}
+              aria-label={`Open ${file} in the IDE`}
               onClick={() => void open(file, stat.lastLine)}
             >
               <svg className="i" viewBox="0 0 24 24" aria-hidden="true">
@@ -95,9 +95,9 @@ export function ModifiedFilesPanel({ files, api = defaultApi, toastFailure = def
             <svg className="i" viewBox="0 0 24 24" aria-hidden="true">
               <path d="m8 7-5 5 5 5M16 7l5 5-5 5" />
             </svg>
-            <span>clic = IDE au fichier:ligne ·</span>
+            <span>click = IDE at file:line ·</span>
             <button type="button" className="open-all" onClick={() => void openAll()}>
-              tout ouvrir
+              open all
             </button>
           </div>
         </>

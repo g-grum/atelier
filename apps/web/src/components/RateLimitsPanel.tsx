@@ -2,22 +2,22 @@ import type { RateLimitSnapshot, RateLimitWindow } from '@atelier/shared'
 
 /** Fixed display order + French labels — mirrors the claude.ai/usage page. */
 const WINDOWS: { window: RateLimitWindow; label: string }[] = [
-  { window: 'five_hour', label: 'Session (5 h)' },
-  { window: 'seven_day', label: 'Semaine — tous modèles' },
-  { window: 'seven_day_opus', label: 'Semaine — Opus' },
-  { window: 'seven_day_sonnet', label: 'Semaine — Sonnet' },
-  { window: 'seven_day_overage_included', label: 'Semaine — dépassement inclus' },
-  { window: 'overage', label: 'Dépassement' },
+  { window: 'five_hour', label: 'Session (5 hr)' },
+  { window: 'seven_day', label: 'Week — all models' },
+  { window: 'seven_day_opus', label: 'Week — Opus' },
+  { window: 'seven_day_sonnet', label: 'Week — Sonnet' },
+  { window: 'seven_day_overage_included', label: 'Week — overage included' },
+  { window: 'overage', label: 'Overage' },
 ]
 
 /** « réinit. 16:00 » same day, « réinit. jeu. 24/07 16:00 » otherwise (fr-FR, local time). */
 export function formatReset(resetsAt: string, now: Date): string {
   const reset = new Date(resetsAt)
-  const time = reset.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  const time = reset.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   const sameDay = reset.toDateString() === now.toDateString()
-  if (sameDay) return `réinit. ${time}`
-  const day = reset.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })
-  return `réinit. ${day} ${time}`
+  if (sameDay) return `resets ${time}`
+  const day = reset.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: '2-digit' })
+  return `resets ${day} ${time}`
 }
 
 export type RateLimitsPanelProps = {
@@ -39,9 +39,9 @@ export function RateLimitsPanel({ limits }: RateLimitsPanelProps) {
   const now = new Date()
 
   return (
-    <section className="card" aria-label="Limites du plan">
+    <section className="card" aria-label="Plan limits">
       {rows.length === 0 ? (
-        <p className="limits-empty">Aucune donnée de limite pour l’instant — elles arrivent avec le premier tour.</p>
+        <p className="limits-empty">No limit data yet — it arrives with the first turn.</p>
       ) : (
         rows.map(({ label, limit }) => {
           // A snapshot whose window already reset describes a FINISHED window —
@@ -54,7 +54,7 @@ export function RateLimitsPanel({ limits }: RateLimitsPanelProps) {
                 <div className="kv">
                   <span>{label}</span>
                 </div>
-                <div className="limit-reset">fenêtre réinitialisée — en attente du prochain tour</div>
+                <div className="limit-reset">window reset — waiting for the next turn</div>
               </div>
             )
           }

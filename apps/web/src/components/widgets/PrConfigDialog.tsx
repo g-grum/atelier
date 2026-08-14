@@ -51,7 +51,7 @@ export function PrConfigDialog({ instance, githubAccount, onSave, onClose }: PrC
 
   const save = () => {
     if (!REPO_PATTERN.test(repo)) {
-      setError('« repo » doit être de la forme owner/repo')
+      setError('“repo” must look like owner/repo')
       return
     }
     onSave({ ...instance, config: { repo, limit: clampLimit(limitRaw) } })
@@ -67,7 +67,7 @@ export function PrConfigDialog({ instance, githubAccount, onSave, onClose }: PrC
     >
       <DialogContent className="bg-surface sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">Configurer le widget Pull Requests</DialogTitle>
+          <DialogTitle className="text-[15px]">Configure the Pull Requests widget</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           {error !== null && (
@@ -77,7 +77,7 @@ export function PrConfigDialog({ instance, githubAccount, onSave, onClose }: PrC
           )}
           <div className="flex flex-col gap-2">
             <label className={LABEL_CLASS} htmlFor="pr-config-repo">
-              Repo (owner/nom)
+              Repo (owner/name)
             </label>
             <input
               id="pr-config-repo"
@@ -89,7 +89,7 @@ export function PrConfigDialog({ instance, githubAccount, onSave, onClose }: PrC
           </div>
           <div className="flex flex-col gap-2">
             <label className={LABEL_CLASS} htmlFor="pr-config-limit">
-              Nombre de PRs
+              Number of PRs
             </label>
             <input
               id="pr-config-limit"
@@ -104,10 +104,10 @@ export function PrConfigDialog({ instance, githubAccount, onSave, onClose }: PrC
         </div>
         <DialogFooter>
           <button type="button" className="dialog-btn" onClick={onClose}>
-            Annuler
+            Cancel
           </button>
           <button type="button" className="dialog-btn" onClick={save}>
-            Enregistrer
+            Save
           </button>
         </DialogFooter>
       </DialogContent>

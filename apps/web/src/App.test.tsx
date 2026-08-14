@@ -93,7 +93,7 @@ describe('App failure surfacing', () => {
     renderApp(fakeBackend({ listProjects: async () => Promise.reject(new Error('GET /api/projects → 401')) }))
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain('GET /api/projects → 401')
-    expect(screen.queryByRole('button', { name: 'Enregistrer' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Register' })).toBeNull()
   })
 
   test('a failed session open shows a banner whose retry recovers the chat', async () => {
@@ -111,9 +111,9 @@ describe('App failure surfacing', () => {
     expect(banner.textContent).toContain('GET /api/sessions/s1/messages → 500')
 
     fail = false
-    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await screen.findByText('Bonjour Claude')
-    expect(screen.queryByText(/Impossible de charger la session/)).toBeNull()
+    expect(screen.queryByText(/Could not load the session/)).toBeNull()
   })
 
   test('a failed rename surfaces a dismissible notice', async () => {
@@ -123,15 +123,15 @@ describe('App failure surfacing', () => {
     renderApp(backend)
 
     // s1 is auto-opened by the launch restore
-    fireEvent.click(await screen.findByRole('button', { name: /renommer la session/i }))
-    const input = screen.getByLabelText('Renommer la session')
+    fireEvent.click(await screen.findByRole('button', { name: /rename the session/i }))
+    const input = screen.getByLabelText('Rename the session')
     fireEvent.change(input, { target: { value: 'Nouveau nom' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
-    const notice = await screen.findByText(/Échec du renommage/)
+    const notice = await screen.findByText(/Rename failed/)
     expect(notice.textContent).toContain('PATCH /api/sessions/s1 → 500')
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
-    expect(screen.queryByText(/Échec du renommage/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByText(/Rename failed/)).toBeNull()
   })
 
   // History with a tool call carrying a file → ChatView renders an IDE button.
@@ -154,12 +154,12 @@ describe('App failure surfacing', () => {
     renderApp(backend)
 
     // s1 is auto-opened by the launch restore — its history renders the IDE button
-    fireEvent.click(await screen.findByRole('button', { name: /ouvrir dans l/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /open in the ide/i }))
 
-    const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
+    const notice = await screen.findByText(/Could not open in the IDE/)
     expect(notice.textContent).toContain('aucun IDE détecté')
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
-    expect(screen.queryByText(/Impossible d’ouvrir dans l’IDE/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByText(/Could not open in the IDE/)).toBeNull()
   })
 
   test('a rejected open-in-ide call is caught and surfaced, not an unhandled rejection', async () => {
@@ -169,9 +169,9 @@ describe('App failure surfacing', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByRole('button', { name: /ouvrir dans l/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /open in the ide/i }))
 
-    const notice = await screen.findByText(/Impossible d’ouvrir dans l’IDE/)
+    const notice = await screen.findByText(/Could not open in the IDE/)
     expect(notice.textContent).toContain('POST /api/open-in-ide → 401')
   })
 })
@@ -190,14 +190,14 @@ describe('App per-session permissions gate', () => {
     renderApp(backend)
 
     // the launch restore auto-opens the (undecided) session — the gate shows
-    await screen.findByRole('group', { name: 'Permissions de la session' })
-    const textarea = screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement
+    await screen.findByRole('group', { name: 'Session permissions' })
+    const textarea = screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement
     expect(textarea.disabled).toBe(true)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Permissions normales' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Normal permissions' }))
     await waitFor(() => expect(patches).toEqual([{ permissionMode: 'default' }]))
-    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
-    expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
+    await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(screen.queryByRole('button', { name: 'Normal permissions' })).toBeNull()
   })
 
   test('the dangerous choice patches bypassPermissions', async () => {
@@ -212,14 +212,14 @@ describe('App per-session permissions gate', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByRole('button', { name: /dangereux/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /dangerous/i }))
     await waitFor(() => expect(patches).toEqual([{ permissionMode: 'bypassPermissions' }]))
   })
 
   test('a decided session never shows the gate', async () => {
     renderApp(fakeBackend())
-    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
-    expect(screen.queryByRole('button', { name: 'Permissions normales' })).toBeNull()
+    await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    expect(screen.queryByRole('button', { name: 'Normal permissions' })).toBeNull()
   })
 
   test('checking « Se souvenir » patches the session AND the preference default', async () => {
@@ -237,8 +237,8 @@ describe('App per-session permissions gate', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByLabelText(/Se souvenir de ce choix/))
-    fireEvent.click(screen.getByRole('button', { name: /dangereux/i }))
+    fireEvent.click(await screen.findByLabelText(/Remember this choice/))
+    fireEvent.click(screen.getByRole('button', { name: /dangerous/i }))
 
     await waitFor(() => expect(prefPatches).toEqual([{ defaultPermissionMode: 'bypassPermissions' }]))
   })
@@ -258,9 +258,9 @@ describe('App per-session permissions gate', () => {
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Permissions normales' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Normal permissions' }))
 
-    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
     expect(prefPatches).toEqual([])
   })
 })
@@ -273,12 +273,12 @@ describe('App bypass indicator', () => {
     // Le match exact ne touche pas le bouton du gate « Skip permissions (dangereux) »,
     // qui de toute façon ne se rend pas pour une session décidée.
     const chip = await screen.findByText('Skip permissions')
-    expect(chip.title).toContain('le défaut se gère dans les réglages')
+    expect(chip.title).toContain('the default is managed in settings')
   })
 
   test('a default-mode session shows no chip', async () => {
     renderApp(fakeBackend())
-    await waitFor(() => expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
     expect(screen.queryByText('Skip permissions')).toBeNull()
   })
 })
@@ -319,23 +319,23 @@ describe('App question QCM (ask user question)', () => {
     })
     renderApp(backend)
 
-    await screen.findByRole('button', { name: /renommer la session « session un »/i })
-    const textarea = screen.getByLabelText('Répondre à Claude')
+    await screen.findByRole('button', { name: /rename the session “session un”/i })
+    const textarea = screen.getByLabelText('Reply to Claude')
     fireEvent.change(textarea, { target: { value: 'Quelle est la suite ?' } })
     fireEvent.keyDown(textarea, { key: 'Enter' })
 
     // Le replay est pacé — timeout généreux pour laisser tout le tour arriver.
-    await screen.findByText('Quelle approche préfères-tu ?', undefined, { timeout: 5000 })
+    await screen.findByText('Which approach do you prefer?', undefined, { timeout: 5000 })
     // Deux questions → pas d'envoi direct : une option par question, puis Envoyer.
-    fireEvent.click(screen.getByRole('button', { name: /Broker dédié/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Dedicated broker/ }))
     fireEvent.click(screen.getByRole('button', { name: /^macOS/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Envoyer les réponses' }))
-    await screen.findByText('Répondu')
+    fireEvent.click(screen.getByRole('button', { name: 'Send answers' }))
+    await screen.findByText('Answered')
     // Le contrat wire est aussi parti : answers complet, jointure virgule du multiSelect.
     expect(sent).toContainEqual({
       type: 'question_response',
       requestId: 'fixture-q-1',
-      answers: { 'Quelle approche préfères-tu ?': 'Broker dédié', 'Quelles plateformes cibler ?': 'macOS' },
+      answers: { 'Which approach do you prefer?': 'Dedicated broker', 'Which platforms to target?': 'macOS' },
     })
   })
 })
@@ -349,7 +349,7 @@ describe('App plan limits panel', () => {
         ],
       }),
     )
-    await screen.findByText('Session (5 h)')
+    await screen.findByText('Session (5 hr)')
     expect(screen.getByText('34 %')).toBeTruthy()
   })
 })
@@ -360,29 +360,29 @@ describe('App update toast', () => {
       fakeBackend({ getVersion: async () => ({ version: '9.9.9', notes: ['Note un', 'Note deux'] }) }),
     )
 
-    await screen.findByText('Une nouvelle version est disponible')
+    await screen.findByText('A new version is available')
     expect(screen.getByText(/Note un/)).toBeTruthy()
     expect(screen.getByText(/Note deux/)).toBeTruthy()
-    expect(screen.getByText(/redémarre Atelier/i)).toBeTruthy()
+    expect(screen.getByText(/restart Atelier/i)).toBeTruthy()
 
     // A refetch of the same version must not stack a second toast.
     await act(async () => {
       await queryClient.invalidateQueries({ queryKey: ['version'] })
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
-    expect(screen.getAllByText('Une nouvelle version est disponible')).toHaveLength(1)
+    expect(screen.getAllByText('A new version is available')).toHaveLength(1)
   })
 
   test('no update toast when the repo version matches the build', async () => {
     renderApp(fakeBackend())
     await screen.findAllByText('Session un') // app settled (sidebar, then topbar once restored)
-    expect(screen.queryByText('Une nouvelle version est disponible')).toBeNull()
+    expect(screen.queryByText('A new version is available')).toBeNull()
   })
 
   test('a failed version fetch stays silent — no toast, no crash', async () => {
     renderApp(fakeBackend({ getVersion: async () => Promise.reject(new Error('GET /api/version → 500')) }))
     await screen.findAllByText('Session un')
-    expect(screen.queryByText('Une nouvelle version est disponible')).toBeNull()
+    expect(screen.queryByText('A new version is available')).toBeNull()
   })
 })
 
@@ -441,7 +441,7 @@ describe('App projects list resilience', () => {
 
     expect(queryClient.getQueryState(['projects'])?.status).toBe('error') // the refetch really failed…
     expect(screen.getByText('atelier')).toBeTruthy() // …yet the cached list keeps rendering
-    expect(screen.queryByText(/Impossible de charger les projets/)).toBeNull()
+    expect(screen.queryByText(/Could not load projects/)).toBeNull()
   })
 })
 
@@ -453,9 +453,9 @@ describe('App dashboard widgets', () => {
       },
     })
     renderApp(backend)
-    fireEvent.keyDown((await screen.findAllByRole('button', { name: /Options du widget/ }))[0]!, { key: 'Enter' })
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Retirer' }))
-    await screen.findByText(/Impossible d’enregistrer le layout/)
+    fireEvent.keyDown((await screen.findAllByRole('button', { name: /Widget options/ }))[0]!, { key: 'Enter' })
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }))
+    await screen.findByText(/Could not save the layout/)
     expect(screen.getAllByRole('group')).toHaveLength(2)
   })
 })
@@ -471,12 +471,12 @@ describe('App session deletion', () => {
       }),
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la conversation' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete the conversation' }))
     // the dialog is a gate — nothing deleted yet
     expect(deleted).toEqual([])
-    expect(screen.getByRole('dialog').textContent).toContain('« Session un » sera définitivement supprimée.')
+    expect(screen.getByRole('dialog').textContent).toContain('“Session un” will be permanently deleted.')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => expect(deleted).toEqual(['s1']))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
@@ -497,20 +497,20 @@ describe('App session deletion', () => {
     )
 
     // the launch restore selects the session — the Topbar shows its rename affordance
-    await screen.findByRole('button', { name: /renommer la session/i })
+    await screen.findByRole('button', { name: /rename the session/i })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer la conversation' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete the conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     // list refetched without the session, and the deleted session was deselected.
     // queryAllByText: while selected, 'Session un' appears TWICE (sidebar + Topbar)
     // — an all-gone assertion fails cleanly instead of a multiple-match timeout.
     await waitFor(() => expect(screen.queryAllByText('Session un')).toHaveLength(0))
-    expect(screen.queryByRole('button', { name: /renommer la session/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /rename the session/i })).toBeNull()
     // Pin the deselection itself (`setSelected(null)`) — the two assertions
     // above also hold from the list refetch alone. A dangling selection would
     // leave the composer enabled against a deleted session.
-    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(true)
     // Pin `controller.close()` — the deleted session's socket must be torn down.
     expect(closes.length).toBeGreaterThan(0)
   })
@@ -532,16 +532,16 @@ describe('App session deletion', () => {
       // the restore selects 'Session un' (first of the tie on updatedAt), then
       // delete 'Session deux' from ITS row (two × buttons share the label —
       // scope with within(row))
-      await screen.findByRole('button', { name: /renommer la session « session un »/i })
+      await screen.findByRole('button', { name: /rename the session “session un”/i })
 
       const otherRow = screen.getByText('Session deux').closest('.sess') as HTMLElement
-      fireEvent.click(within(otherRow).getByRole('button', { name: 'Supprimer la conversation' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+      fireEvent.click(within(otherRow).getByRole('button', { name: 'Delete the conversation' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
       // 'Session deux' leaves the list; 'Session un' stays selected — the guard
       // branch (`if (selected?.sessionId === session.id)`) must not over-deselect
       await waitFor(() => expect(screen.queryByText('Session deux')).toBeNull())
-      expect(screen.getByRole('button', { name: /renommer la session « session un »/i })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /rename the session “session un”/i })).toBeTruthy()
     },
     // Pre-existing (not Task 9's doing): with the selected session's ChatView left
     // mounted through this delete, some effect settles very slowly under happy-dom
@@ -562,8 +562,8 @@ describe('App session deletion', () => {
       }),
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la conversation' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete the conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(deleted).toEqual([])
@@ -572,13 +572,13 @@ describe('App session deletion', () => {
   test('a failed deletion surfaces a dismissible notice', async () => {
     renderApp(fakeBackend({ deleteSession: async () => Promise.reject(new Error('DELETE /api/sessions/s1 → 500')) }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la conversation' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete the conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     const banner = await screen.findByRole('alert')
-    expect(banner.textContent).toContain('Impossible de supprimer la session')
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }))
-    expect(screen.queryByText(/Impossible de supprimer la session/)).toBeNull()
+    expect(banner.textContent).toContain('Could not delete the session')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByText(/Could not delete the session/)).toBeNull()
     // no optimistic removal: the SIDEBAR row must survive a failed delete
     // (getAll: the auto-selected session's name also shows in the Topbar)
     expect(screen.getAllByText('Session un').some((el) => el.closest('.sess') !== null)).toBe(true)
@@ -596,7 +596,7 @@ describe('App session deletion', () => {
       }),
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer le brouillon' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete the draft' }))
 
     await waitFor(() => expect(deleted).toEqual(['d1']))
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -618,20 +618,20 @@ describe('App launch restore (spec 2026-07-24)', () => {
     renderApp(fakeBackend({ listSessions: twoSessions }))
 
     // s1 is remembered → it wins over the more recent s2
-    await screen.findByRole('button', { name: /renommer la session « session un »/i })
-    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(false)
+    await screen.findByRole('button', { name: /rename the session “session un”/i })
+    expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false)
   })
 
   test('a vanished remembered session falls back to the most recent one', async () => {
     localStorage.setItem(storageKey, JSON.stringify({ sessionId: 's-dead', projectId: 'p1' }))
     renderApp(fakeBackend({ listSessions: twoSessions }))
-    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+    await screen.findByRole('button', { name: /rename the session “session deux”/i })
   })
 
   test('a vanished remembered project falls back to the first project', async () => {
     localStorage.setItem(storageKey, JSON.stringify({ sessionId: 's1', projectId: 'p-dead' }))
     renderApp(fakeBackend({ listSessions: twoSessions }))
-    await screen.findByRole('button', { name: /renommer la session « session un »/i })
+    await screen.findByRole('button', { name: /rename the session “session un”/i })
   })
 
   test('the remembered PROJECT reopens too — its session list is where the id lives', async () => {
@@ -645,19 +645,19 @@ describe('App launch restore (spec 2026-07-24)', () => {
       }),
     )
 
-    await screen.findByRole('button', { name: /renommer la session « article »/i })
+    await screen.findByRole('button', { name: /rename the session “article”/i })
     expect(screen.getByText('blog').className).toContain('open')
   })
 
   test('nothing stored → the most recent session still opens (typeable cold start)', async () => {
     renderApp(fakeBackend({ listSessions: twoSessions }))
-    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+    await screen.findByRole('button', { name: /rename the session “session deux”/i })
   })
 
   test('corrupt storage behaves as nothing stored — fallback, no crash', async () => {
     localStorage.setItem(storageKey, '{oops')
     renderApp(fakeBackend({ listSessions: twoSessions }))
-    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+    await screen.findByRole('button', { name: /rename the session “session deux”/i })
   })
 
   test('no session at all → empty state unchanged, composer disabled', async () => {
@@ -666,13 +666,13 @@ describe('App launch restore (spec 2026-07-24)', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
-    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(true)
   })
 
   test('selecting a session records it for the next launch', async () => {
     renderApp(fakeBackend({ listSessions: twoSessions }))
     // the restore auto-opens s2 (most recent) — then the user picks s1 manually
-    await screen.findByRole('button', { name: /renommer la session « session deux »/i })
+    await screen.findByRole('button', { name: /rename the session “session deux”/i })
     const row = screen.getAllByText('Session un').find((el) => el.closest('.sess') !== null)!
     fireEvent.click(row)
     await waitFor(() => expect(stored()).toEqual({ sessionId: 's1', projectId: 'p1' }))
@@ -702,8 +702,8 @@ describe('App launch restore (spec 2026-07-24)', () => {
     })
     await waitFor(() => expect(screen.getByText('blog').className).toContain('open'))
     // the user navigated deliberately — nothing auto-opens behind their back
-    expect(screen.queryByRole('button', { name: /renommer la session/i })).toBeNull()
-    expect((screen.getByLabelText('Répondre à Claude') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(screen.queryByRole('button', { name: /rename the session/i })).toBeNull()
+    expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(true)
   })
 
   test('the draft→session remap rewrites the stored id for the next launch', async () => {
@@ -720,7 +720,7 @@ describe('App launch restore (spec 2026-07-24)', () => {
       }),
     )
 
-    await screen.findByRole('button', { name: /renommer la session/i }) // restore settled on s1
+    await screen.findByRole('button', { name: /rename the session/i }) // restore settled on s1
     fireEvent.click(screen.getByRole('button', { name: '+ Session' }))
     await waitFor(() => expect(stored()).toEqual({ sessionId: 'd1', projectId: 'p1' }))
 
@@ -741,10 +741,10 @@ describe('App launch restore (spec 2026-07-24)', () => {
       }),
     )
 
-    await screen.findByRole('button', { name: /renommer la session « session un »/i }) // restored → stored
+    await screen.findByRole('button', { name: /rename the session “session un”/i }) // restored → stored
     expect(stored()).toEqual({ sessionId: 's1', projectId: 'p1' })
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer la conversation' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete the conversation' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(stored()).toBeNull())
   })
 })
@@ -778,7 +778,7 @@ describe('Sidebar au fil de la matérialisation du draft', () => {
     )
 
     // le draft est dans la sidebar (le même libellé apparaît aussi dans la topbar → scope .sess)
-    const sidebarRow = () => screen.queryAllByText('Nouvelle session').find((el) => el.closest('.sess') !== null)
+    const sidebarRow = () => screen.queryAllByText('New session').find((el) => el.closest('.sess') !== null)
     await waitFor(() => expect(sidebarRow()).not.toBeUndefined())
     materialized = true
     await waitFor(() => expect(emit).not.toBeNull())
@@ -807,7 +807,7 @@ describe('Sidebar au fil de la matérialisation du draft', () => {
       }),
     )
 
-    await screen.findByRole('button', { name: /renommer la session/i })
+    await screen.findByRole('button', { name: /rename the session/i })
     const before = listCalls
     act(() => {
       hubEmit!({ type: 'session_status', sessionId: 'sdk-1', state: 'streaming' })
@@ -829,7 +829,7 @@ describe('App theme boot resync', () => {
     renderApp(backend)
 
     // Mount = dark (no data-theme). User deliberately switches to light mid-flight.
-    const toggle = await screen.findByRole('button', { name: 'Passer en mode clair' })
+    const toggle = await screen.findByRole('button', { name: 'Switch to light mode' })
     fireEvent.click(toggle)
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
 

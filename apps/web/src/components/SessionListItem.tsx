@@ -31,14 +31,14 @@ export function SessionListItem({ session, active, state, onSelect, onDelete }: 
     <div className={`sess${active ? ' active' : ''}`}>
       <button type="button" className="sess-btn" onClick={onSelect}>
         <span className="dot" data-state={state} aria-hidden="true" />
-        <span className="name">{session.name ?? 'Nouvelle session'}</span>
+        <span className="name">{session.name ?? 'New session'}</span>
         <span className="when">{relativeTime(session.updatedAt)}</span>
       </button>
       {onDelete !== undefined && (
         <button
           type="button"
           className="del"
-          aria-label={session.isDraft ? 'Supprimer le brouillon' : 'Supprimer la conversation'}
+          aria-label={session.isDraft ? 'Delete the draft' : 'Delete the conversation'}
           onClick={onDelete}
         >
           ×
@@ -55,6 +55,6 @@ function relativeTime(iso: string): string {
   if (Number.isNaN(then.getTime())) return ''
   if (elapsedMs < 60_000) return 'now'
   if (elapsedMs < 3_600_000) return `${Math.floor(elapsedMs / 60_000)} min`
-  if (elapsedMs < 86_400_000) return then.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-  return then.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+  if (elapsedMs < 86_400_000) return then.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }

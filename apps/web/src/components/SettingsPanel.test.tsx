@@ -52,8 +52,8 @@ describe('SettingsPanel', () => {
   // la présence du plafond + du conteneur de défilement, pas la géométrie.
   test('le contenu du dialog est borné en hauteur et absorbe le débordement par un scroller', async () => {
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
-    await screen.findByLabelText('IDE préféré')
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    await screen.findByLabelText('Preferred IDE')
 
     const dialog = screen.getByRole('dialog')
     expect(dialog.className).toContain('max-h-')
@@ -67,19 +67,19 @@ describe('SettingsPanel', () => {
     expect(scroller).not.toBeNull()
     expect(scroller?.className).toContain('overflow-y-auto')
     // le scroller doit contenir le corps réglages, pas juste exister
-    expect(scroller?.contains(screen.getByLabelText('IDE préféré'))).toBe(true)
+    expect(scroller?.contains(screen.getByLabelText('Preferred IDE'))).toBe(true)
   })
 
   test('the gear opens the dialog; selects show the preferences and PATCH on change', async () => {
     const calls = renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
-    const ideSelect = (await screen.findByLabelText('IDE préféré')) as HTMLSelectElement
+    const ideSelect = (await screen.findByLabelText('Preferred IDE')) as HTMLSelectElement
     expect(ideSelect.value).toBe('webstorm')
     fireEvent.change(ideSelect, { target: { value: 'cursor' } })
     await waitFor(() => expect(calls.patches).toEqual([{ ide: 'cursor' }]))
 
-    const modelSelect = screen.getByLabelText('Modèle par défaut') as HTMLSelectElement
+    const modelSelect = screen.getByLabelText('Default model') as HTMLSelectElement
     expect(modelSelect.value).toBe('claude-fable-5')
     fireEvent.change(modelSelect, { target: { value: 'claude-opus-4-8' } })
     await waitFor(() => expect(calls.patches).toEqual([{ ide: 'cursor' }, { defaultModel: 'claude-opus-4-8' }]))
@@ -87,21 +87,21 @@ describe('SettingsPanel', () => {
 
   test('the « Thème » select reflects prefs.theme, defaulting to « dark » when absent', async () => {
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
-    const themeSelect = (await screen.findByLabelText('Thème')) as HTMLSelectElement
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    const themeSelect = (await screen.findByLabelText('Theme')) as HTMLSelectElement
     expect(themeSelect.value).toBe('dark') // preferences has no `theme` → prefs.theme ?? 'dark'
 
     cleanup()
     renderPanel({ getPreferences: async () => ({ ...preferences, theme: 'light' }) })
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
-    const lightSelect = (await screen.findByLabelText('Thème')) as HTMLSelectElement
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    const lightSelect = (await screen.findByLabelText('Theme')) as HTMLSelectElement
     expect(lightSelect.value).toBe('light')
   })
 
   test('changing the « Thème » select PATCHes the preference AND re-themes the DOM', async () => {
     const calls = renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
-    const themeSelect = (await screen.findByLabelText('Thème')) as HTMLSelectElement
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    const themeSelect = (await screen.findByLabelText('Theme')) as HTMLSelectElement
 
     fireEvent.change(themeSelect, { target: { value: 'light' } })
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
@@ -110,9 +110,9 @@ describe('SettingsPanel', () => {
 
   test('the permissions select shows the current default and PATCHes changes — null clears', async () => {
     const calls = renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
-    const select = (await screen.findByLabelText('Permissions des nouvelles sessions')) as HTMLSelectElement
+    const select = (await screen.findByLabelText('New-session permissions')) as HTMLSelectElement
     // preferences fixture sans defaultPermissionMode → « demander à chaque session »
     expect(select.value).toBe('')
 
@@ -135,30 +135,30 @@ describe('SettingsPanel', () => {
         rules = rules.filter((entry) => entry.id !== id)
       },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
     const row = await screen.findByText('git push')
     expect(row.closest('li')?.textContent).toContain('Bash')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer la règle « Bash : git push »' }))
-    await screen.findByText('Aucune règle « toujours autoriser » enregistrée.')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete the rule “Bash: git push”' }))
+    await screen.findByText('No “always allow” rule recorded.')
     expect(deleted).toEqual(['r1'])
   })
 
-  test('a null matcher renders « outil entier »', async () => {
+  test('a null matcher renders “entire tool”', async () => {
     renderPanel({ listRules: async () => [{ ...rule, matcher: null }] })
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
-    await screen.findByText('outil entier')
-    expect(screen.getByRole('button', { name: 'Supprimer la règle « Bash : outil entier »' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    await screen.findByText('entire tool')
+    expect(screen.getByRole('button', { name: 'Delete the rule “Bash: entire tool”' })).toBeTruthy()
   })
 
   test('the « Projets » section lists projects (basename, full path in title) with the ~/.claude hint', async () => {
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
     const row = await screen.findByTitle('/tmp/demo/atelier')
     expect(row.textContent).toBe('atelier')
-    expect(screen.getByText('Retirer le projet (les conversations restent dans ~/.claude)')).toBeTruthy()
+    expect(screen.getByText('Removing a project keeps its conversations in ~/.claude')).toBeTruthy()
   })
 
   test('unregistering is two-step: the first click only arms, the second deletes and refreshes the list', async () => {
@@ -171,30 +171,30 @@ describe('SettingsPanel', () => {
         projects = projects.filter((entry) => entry.id !== id)
       },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Retirer le projet « atelier »' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove the project “atelier”' }))
     expect(removed).toEqual([]) // armed, nothing deleted yet
     // The armed button keeps naming the project (aria-label); its visible text asks confirmation.
-    const confirm = screen.getByRole('button', { name: 'Confirmer le retrait de « atelier »' })
-    expect(confirm.textContent).toBe('Confirmer le retrait ?')
+    const confirm = screen.getByRole('button', { name: 'Confirm removing “atelier”' })
+    expect(confirm.textContent).toBe('Confirm removal?')
     fireEvent.click(confirm)
     await waitFor(() => expect(removed).toEqual(['p1']))
     // ['projects'] invalidated → the list refetches through the seam and empties.
     await waitFor(() => expect(screen.queryByTitle('/tmp/demo/atelier')).toBeNull())
-    await screen.findByText('Aucun projet enregistré.')
+    await screen.findByText('No registered projects.')
   })
 
   test('arming a second project disarms the first (a single confirmation at a time)', async () => {
     const other: ProjectSummary = { id: 'p2', path: '/tmp/demo/blog', color: '#4ade80', sessionCount: 0 }
     renderPanel({ listProjects: async () => [project, other] })
-    fireEvent.click(screen.getByRole('button', { name: 'Réglages' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Retirer le projet « atelier »' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Retirer le projet « blog »' }))
-    expect(screen.getByRole('button', { name: 'Confirmer le retrait de « blog »' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Confirmer le retrait de « atelier »' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove the project “atelier”' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the project “blog”' }))
+    expect(screen.getByRole('button', { name: 'Confirm removing “blog”' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Confirm removing “atelier”' })).toBeNull()
     // atelier's row reverted to its unarmed button
-    expect(screen.getByRole('button', { name: 'Retirer le projet « atelier »' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove the project “atelier”' })).toBeTruthy()
   })
 })

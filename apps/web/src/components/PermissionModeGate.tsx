@@ -19,14 +19,14 @@ export type PermissionModeGateProps = {
 export function PermissionModeGate({ onChoose, pending }: PermissionModeGateProps) {
   const [remember, setRemember] = useState(false)
   return (
-    <div className="perm-gate" role="group" aria-label="Permissions de la session">
-      <span className="perm-gate-text">Comment gérer les permissions d’outils pour cette session ?</span>
+    <div className="perm-gate" role="group" aria-label="Session permissions">
+      <span className="perm-gate-text">How should tool permissions be handled for this session?</span>
       <div className="perm-gate-actions">
         <button type="button" className="perm-gate-btn" disabled={pending} onClick={() => onChoose('default', remember)}>
-          Permissions normales
+          Normal permissions
         </button>
         <button type="button" className="perm-gate-btn danger" disabled={pending} onClick={() => onChoose('bypassPermissions', remember)}>
-          Skip permissions (dangereux)
+          Skip permissions (dangerous)
         </button>
       </div>
       <label className="perm-gate-remember">
@@ -36,7 +36,7 @@ export function PermissionModeGate({ onChoose, pending }: PermissionModeGateProp
           disabled={pending}
           onChange={(event) => setRemember(event.target.checked)}
         />
-        Se souvenir de ce choix pour les nouvelles sessions (modifiable dans les réglages)
+        Remember this choice for new sessions (can be changed in settings)
       </label>
     </div>
   )

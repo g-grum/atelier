@@ -14,12 +14,12 @@ function renderFrame(over: Partial<Parameters<typeof WidgetFrame>[0]> = {}) {
   render(
     <WidgetFrame
       instance={instance}
-      title="Limites du plan"
+      title="Plan limits"
       onChange={(next) => changes.push(next)}
       onRemove={(id) => removed.push(id)}
       {...over}
     >
-      <div>corps du widget</div>
+      <div>widget body</div>
     </WidgetFrame>,
   )
   return { changes, removed }
@@ -30,16 +30,16 @@ function renderFrame(over: Partial<Parameters<typeof WidgetFrame>[0]> = {}) {
 // (openMenu = keyDown Enter + await findByRole). fireEvent.click on the
 // trigger does NOT open the menu.
 const openMenu = async () => {
-  fireEvent.keyDown(screen.getByRole('button', { name: /Options du widget/ }), { key: 'Enter' })
+  fireEvent.keyDown(screen.getByRole('button', { name: /Widget options/ }), { key: 'Enter' })
   await screen.findAllByRole('menuitem')
 }
 
 describe('WidgetFrame', () => {
   test('renders heading, body, and span/height classes', () => {
     renderFrame()
-    screen.getByRole('heading', { name: 'Limites du plan' })
-    screen.getByText('corps du widget')
-    const frame = screen.getByRole('group', { name: 'Limites du plan' })
+    screen.getByRole('heading', { name: 'Plan limits' })
+    screen.getByText('widget body')
+    const frame = screen.getByRole('group', { name: 'Plan limits' })
     expect(frame.className).toContain('span-2')
     expect(frame.className).toContain('h-M')
   })
@@ -47,40 +47,40 @@ describe('WidgetFrame', () => {
   test('menu: height change emits a patched instance', async () => {
     const { changes } = renderFrame()
     await openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Hauteur L' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Height L' }))
     expect(changes).toEqual([{ ...instance, height: 'L' }])
   })
 
   test('menu: width change emits a patched instance', async () => {
     const { changes } = renderFrame()
     await openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Demi-largeur' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Half width' }))
     expect(changes).toEqual([{ ...instance, span: 1 }])
   })
 
-  test('menu: span-1 widget offers Pleine largeur and patches span to 2', async () => {
+  test('menu: span-1 widget offers Full width and patches span to 2', async () => {
     const half: WidgetInstance = { ...instance, span: 1 }
     const { changes } = renderFrame({ instance: half })
     await openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Pleine largeur' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Full width' }))
     expect(changes).toEqual([{ ...half, span: 2 }])
   })
 
-  test('menu: Configurer… shown with onConfigure and calls it; Retirer stays last', async () => {
+  test('menu: Configure… shown with onConfigure and calls it; Remove stays last', async () => {
     const configured: number[] = []
     renderFrame({ onConfigure: () => configured.push(1) })
     await openMenu()
     const items = screen.getAllByRole('menuitem')
-    expect(items.at(-1)?.textContent).toBe('Retirer')
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Configurer…' }))
+    expect(items.at(-1)?.textContent).toBe('Remove')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Configure…' }))
     expect(configured).toHaveLength(1)
   })
 
   test('menu: remove emits the id; configure hidden without onConfigure', async () => {
     const { removed } = renderFrame()
     await openMenu()
-    expect(screen.queryByRole('menuitem', { name: 'Configurer…' })).toBeNull()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Retirer' }))
+    expect(screen.queryByRole('menuitem', { name: 'Configure…' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
     expect(removed).toEqual(['w1'])
   })
 })

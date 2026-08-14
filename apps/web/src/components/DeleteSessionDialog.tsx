@@ -30,12 +30,12 @@ export function DeleteSessionDialog({ session, onConfirm, onCancel }: DeleteSess
     >
       <DialogContent className="bg-surface sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle className="text-[15px]">Supprimer la conversation ?</DialogTitle>
-          <DialogDescription>« {shown?.name ?? 'Nouvelle session'} » sera définitivement supprimée.</DialogDescription>
+          <DialogTitle className="text-[15px]">Delete this conversation?</DialogTitle>
+          <DialogDescription>“{shown?.name ?? 'New session'}” will be permanently deleted.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <button type="button" className="dialog-btn" onClick={onCancel}>
-            Annuler
+            Cancel
           </button>
           <button
             type="button"
@@ -44,7 +44,7 @@ export function DeleteSessionDialog({ session, onConfirm, onCancel }: DeleteSess
               if (session !== null) onConfirm(session)
             }}
           >
-            Supprimer
+            Delete
           </button>
         </DialogFooter>
       </DialogContent>
