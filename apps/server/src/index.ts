@@ -11,6 +11,9 @@ import { createApp } from './app'
 import { watchStdin } from './stdin-watchdog'
 import { AutopilotRunner } from './autopilot/autopilot-runner'
 import { createWorkspace } from './autopilot/workspace'
+import { existsSync } from 'node:fs'
+import { SessionArtifactsTracker } from './artifacts/session-artifacts'
+import { DevServerMonitor } from './devservers/dev-server-monitor'
 
 function parseArgs(): {
   port: number
@@ -61,13 +64,33 @@ if (shouldWatchStdin) {
 
 const data = new AppData(dataPath)
 const sdk = new AgentSdkClient()
+// Trackers spec 2026-08-14 — publish est une closure : `streams` n'existe qu'après,
+// mais le hub n'est sollicité qu'au runtime, jamais pendant la composition.
+const artifacts = new SessionArtifactsTracker({ publish: (e) => streams.publish(e), fileExists: existsSync })
+const devServers = new DevServerMonitor({
+  exec: async (cmd) => await new Response(Bun.spawn(cmd, { stdout: 'pipe', stderr: 'ignore' }).stdout).text(),
+  publish: (e) => streams.publish(e),
+  kill: (pid) => process.kill(pid, 'SIGTERM'),
+  selfPid: process.pid,
+})
 // Prédicat data-driven « session autopilot ? » — pas de cycle registre↔runner (spec 2026-08-05).
-const streams = new SessionStreamRegistry(data, sdk, (sessionId) =>
-  data.get().autopilot.items.some(
-    (i) =>
-      (i.sessionId !== '' && data.resolveSessionId(i.sessionId) === sessionId) ||
-      (i.reviewSessionId !== undefined && i.reviewSessionId !== '' && data.resolveSessionId(i.reviewSessionId) === sessionId)
-  )
+const streams = new SessionStreamRegistry(
+  data,
+  sdk,
+  (sessionId) =>
+    data.get().autopilot.items.some(
+      (i) =>
+        (i.sessionId !== '' && data.resolveSessionId(i.sessionId) === sessionId) ||
+        (i.reviewSessionId !== undefined && i.reviewSessionId !== '' && data.resolveSessionId(i.reviewSessionId) === sessionId)
+    ),
+  (sessionId, projectId, toolName, input) => {
+    if (toolName === 'Bash') {
+      const command = (input as Record<string, unknown> | null)?.command
+      if (typeof command === 'string') devServers.noteBash(command)
+    }
+    const root = data.get().projects.find((p) => p.id === projectId)?.path
+    if (root !== undefined) artifacts.onToolUse(sessionId, projectId, root, toolName, input)
+  }
 )
 const sessions = new SessionsService(sdk, data, streams)
 const github = new GithubService(createGhRunner())
@@ -75,7 +98,7 @@ const autopilot = new AutopilotRunner({ data, sessions, streams, github, workspa
 // Repo root — this file lives at apps/server/src/index.ts; the server runs
 // from repo sources (repo-tethered bundle), so the path holds in both modes.
 const versionFile = join(import.meta.dir, '..', '..', '..', 'version.json')
-const app = createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github, autopilot })
+const app = createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github, autopilot, devServers })
 
 Bun.serve({
   hostname: '127.0.0.1',

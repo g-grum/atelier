@@ -18,6 +18,8 @@ type SessionStreamParams = {
   onRekey?: (from: string, to: string) => void
   /** Notifié à CHAQUE transition d'état (démarrage de tour inclus) — alimente le status hub. */
   onStatusChange?: (sessionId: string, state: SessionState) => void
+  /** Observes every tool_use (spec 2026-08-14) — feeds the artifacts tracker and the dev-servers label heuristic. */
+  onToolUse?: (sessionId: string, projectId: string, toolName: string, input: unknown) => void
   /** Session autopilot (spec 2026-08-05) : AskUserQuestion y est refusé net — personne ne répondra. Data-driven (lit l'état autopilot), pas de cycle registre↔runner. */
   isAutopilot?: (sessionId: string) => boolean
 }
@@ -34,6 +36,7 @@ export class SessionStream {
   private readonly sdk: SdkClient
   private readonly onRekey?: (from: string, to: string) => void
   private readonly onStatusChange?: (sessionId: string, state: SessionState) => void
+  private readonly onToolUse?: (sessionId: string, projectId: string, toolName: string, input: unknown) => void
   private readonly isAutopilot?: (sessionId: string) => boolean
   private readonly broker: PermissionBroker
   private readonly questions: QuestionBroker
@@ -49,13 +52,14 @@ export class SessionStream {
   /** Draft name awaiting renameSession — applied at turn end, once the SDK CLI has flushed the session JSONL. */
   private pendingRename: { sessionId: string; name: string } | null = null
 
-  constructor({ id, projectId, data, sdk, onRekey, onStatusChange, isAutopilot }: SessionStreamParams) {
+  constructor({ id, projectId, data, sdk, onRekey, onStatusChange, onToolUse, isAutopilot }: SessionStreamParams) {
     this.id = id
     this.projectId = projectId
     this.data = data
     this.sdk = sdk
     this.onRekey = onRekey
     this.onStatusChange = onStatusChange
+    this.onToolUse = onToolUse
     this.isAutopilot = isAutopilot
     const projectDir = data.get().projects.find((p) => p.id === projectId)?.path ?? ''
     this.broker = new PermissionBroker(data, projectId, projectDir, (request) => {
@@ -219,6 +223,7 @@ export class SessionStream {
         // Ce reset reste MÊME quand le broadcast est supprimé (QCM) : sinon le snapshot
         // de reconnexion re-servirait le texte pré-QCM comme run en cours.
         this.partialText = ''
+        this.onToolUse?.(this.sessionId(), this.projectId, event.toolName, event.input)
         if (event.toolName === 'AskUserQuestion') {
           // La carte QCM est la représentation du tour — une ligne outil doublonnerait.
           this.suppressedToolUseIds.add(event.toolUseId)
@@ -394,7 +399,9 @@ export class SessionStreamRegistry {
     private readonly data: AppData,
     private readonly sdk: SdkClient,
     /** Prédicat data-driven « cette session est-elle pilotée par l'autopilot ? » — transmis à chaque stream. */
-    private readonly isAutopilot?: (sessionId: string) => boolean
+    private readonly isAutopilot?: (sessionId: string) => boolean,
+    /** Observateur des tool_use (spec 2026-08-14) — transmis à chaque stream. */
+    private readonly onToolUse?: (sessionId: string, projectId: string, toolName: string, input: unknown) => void
   ) {}
 
   get(id: string, projectId: string): SessionStream {
@@ -407,6 +414,7 @@ export class SessionStreamRegistry {
         data: this.data,
         sdk: this.sdk,
         isAutopilot: this.isAutopilot,
+        onToolUse: this.onToolUse,
         onRekey: (from, to) => {
           const entry = this.streams.get(from)
           if (entry) {

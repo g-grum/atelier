@@ -15,13 +15,16 @@ import { uploadsRoutes } from './uploads/uploads-routes'
 import type { GithubService } from './github/github-service'
 import { autopilotRoutes } from './autopilot/autopilot-routes'
 import type { AutopilotRunner } from './autopilot/autopilot-runner'
+import { artifactsRoutes } from './artifacts/artifacts-routes'
+import { devServersRoutes } from './devservers/dev-servers-routes'
+import type { DevServerMonitor } from './devservers/dev-server-monitor'
 
 // Security model: same-origin serving + loopback binding + token auth.
 // No CORS headers needed — the server only listens on 127.0.0.1 and the web
 // client is served from the same origin. The token covers WS upgrades too via
 // the ?token= query param (browsers cannot set headers on WS handshakes).
 
-export function createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github, autopilot }: { data: AppData; sessions: SessionsService; sdk: SdkClient; streams: SessionStreamRegistry; token: string; webDist?: string; versionFile?: string; github: GithubService; autopilot?: AutopilotRunner }): Hono {
+export function createApp({ data, sessions, sdk, streams, token, webDist, versionFile, github, autopilot, devServers }: { data: AppData; sessions: SessionsService; sdk: SdkClient; streams: SessionStreamRegistry; token: string; webDist?: string; versionFile?: string; github: GithubService; autopilot?: AutopilotRunner; devServers?: DevServerMonitor }): Hono {
   const app = new Hono()
 
   // Token middleware scoped to /api/* so that /health and static assets stay open
@@ -45,8 +48,10 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
   api.route('/', commandsRoutes(data, sdk))
   api.route('/', filesRoutes(data))
   api.route('/', uploadsRoutes(data))
+  api.route('/', artifactsRoutes(data))
   // Optionnel : les tests d'app existants n'ont pas besoin de construire un runner.
   if (autopilot !== undefined) api.route('/', autopilotRoutes(autopilot, data))
+  if (devServers !== undefined) api.route('/', devServersRoutes(devServers))
 
   // Update detection: read version.json from DISK on every request — the
   // server process was loaded at app launch, but the repo may have moved on
@@ -109,9 +114,12 @@ export function createApp({ data, sessions, sdk, streams, token, webDist, versio
         onOpen(_evt, ws) {
           sink = (event) => ws.send(JSON.stringify(event))
           streams.onStatusConnect(sink)
+          // Le scan lsof ne tourne que quand un dashboard écoute (spec 2026-08-14).
+          devServers?.clientConnected()
         },
         onClose() {
           if (sink) streams.onStatusClose(sink)
+          devServers?.clientClosed()
         },
       }
     })
