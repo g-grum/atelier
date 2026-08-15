@@ -1,4 +1,4 @@
-import { DEFAULT_WIDGETS, MODELS, type AutopilotState, type ChatMessage, type ProjectSummary, type PrSummary, type ServerEvent, type SessionSummary, type WidgetInstance } from '@atelier/shared'
+import { DEFAULT_WIDGETS, MODELS, type AutopilotState, type ChatMessage, type DevServer, type ProjectSummary, type PrSummary, type ServerEvent, type SessionArtifact, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 
 /**
  * Scripted session data — production code, not test-only.
@@ -179,3 +179,19 @@ export const fixtureAutopilot: AutopilotState = {
     { issue: 15, title: 'Fix the composer scrolling', branch: 'autopilot/15', projectId: 'proj-atelier', repoRoot: '/work/atelier', sessionId: 'fixture-session-2', status: 'failed', error: 'the turn ended without an open PR', startedAt: '2026-08-05T09:20:00Z', endedAt: '2026-08-05T09:50:00Z' },
   ],
 }
+
+/**
+ * Demo artifacts for the session-visuals widget. Fixtures mode cannot serve
+ * real image bytes — the widget renders a neutral placeholder on img error.
+ */
+export const fixtureArtifacts: SessionArtifact[] = [
+  { path: 'shots/dashboard.png', addedAt: '2026-08-14T09:12:00.000Z' },
+  { path: 'shots/lightbox.png', addedAt: '2026-08-14T09:20:00.000Z' },
+  { path: '.atelier/uploads/mockup-home.png', addedAt: '2026-08-14T09:31:00.000Z' },
+]
+
+/** Demo dev servers — one killable (vite), one external (Stop hidden). */
+export const fixtureDevServers: DevServer[] = [
+  { port: 4518, pid: 48213, label: 'vite', command: 'bunx vite --port 4518', killable: true },
+  { port: 3010, pid: 47102, label: 'external API', command: 'node api/server.js', killable: false },
+]

@@ -1,6 +1,6 @@
 import type { AlwaysRule, AutopilotState, ChatMessage, ClientMessage, Preferences, ProjectFileList, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, SlashCommandInfo, StatusHubEvent, VersionInfo, WidgetInstance } from '@atelier/shared'
 import type { ControllerSocket } from '../state/session-controller'
-import { fixtureAutopilot, fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
+import { FIXTURE_PROJECT_ID, FIXTURE_SESSION_ID, fixtureArtifacts, fixtureAutopilot, fixtureDevServers, fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
 import * as client from './client'
 import { StatusSocket } from './status-socket'
 import { SessionSocket } from './ws'
@@ -66,6 +66,12 @@ export type Backend = {
   stopAutopilot: () => Promise<void>
   /** Nettoie worktrees/branches/projets temporaires des items terminaux. */
   cleanupAutopilot: () => Promise<void>
+  /**
+   * Stops a killable dev server (POST /api/dev-servers/:pid/stop). The rows
+   * themselves arrive through the status hub (dev_servers_status events) —
+   * same push-only flow as autopilot_status.
+   */
+  stopDevServer: (pid: number) => Promise<void>
 }
 
 const realBackend: Backend = {
@@ -99,6 +105,7 @@ const realBackend: Backend = {
   startAutopilot: client.startAutopilot,
   stopAutopilot: client.stopAutopilot,
   cleanupAutopilot: client.cleanupAutopilot,
+  stopDevServer: client.stopDevServer,
 }
 
 /** Baseline préférences (sans clé `theme` → dark) — partagé par le fixture et les tests, façon DEFAULT_WIDGETS. */
@@ -124,6 +131,7 @@ export function createFixtureBackend(): Backend {
   const messages = new Map<string, ChatMessage[]>(Object.entries(fixtureMessages))
   let widgets: WidgetInstance[] = fixtureWidgets.map((w) => ({ ...w }))
   let autopilot: AutopilotState = structuredClone(fixtureAutopilot)
+  let devServers = fixtureDevServers.map((server) => ({ ...server }))
   let nextId = 1
 
   return {
@@ -200,9 +208,16 @@ export function createFixtureBackend(): Backend {
     deleteProject: async (id) => {
       projects = projects.filter((project) => project.id !== id)
     },
-    // Demo mode: no server-side status hub to connect to — a no-op keeps the
-    // sidebar dots at their default (idle/done) derivation.
-    createStatusSocket: () => ({ close: () => {} }),
+    // Demo mode: no server-side hub — replay the artifacts + dev servers
+    // snapshots once (async, after the subscriber registered) so both widgets
+    // have data; session dots keep their default (idle/done) derivation.
+    createStatusSocket: (onEvent) => {
+      const timer = setTimeout(() => {
+        onEvent({ type: 'artifacts_status', sessionId: FIXTURE_SESSION_ID, projectId: FIXTURE_PROJECT_ID, artifacts: fixtureArtifacts.map((a) => ({ ...a })) })
+        onEvent({ type: 'dev_servers_status', servers: devServers.map((server) => ({ ...server })) })
+      }, 0)
+      return { close: () => clearTimeout(timer) }
+    },
     // Autopilot de démo : start bascule le premier item en running, assez pour montrer la UI.
     getAutopilot: async () => structuredClone(autopilot),
     startAutopilot: async (projectId) => {
@@ -216,6 +231,10 @@ export function createFixtureBackend(): Backend {
     },
     cleanupAutopilot: async () => {
       autopilot = { run: autopilot.run, items: autopilot.items.filter((i) => i.status !== 'pr_opened' && i.status !== 'failed') }
+    },
+    // Demo stop: drop the row — the next hub replay (new socket) reflects it.
+    stopDevServer: async (pid) => {
+      devServers = devServers.filter((server) => server.pid !== pid)
     },
   }
 }

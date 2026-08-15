@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import currentVersion from '../../../version.json'
-import { DEFAULT_WIDGETS, type AutopilotState, type RateLimitSnapshot, type SessionPermissionMode, type SessionSummary, type WidgetInstance } from '@atelier/shared'
+import { DEFAULT_WIDGETS, type ArtifactsStatusEvent, type AutopilotState, type DevServer, type RateLimitSnapshot, type SessionPermissionMode, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
 import { Composer } from './components/Composer'
@@ -17,7 +17,9 @@ import { Toaster } from './components/ui/sonner'
 import { DashboardGrid } from './components/widgets/DashboardGrid'
 import { AutopilotConfigDialog } from './components/widgets/AutopilotConfigDialog'
 import { AutopilotWidget } from './components/widgets/AutopilotWidget'
+import { DevServersWidget } from './components/widgets/DevServersWidget'
 import { PrConfigDialog } from './components/widgets/PrConfigDialog'
+import { SessionVisualsWidget } from './components/widgets/SessionVisualsWidget'
 import { PrListWidget } from './components/widgets/PrListWidget'
 import type { FileEntry } from './lib/file-mentions'
 import { clearLastSession, readLastSession, writeLastSession } from './lib/last-session'
@@ -117,11 +119,17 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     }
   }, [statusStore, queryClient])
   const [autopilot, setAutopilot] = useState<AutopilotState | null>(null)
+  // Artifacts par session (le hub pousse un snapshot complet par session) + dev servers (snapshot global).
+  const [artifactsBySession, setArtifactsBySession] = useState<Record<string, ArtifactsStatusEvent>>({})
+  const [devServers, setDevServers] = useState<DevServer[]>([])
   useEffect(() => {
-    // Dispatch par type : le hub transporte les transitions de session ET l'état autopilot (spec 2026-08-05).
+    // Dispatch par type : le hub transporte les transitions de session, l'état autopilot (spec 2026-08-05),
+    // les artefacts visuels et les dev servers (spec 2026-08-14).
     const socket = backend.createStatusSocket((event) => {
       if (event.type === 'session_status') statusStore.handle(event)
-      else setAutopilot(event.autopilot)
+      else if (event.type === 'autopilot_status') setAutopilot(event.autopilot)
+      else if (event.type === 'artifacts_status') setArtifactsBySession((prev) => ({ ...prev, [event.sessionId]: event }))
+      else setDevServers(event.servers)
     })
     return () => socket.close()
   }, [backend, statusStore])
@@ -431,6 +439,13 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
           />
         )
       }
+      case 'session-visuals': {
+        // Le hub scope les artefacts par session — le widget montre ceux de la session ACTIVE.
+        const current = selected !== null ? artifactsBySession[selected.sessionId] : undefined
+        return <SessionVisualsWidget projectId={current?.projectId ?? ''} artifacts={current?.artifacts ?? []} />
+      }
+      case 'dev-servers':
+        return <DevServersWidget servers={devServers} api={{ stopDevServer: backend.stopDevServer }} />
       default:
         return null
     }

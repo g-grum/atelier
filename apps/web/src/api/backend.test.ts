@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import type { StatusHubEvent } from '@atelier/shared'
 import { backend, createFixtureBackend } from './backend'
+import { fixtureDevServers } from '../state/fixtures'
 import { defaultApi as modelSelectorApi } from '../components/ModelSelector'
 import { defaultApi as settingsApi } from '../components/SettingsPanel'
 
@@ -39,6 +41,35 @@ describe('FixtureSocket — tour d’erreur', () => {
     await new Promise((r) => setTimeout(r, 300))
     socket.close()
     expect(JSON.stringify(events)).not.toContain('usage_limit')
+  })
+})
+
+describe('fixture backend — artifacts + dev servers (status hub replay)', () => {
+  test('createStatusSocket replays artifacts_status and dev_servers_status with the demo data', async () => {
+    const fixture = createFixtureBackend()
+    const events: StatusHubEvent[] = []
+    const socket = fixture.createStatusSocket((event) => events.push(event))
+    await new Promise((r) => setTimeout(r, 10))
+    socket.close()
+    const artifacts = events.find((e) => e.type === 'artifacts_status')
+    expect(artifacts?.type).toBe('artifacts_status')
+    expect(artifacts !== undefined && artifacts.type === 'artifacts_status' ? artifacts.artifacts.length : 0).toBe(3)
+    const servers = events.find((e) => e.type === 'dev_servers_status')
+    expect(servers !== undefined && servers.type === 'dev_servers_status' ? servers.servers.map((s) => s.killable) : []).toEqual([true, false])
+  })
+
+  test('stopDevServer removes the server from the next hub replay', async () => {
+    const fixture = createFixtureBackend()
+    const before: StatusHubEvent[] = []
+    fixture.createStatusSocket((event) => before.push(event)).close()
+    const first = fixtureDevServers[0]!
+    await fixture.stopDevServer(first.pid)
+    const events: StatusHubEvent[] = []
+    const socket = fixture.createStatusSocket((event) => events.push(event))
+    await new Promise((r) => setTimeout(r, 10))
+    socket.close()
+    const servers = events.find((e) => e.type === 'dev_servers_status')
+    expect(servers !== undefined && servers.type === 'dev_servers_status' ? servers.servers.map((s) => s.pid) : []).not.toContain(first.pid)
   })
 })
 

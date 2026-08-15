@@ -201,6 +201,11 @@ export async function uploadImage(projectId: string, file: File): Promise<{ path
 
 // ── Autopilot (spec 2026-08-05) ──
 
+/** Stops a dev server Atelier started (POST → 204; 403 = not killable, 404 = gone). */
+export function stopDevServer(pid: number): Promise<void> {
+  return request('POST', `/dev-servers/${pid}/stop`)
+}
+
 export function getAutopilot(): Promise<AutopilotState> {
   return request<AutopilotState>('GET', '/autopilot')
 }

@@ -48,6 +48,7 @@ function fakeBackend(overrides: Partial<Backend> = {}): Backend {
     getMessages: async () => [],
     patchSession: async () => {},
     deleteSession: async () => {},
+    stopDevServer: async () => {},
     openInIde: async () => ({ ok: true }),
     createSocket: () => idleSocket,
     getVersion: async () => currentVersion,

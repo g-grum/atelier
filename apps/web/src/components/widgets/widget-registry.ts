@@ -38,4 +38,14 @@ export const WIDGET_META: Partial<Record<WidgetType, WidgetMeta>> = {
     // projectId vide = à configurer (le bouton Lancer reste désactivé tant que la config n'est pas faite).
     create: () => ({ id: crypto.randomUUID(), type: 'autopilot', span: 2, height: 'M', config: { projectId: '', maxItems: 3 } }),
   },
+  'session-visuals': {
+    title: 'Session visuals',
+    multiInstance: false,
+    create: () => ({ id: crypto.randomUUID(), type: 'session-visuals', span: 1, height: 'M' }),
+  },
+  'dev-servers': {
+    title: 'Dev servers',
+    multiInstance: false,
+    create: () => ({ id: crypto.randomUUID(), type: 'dev-servers', span: 1, height: 'M' }),
+  },
 }
