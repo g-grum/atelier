@@ -500,6 +500,23 @@
   .pr-error .banner-btn:hover { border-color: var(--color-red); color: var(--color-red); }
   .pr-setup .banner-btn:hover { border-color: var(--color-indigo); color: var(--color-indigo); }
   .pr-skeleton { height: 60px; border-radius: 6px; background: var(--color-surface-2); }
+  /* ── Dev servers widget (spec 2026-08-14) ── */
+  .srv-line { cursor: default; flex-wrap: nowrap; }
+  .srv-line .pr-title { flex: none; max-width: 45%; }
+  .srv-port { font: 600 11px var(--font-mono); color: var(--color-text); flex: none; }
+  .srv-cmd { color: var(--color-faint); font: 500 10px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .srv-external { flex: none; font: 500 9px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-faint); border: 1px dashed var(--color-line); border-radius: 4px; padding: 1px 5px; }
+
+  /* ── Session visuals widget (spec 2026-08-14) ── */
+  .visuals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+  .visual-thumb { display: block; padding: 0; border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-surface-2); overflow: hidden; cursor: zoom-in; aspect-ratio: 4 / 3; }
+  .visual-thumb:hover { border-color: var(--color-indigo); }
+  .visual-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .visual-placeholder { display: block; width: 100%; height: 100%; background: repeating-linear-gradient(45deg, var(--color-surface-2), var(--color-surface-2) 6px, var(--color-line) 6px, var(--color-line) 7px); }
+  .visual-lightbox { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.75); cursor: zoom-out; }
+  .visual-lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5); }
+  .visual-lightbox .visual-placeholder.large { width: 320px; height: 240px; border-radius: 8px; }
+
 }
 
 @media (prefers-reduced-motion: no-preference) {

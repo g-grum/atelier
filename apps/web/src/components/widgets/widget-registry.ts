@@ -41,11 +41,11 @@ export const WIDGET_META: Partial<Record<WidgetType, WidgetMeta>> = {
   'session-visuals': {
     title: 'Session visuals',
     multiInstance: false,
-    create: () => ({ id: crypto.randomUUID(), type: 'session-visuals', span: 1, height: 'M' }),
+    create: () => ({ id: crypto.randomUUID(), type: 'session-visuals', span: 2, height: 'M' }),
   },
   'dev-servers': {
     title: 'Dev servers',
     multiInstance: false,
-    create: () => ({ id: crypto.randomUUID(), type: 'dev-servers', span: 1, height: 'M' }),
+    create: () => ({ id: crypto.randomUUID(), type: 'dev-servers', span: 2, height: 'M' }),
   },
 }
