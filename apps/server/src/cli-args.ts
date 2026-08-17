@@ -10,14 +10,14 @@ export type ServerArgs = {
 }
 
 /**
- * Parsing pur des options du serveur — `argv` et `env` sont injectés pour être
- * testables sans toucher au process.
+ * Pure parsing of the server options — `argv` and `env` are injected so this is
+ * testable without touching the process.
  *
- * Le token est obligatoire (le modèle de sécurité repose dessus : bind loopback
- * + Bearer sur tout /api), mais il accepte deux sources — `--token` (ce que fait
- * le shell Electron) et `ATELIER_TOKEN` (ce qui rend `bun run dev:server`
- * utilisable sans argument). Absence de token = erreur, jamais de défaut
- * silencieux : un serveur ouvert par accident serait pire qu'un crash.
+ * The token is mandatory (the security model rests on it: loopback bind + Bearer
+ * on every /api route), but it accepts two sources — `--token`, which is what the
+ * Electron shell passes, and `ATELIER_TOKEN`, which is what makes
+ * `bun run dev:server` usable with no arguments. A missing token is an error,
+ * never a silent default: a server left open by accident is worse than a crash.
  */
 export function parseArgs(argv: string[], env: Record<string, string | undefined>): ServerArgs {
   let port = 4517
@@ -42,13 +42,13 @@ export function parseArgs(argv: string[], env: Record<string, string | undefined
     }
   }
 
-  // Un ATELIER_TOKEN vide (`export ATELIER_TOKEN=`) compte comme absent.
+  // An empty ATELIER_TOKEN (`export ATELIER_TOKEN=`) counts as absent.
   if (token === undefined && env.ATELIER_TOKEN !== undefined && env.ATELIER_TOKEN !== '') {
     token = env.ATELIER_TOKEN
   }
 
   if (token === undefined || token === '') {
-    throw new Error('un token d’authentification est requis : passe --token <valeur> ou définis ATELIER_TOKEN')
+    throw new Error('an auth token is required: pass --token <value> or set ATELIER_TOKEN')
   }
 
   return { port, token, dataPath, webDist, watchStdin }

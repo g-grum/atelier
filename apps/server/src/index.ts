@@ -19,7 +19,7 @@ function readArgs(): ServerArgs {
   try {
     return parseArgs(Bun.argv.slice(2), Bun.env)
   } catch (err) {
-    console.error(`Erreur : ${err instanceof Error ? err.message : String(err)}`)
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`)
     process.exit(1)
   }
 }
@@ -78,11 +78,11 @@ Bun.serve({
   websocket,
 })
 
-// En mode `--web-dist` le serveur sert lui-même l'UI : l'URL affichée porte le
-// token pour être cliquable telle quelle. En dev l'UI vit sur le serveur Vite
-// (4518), qui injecte le token lui-même — on n'annonce alors que l'API.
+// With `--web-dist` the server serves the UI itself, so the printed URL carries
+// the token and is clickable as-is. In dev the UI lives on the Vite server (4518),
+// which injects the token on its own — we only announce the API there.
 console.log(
   webDist !== undefined
-    ? `atelier prêt → http://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`
-    : `atelier server on http://127.0.0.1:${port} (UI dev : bun run dev:web → http://localhost:4518)`
+    ? `atelier ready → http://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`
+    : `atelier server on http://127.0.0.1:${port} (dev UI: bun run dev:web → http://localhost:4518)`
 )

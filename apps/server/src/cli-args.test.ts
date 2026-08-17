@@ -3,54 +3,54 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseArgs } from './cli-args'
 
-/** Aucun token nulle part : le cas qui faisait planter `bun run dev:server` (issue #1). */
+/** No token anywhere: the case that made `bun run dev:server` crash (issue #1). */
 const noEnv: Record<string, string | undefined> = {}
 
 describe('parseArgs', () => {
-  test('lit le token depuis --token', () => {
+  test('reads the token from --token', () => {
     expect(parseArgs(['--token', 'abc'], noEnv).token).toBe('abc')
   })
 
-  test('retombe sur ATELIER_TOKEN quand --token est absent', () => {
+  test('falls back to ATELIER_TOKEN when --token is absent', () => {
     expect(parseArgs([], { ATELIER_TOKEN: 'from-env' }).token).toBe('from-env')
   })
 
-  test('--token gagne sur ATELIER_TOKEN', () => {
+  test('--token wins over ATELIER_TOKEN', () => {
     expect(parseArgs(['--token', 'from-arg'], { ATELIER_TOKEN: 'from-env' }).token).toBe('from-arg')
   })
 
-  test('ignore un ATELIER_TOKEN vide', () => {
+  test('ignores an empty ATELIER_TOKEN', () => {
     expect(() => parseArgs([], { ATELIER_TOKEN: '' })).toThrow(/ATELIER_TOKEN/)
   })
 
-  test('échoue avec un message actionnable quand aucun token n’est fourni', () => {
+  test('fails with an actionable message when no token is provided', () => {
     expect(() => parseArgs([], noEnv)).toThrow(/--token/)
   })
 
-  test('port par défaut 4517, surchargeable par --port', () => {
+  test('port defaults to 4517 and is overridable by --port', () => {
     expect(parseArgs(['--token', 't'], noEnv).port).toBe(4517)
     expect(parseArgs(['--token', 't', '--port', '5000'], noEnv).port).toBe(5000)
   })
 
-  test('data path par défaut ~/.atelier/app-data.json', () => {
+  test('data path defaults to ~/.atelier/app-data.json', () => {
     expect(parseArgs(['--token', 't'], noEnv).dataPath).toBe(join(homedir(), '.atelier', 'app-data.json'))
   })
 
-  test('--data développe le ~ en home', () => {
+  test('--data expands a leading ~ to the home directory', () => {
     expect(parseArgs(['--token', 't', '--data', '~/tmp/d.json'], noEnv).dataPath).toBe(join(homedir(), 'tmp', 'd.json'))
   })
 
-  test('--data absolu est pris tel quel', () => {
+  test('--data takes an absolute path as-is', () => {
     expect(parseArgs(['--token', 't', '--data', '/var/tmp/d.json'], noEnv).dataPath).toBe('/var/tmp/d.json')
   })
 
-  test('--web-dist et --watch-stdin', () => {
+  test('--web-dist and --watch-stdin', () => {
     const parsed = parseArgs(['--token', 't', '--web-dist', '/dist', '--watch-stdin'], noEnv)
     expect(parsed.webDist).toBe('/dist')
     expect(parsed.watchStdin).toBe(true)
   })
 
-  test('watchStdin faux et webDist absent par défaut', () => {
+  test('watchStdin is false and webDist absent by default', () => {
     const parsed = parseArgs(['--token', 't'], noEnv)
     expect(parsed.watchStdin).toBe(false)
     expect(parsed.webDist).toBeUndefined()
