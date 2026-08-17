@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite --port 4518",
+    "dev": "ATELIER_TOKEN=${ATELIER_TOKEN:-atelier-dev} vite --port 4518",
     "build": "vite build"
   },
   "dependencies": {

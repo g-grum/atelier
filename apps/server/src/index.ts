@@ -1,6 +1,6 @@
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { websocket } from 'hono/bun'
+import { parseArgs, type ServerArgs } from './cli-args'
 import { AppData } from './store/app-data'
 import { AgentSdkClient } from './sdk/sdk-client'
 import { SessionsService } from './sessions/sessions-service'
@@ -15,45 +15,16 @@ import { existsSync } from 'node:fs'
 import { SessionArtifactsTracker } from './artifacts/session-artifacts'
 import { DevServerMonitor } from './devservers/dev-server-monitor'
 
-function parseArgs(): {
-  port: number
-  token: string
-  dataPath: string
-  webDist?: string
-  watchStdin: boolean
-} {
-  const args = Bun.argv.slice(2)
-  let port = 4517
-  let token: string | undefined
-  let dataPath = join(homedir(), '.atelier', 'app-data.json')
-  let webDist: string | undefined
-  let watchStdin = false
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]
-    if (arg === '--port' && args[i + 1]) {
-      port = parseInt(args[++i] as string, 10)
-    } else if (arg === '--token' && args[i + 1]) {
-      token = args[++i] as string
-    } else if (arg === '--data' && args[i + 1]) {
-      const raw = args[++i] as string
-      dataPath = raw.startsWith('~') ? join(homedir(), raw.slice(1)) : raw
-    } else if (arg === '--web-dist' && args[i + 1]) {
-      webDist = args[++i] as string
-    } else if (arg === '--watch-stdin') {
-      watchStdin = true
-    }
-  }
-
-  if (!token) {
-    console.error('Error: --token is required')
+function readArgs(): ServerArgs {
+  try {
+    return parseArgs(Bun.argv.slice(2), Bun.env)
+  } catch (err) {
+    console.error(`Erreur : ${err instanceof Error ? err.message : String(err)}`)
     process.exit(1)
   }
-
-  return { port, token, dataPath, webDist, watchStdin }
 }
 
-const { port, token, dataPath, webDist, watchStdin: shouldWatchStdin } = parseArgs()
+const { port, token, dataPath, webDist, watchStdin: shouldWatchStdin } = readArgs()
 
 if (shouldWatchStdin) {
   watchStdin(process.stdin, () => {
@@ -107,4 +78,11 @@ Bun.serve({
   websocket,
 })
 
-console.log(`atelier server on http://127.0.0.1:${port}`)
+// En mode `--web-dist` le serveur sert lui-même l'UI : l'URL affichée porte le
+// token pour être cliquable telle quelle. En dev l'UI vit sur le serveur Vite
+// (4518), qui injecte le token lui-même — on n'annonce alors que l'API.
+console.log(
+  webDist !== undefined
+    ? `atelier prêt → http://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`
+    : `atelier server on http://127.0.0.1:${port} (UI dev : bun run dev:web → http://localhost:4518)`
+)
