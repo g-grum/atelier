@@ -60,6 +60,10 @@ export class SessionSocket {
   private everOpened = false
   private closedByApp = false
   private cancelReconnect: (() => void) | null = null
+  // Whether the current socket's handshake has settled (onopen or onclose fired).
+  // Closing a socket that is still CONNECTING is legal but makes the browser log
+  // "WebSocket is closed before the connection is established", so close() waits.
+  private settled = false
 
   constructor(sessionId: string, projectId: string, options: { createSocket?: SocketFactory; schedule?: Schedule } = {}) {
     this.createSocket = options.createSocket ?? browserSocketFactory
@@ -95,15 +99,24 @@ export class SessionSocket {
     this.closedByApp = true
     this.cancelReconnect?.()
     this.cancelReconnect = null
-    this.socket?.close()
+    // Mid-handshake, onopen closes it instead — see `settled`.
+    if (this.settled) this.socket?.close()
   }
 
   private connect(): void {
     const socket = this.createSocket(this.url)
     this.socket = socket
+    this.settled = false
 
     socket.onopen = () => {
       if (socket !== this.socket) return
+      this.settled = true
+      // close() was called while connecting: honour it now that closing is clean.
+      // Deliberately before flushOutbox — a closed app must not send anything.
+      if (this.closedByApp) {
+        socket.close()
+        return
+      }
       const isReconnect = this.everOpened
       this.everOpened = true
       this.isOpen = true
@@ -126,6 +139,7 @@ export class SessionSocket {
 
     socket.onclose = () => {
       if (socket !== this.socket) return
+      this.settled = true
       this.isOpen = false
       if (this.closedByApp) return
       this.cancelReconnect = this.schedule(() => {
