@@ -534,3 +534,24 @@
     40% { opacity: 1; transform: translateY(-2px); }
   }
 }
+
+/* First-launch welcome panel (spec 2026-08-18) */
+.welcome {
+  margin: auto;
+  max-width: 420px;
+  padding: 24px;
+}
+.welcome h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+.welcome p {
+  color: var(--t-muted);
+  margin: 0 0 16px;
+}
+.welcome ol {
+  margin: 0 0 20px;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
