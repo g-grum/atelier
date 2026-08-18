@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { ChatMessage, ClientMessage, ServerEvent } from '@atelier/shared'
 import { SessionController, type ControllerSocket } from './session-controller'
-import { FIXTURE_SESSION_ID, fixtureMessages, fixtureTurn } from './fixtures'
+import { FIXTURE_SESSION_ID, fixtureMessages, fixtureTurn } from '@/mocks/fixtures'
 
 class FakeControllerSocket implements ControllerSocket {
   sent: ClientMessage[] = []

@@ -1,4 +1,4 @@
-import type { StreamState } from '@/state/stream-reducer'
+import type { StreamState } from '@/stores/stream-reducer'
 
 export type ErrorBannerProps = {
   status: StreamState['status']

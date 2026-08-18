@@ -5,7 +5,8 @@ import { MODELS, type AlwaysRule, type Preferences, type ProjectSummary, type Se
 import { type Backend, backend } from '@/api/backend'
 import { modelLabel } from '@/features/settings/utils/models'
 import { applyTheme } from '@/features/settings/utils/theme'
-import { basename, errorMessage } from '@/lib/utils'
+import { basename } from '@atelier/core/utils/basename'
+import { errorMessage } from '@atelier/core/utils/error-message'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/ui/dialog/dialog'
 
 /** The slice of the Backend seam the panel needs — injectable for tests. */

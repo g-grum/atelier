@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Dictionary } from '@atelier/core/types'
 import type { PermissionDecision } from '@atelier/shared'
-import type { ChatItem, StreamState } from '@/state/stream-reducer'
+import type { ChatItem, StreamState } from '@/stores/stream-reducer'
 import { MessageItem, TypingIndicator } from '@/features/chat/components/message-item/MessageItem'
 import { PermissionPrompt, type PermissionChatItem } from '@/features/chat/components/permission-prompt/PermissionPrompt'
 import { QuestionPrompt, type QuestionChatItem } from '@/features/chat/components/question-prompt/QuestionPrompt'

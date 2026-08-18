@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import type { Dictionary } from '@atelier/core/types'
 import type { QcmQuestion } from '@atelier/shared'
-import type { ChatItem } from '@/state/stream-reducer'
+import type { ChatItem } from '@/stores/stream-reducer'
 
 export type QuestionChatItem = Extract<ChatItem, { kind: 'question' }>
 

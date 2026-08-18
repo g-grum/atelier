@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { PrSummary } from '@atelier/shared'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@atelier/core/utils/error-message'
 
 export type PrListWidgetApi = { getGithubPrs: (repo: string, limit: number) => Promise<PrSummary[]> }
 

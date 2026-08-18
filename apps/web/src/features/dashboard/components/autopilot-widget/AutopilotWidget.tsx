@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { AutopilotItem, AutopilotItemStatus, AutopilotState } from '@atelier/shared'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@atelier/core/utils/error-message'
 
 export type AutopilotWidgetApi = {
   getAutopilot: () => Promise<AutopilotState>

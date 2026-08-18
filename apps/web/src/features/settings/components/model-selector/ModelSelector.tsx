@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { MODELS, type SessionSummary } from '@atelier/shared'
 import { type Backend, backend } from '@/api/backend'
 import { modelLabel } from '@/features/settings/utils/models'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@atelier/core/utils/error-message'
 import {
   DropdownMenu,
   DropdownMenuContent,

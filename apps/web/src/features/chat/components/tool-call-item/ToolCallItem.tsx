@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ToolKind } from '@atelier/shared'
-import type { ChatItem } from '@/state/stream-reducer'
+import type { ChatItem } from '@/stores/stream-reducer'
 
 export type ToolChatItem = Extract<ChatItem, { kind: 'tool' }>
 

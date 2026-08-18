@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { PermissionDecision, ProposedRule } from '@atelier/shared'
-import type { ChatItem } from '@/state/stream-reducer'
+import type { ChatItem } from '@/stores/stream-reducer'
 
 export type PermissionChatItem = Extract<ChatItem, { kind: 'permission' }>
 

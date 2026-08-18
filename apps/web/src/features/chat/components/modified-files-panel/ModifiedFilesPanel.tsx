@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import * as client from '@/api/client'
-import { basename, errorMessage } from '@/lib/utils'
+import { basename } from '@atelier/core/utils/basename'
+import { errorMessage } from '@atelier/core/utils/error-message'
 
 /** The slice of the REST client the panel needs — injectable for tests. */
 export type ModifiedFilesApi = {

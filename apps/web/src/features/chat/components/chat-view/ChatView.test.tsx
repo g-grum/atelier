@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import type { ChatItem } from '@/state/stream-reducer'
+import type { ChatItem } from '@/stores/stream-reducer'
 import { ChatView } from '@/features/chat/components/chat-view/ChatView'
 
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.

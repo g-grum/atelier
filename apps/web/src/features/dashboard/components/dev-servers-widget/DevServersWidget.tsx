@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { DevServer } from '@atelier/shared'
-import { errorMessage } from '@/lib/utils'
+import { errorMessage } from '@atelier/core/utils/error-message'
 
 export type DevServersWidgetApi = { stopDevServer: (pid: number) => Promise<void> }
 

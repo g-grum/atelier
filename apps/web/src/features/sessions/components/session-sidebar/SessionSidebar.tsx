@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Maybe } from '@atelier/core/types'
 import type { ProjectSummary, SessionState, SessionSummary } from '@atelier/shared'
-import { basename } from '@/lib/utils'
+import { basename } from '@atelier/core/utils/basename'
 import { SessionListItem, type SessionDotState } from '@/features/sessions/components/session-list-item/SessionListItem'
 
 export type SessionSidebarProps = {

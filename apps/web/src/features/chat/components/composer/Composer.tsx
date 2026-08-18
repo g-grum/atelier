@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { SlashCommandInfo } from '@atelier/shared'
 import { completeMention, insertMention, matchFiles, mentionPrefix, type FileEntry } from '@/features/chat/utils/file-mentions'
 import { commandPrefix, completeCommand, matchCommands } from '@/features/chat/utils/slash-commands'
-import type { StreamState } from '@/state/stream-reducer'
+import type { StreamState } from '@/stores/stream-reducer'
 
 export type ComposerProps = {
   /** No session selected — dimmed and inert. */

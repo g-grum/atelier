@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cleanup, render, screen } from '@testing-library/react'
-import { fixtureErrorTurn } from '@/state/fixtures'
-import { initialState, reduce } from '@/state/stream-reducer'
+import { fixtureErrorTurn } from '@/mocks/fixtures'
+import { initialState, reduce } from '@/stores/stream-reducer'
 import { ErrorBanner } from '@/components/error-banner/ErrorBanner'
 
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.

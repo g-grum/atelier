@@ -25,9 +25,9 @@ import { PrListWidget } from '@/features/dashboard/components/pr-list-widget/PrL
 import type { FileEntry } from '@/features/chat/utils/file-mentions'
 import { clearLastSession, readLastSession, writeLastSession } from '@/features/sessions/utils/last-session'
 import { applyTheme, currentTheme } from '@/features/settings/utils/theme'
-import { errorMessage } from './lib/utils'
-import { SessionController } from './state/session-controller'
-import { SessionStatusStore } from './state/session-status-store'
+import { errorMessage } from '@atelier/core/utils/error-message'
+import { SessionController } from '@/stores/session-controller'
+import { SessionStatusStore } from '@/stores/session-status-store'
 
 export type AppProps = {
   /** Injectable for tests — defaults to the module backend (real REST+WS, or fixtures). */
