@@ -55,35 +55,42 @@ Tone: concise, English, no download links or release promises.
 
 ## 3. Guided empty state
 
-Component: `apps/web/src/features/onboarding/components/WelcomePanel.tsx`.
+Component: `apps/web/src/features/onboarding/components/welcome-panel/WelcomePanel.tsx`
+(per the `features/<area>/components/<kebab-name>/Component.tsx` convention).
 
 Behavior:
 
 - In `App.tsx`, when the projects query has resolved and the list is empty, render
   `WelcomePanel` in the chat zone instead of the empty `ChatView` + composer.
 - Content: one-line "what Atelier is", three numbered steps (register a project → start
-  a session → watch the dashboard), and a primary button that opens the existing
-  register-project form in the sidebar (reuse the sidebar's existing open/focus
-  mechanism; add a small callback or store flag if none exists).
+  a session → watch the dashboard), and a primary button that focuses the
+  register-project form in the sidebar. Note: when no projects exist, `SessionSidebar`
+  already renders `RegisterProjectForm` inline, so the button only needs to focus its
+  path input — no open mechanism to invent.
 - No persisted flag: the panel disappears naturally once a project exists, and comes
-  back if all projects are removed. While the projects query is loading, render the
-  normal shell (no flash of the welcome panel).
+  back if all projects are removed. While the projects query is loading or errored,
+  render the normal shell (no flash of the welcome panel).
 
 ## 4. Feature tour (custom coach marks)
 
 Decision: custom implementation on existing Radix/shadcn popover primitives (approach A).
 Rejected: driver.js (fights theme tokens), react-joyride (heavy, React 19 lag).
 
-Components: `apps/web/src/features/onboarding/components/Tour.tsx` plus a small step
-definition module.
+Components: `apps/web/src/features/onboarding/components/tour/Tour.tsx` plus a small
+step definition module.
 
 - ~4 sequential steps anchored via `data-tour="..."` attributes: session sidebar →
   composer → dashboard → settings gear.
 - Each step: positioned popover with title, one sentence, step counter (1/4),
   Next / Skip buttons; final step shows Done. Dimmed backdrop over the rest of the UI;
-  Escape skips.
-- Trigger: shown once, right after the first project registration completes, when
-  `preferences.hasCompletedTour` is falsy.
+  Escape skips (and, like Skip/Done, persists the flag).
+- Trigger: shown once, right after a project registration completes **from the empty
+  state** (the projects list was empty immediately before the registration, i.e. the
+  WelcomePanel path) and `preferences.hasCompletedTour` is falsy. A registration when
+  projects already exist never triggers the tour, so existing installs (flag absent =
+  `false`) adding another project are unaffected. Detection hint for the plan: gate on
+  the WelcomePanel being mounted when the registration succeeds (simplest correct proxy
+  for "was empty before").
 - Persistence: new optional boolean `hasCompletedTour` in server preferences
   (`~/.atelier/app-data.json`, `apps/server/src/store/app-data.ts`), default `false`,
   set `true` via the existing preferences update API on Done or Skip. Server-side so it
@@ -111,4 +118,6 @@ definition module.
   trigger condition (first registration + flag falsy); flag persists via preferences
   API; missing-anchor step skip.
 - Manual verify pass: fresh `--data` dir → welcome panel → register project → tour →
-  `hasCompletedTour: true` written → repackage → installed app shows Atelier icon.
+  `hasCompletedTour: true` written → repackage → verify bundle contents
+  (`Contents/Resources/*.icns` + `CFBundleIconFile`) → installed app shows the Atelier
+  icon (a stale macOS icon cache can hide a correct bundle, so check contents first).
