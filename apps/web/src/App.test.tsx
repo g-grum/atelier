@@ -89,6 +89,22 @@ function renderApp(backend: Backend) {
   return { queryClient }
 }
 
+
+/**
+ * Poll for a condition WITHOUT MutationObserver. RTL's waitFor observes the
+ * whole document; happy-dom's observer implementation degenerates (multi-
+ * second synchronous mutation processing) during the large welcome->shell
+ * remount, making absence-waits intermittently exceed bun's 5s test timeout
+ * (CI flake). Plain interval polling sees the same DOM change in ~30ms.
+ */
+async function waitUntil(pred: () => boolean, timeoutMs = 3000) {
+  const t0 = Date.now()
+  while (!pred()) {
+    if (Date.now() - t0 > timeoutMs) throw new Error('waitUntil timeout')
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+}
+
 describe('first-launch welcome', () => {
   test('shows the welcome panel when the projects list resolves empty', async () => {
     renderApp(fakeBackend({ listProjects: async () => [] }))
@@ -121,7 +137,7 @@ describe('first-launch welcome', () => {
     await screen.findByText(/welcome to atelier/i)
     fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
     fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    await waitFor(() => expect(screen.queryByText(/welcome to atelier/i)).toBeNull())
+    await waitUntil(() => screen.queryByText(/welcome to atelier/i) === null)
   })
 
   test('registering the first project from the welcome state starts the tour', async () => {
@@ -206,7 +222,7 @@ describe('first-launch welcome', () => {
     await screen.findByText(/welcome to atelier/i)
     fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
     fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    await waitFor(() => expect(screen.queryByText(/welcome to atelier/i)).toBeNull())
+    await waitUntil(() => screen.queryByText(/welcome to atelier/i) === null)
     expect(screen.queryByText('Projects & sessions')).toBeNull()
   })
 
@@ -225,7 +241,7 @@ describe('first-launch welcome', () => {
     await screen.findByText(/welcome to atelier/i)
     fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
     fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    await waitFor(() => expect(screen.queryByText(/welcome to atelier/i)).toBeNull())
+    await waitUntil(() => screen.queryByText(/welcome to atelier/i) === null)
     expect(screen.queryByText('Projects & sessions')).toBeNull()
   })
 })
