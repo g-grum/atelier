@@ -128,6 +128,12 @@ describe('first-launch welcome', () => {
     renderApp(
       fakeBackend({
         listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
         registerProject: async (path) => {
           registered = true
           return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
@@ -145,6 +151,12 @@ describe('first-launch welcome', () => {
     renderApp(
       fakeBackend({
         listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
         registerProject: async (path) => {
           registered = true
           return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
@@ -163,6 +175,12 @@ describe('first-launch welcome', () => {
     renderApp(
       fakeBackend({
         listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
         registerProject: async (path) => {
           registered = true
           return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
@@ -210,6 +228,12 @@ describe('first-launch welcome', () => {
     renderApp(
       fakeBackend({
         listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
         registerProject: async (path) => {
           registered = true
           return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
@@ -231,6 +255,12 @@ describe('first-launch welcome', () => {
     renderApp(
       fakeBackend({
         listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
         registerProject: async (path) => {
           registered = true
           return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
