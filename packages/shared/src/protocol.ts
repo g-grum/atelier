@@ -49,6 +49,8 @@ export type Preferences = {
   theme?: Theme
   /** Mode appliqué aux NOUVELLES sessions (stampé dans createDraft). Absent/null = demander à chaque session (gate). Jamais rétroactif. */
   defaultPermissionMode?: SessionPermissionMode | null
+  /** First-launch feature tour completed (or skipped). Absent = false — pre-existing installs never see the tour since it only triggers on a first registration. */
+  hasCompletedTour?: boolean
 }
 
 /** One recorded usage sample (REST: GET /api/usage/history). All four counters persist — the forecast's fidelity depends on cache counts; a lossy total can't be backfilled. */
