@@ -189,6 +189,27 @@ describe('first-launch welcome', () => {
     expect(screen.queryByText('Projects & sessions')).toBeNull()
   })
 
+  test('a pending preferences fetch suppresses the tour (fail closed)', async () => {
+    let registered = false
+    renderApp(
+      fakeBackend({
+        listProjects: async () => (registered ? [project] : []),
+        registerProject: async (path) => {
+          registered = true
+          return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
+        },
+        // Never resolves: without preferences data the trigger must stay OFF —
+        // the tour may already have been completed by this user.
+        getPreferences: () => new Promise(() => {}),
+      }),
+    )
+    await screen.findByText(/welcome to atelier/i)
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await waitFor(() => expect(screen.queryByText(/welcome to atelier/i)).toBeNull())
+    expect(screen.queryByText('Projects & sessions')).toBeNull()
+  })
+
   test('hasCompletedTour true suppresses the tour after a first registration', async () => {
     let registered = false
     renderApp(

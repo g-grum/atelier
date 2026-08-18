@@ -555,55 +555,55 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
             />
           ) : (
             <>
-              <ChatView
-                items={stream.items}
-                status={stream.status}
-                // Sends permission_response on the socket and resolves the item locally.
-                onPermissionDecision={(requestId, decision) => controller.respondPermission(requestId, decision)}
-                // Sends question_response on the socket and freezes the QCM card locally.
-                onQuestionAnswer={(requestId, answers) => controller.answerQuestion(requestId, answers)}
-                onOpenInIde={(file, line) => {
-                  // The server answers { ok: false, reason } instead of a 5xx when
-                  // the IDE cannot be opened — both that and a transport rejection
-                  // must reach the user, or the click silently does nothing.
-                  backend.openInIde({ file, line }).then(
-                    (result) => {
-                      if (!result.ok) setNotice(`Could not open in the IDE: ${result.reason}`)
-                    },
-                    (error: unknown) => setNotice(`Could not open in the IDE: ${errorMessage(error)}`),
-                  )
-                }}
-              />
-              {needsPermissionChoice && (
-                <PermissionModeGate
-                  pending={setPermissionMode.isPending}
-                  onChoose={(mode, remember) => {
-                    if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
-                    if (remember) rememberPermissionDefault.mutate(mode)
+                <ChatView
+                  items={stream.items}
+                  status={stream.status}
+                  // Sends permission_response on the socket and resolves the item locally.
+                  onPermissionDecision={(requestId, decision) => controller.respondPermission(requestId, decision)}
+                  // Sends question_response on the socket and freezes the QCM card locally.
+                  onQuestionAnswer={(requestId, answers) => controller.answerQuestion(requestId, answers)}
+                  onOpenInIde={(file, line) => {
+                    // The server answers { ok: false, reason } instead of a 5xx when
+                    // the IDE cannot be opened — both that and a transport rejection
+                    // must reach the user, or the click silently does nothing.
+                    backend.openInIde({ file, line }).then(
+                      (result) => {
+                        if (!result.ok) setNotice(`Could not open in the IDE: ${result.reason}`)
+                      },
+                      (error: unknown) => setNotice(`Could not open in the IDE: ${errorMessage(error)}`),
+                    )
                   }}
                 />
-              )}
-              {activeSession?.permissionMode === 'bypassPermissions' && (
-                <div
-                  className="perm-bypass-chip"
-                  role="status"
-                  title="Set for this session — the default is managed in settings"
-                >
-                  Skip permissions
-                </div>
-              )}
-              <Composer
-                disabled={selected === null || needsPermissionChoice}
-                status={stream.status}
-                // Précédence, pas de fusion (spec §5) : les deux listes viennent du
-                // même producteur (le SDK), celle du WS est juste plus fraîche.
-                commands={stream.commands ?? commandsQuery.data ?? []}
-                files={fileEntries}
-                onUploadImage={(file) => backend.uploadImage(commandsProjectId ?? '', file)}
-                onSend={(text) => controller.sendMessage(text)}
-                // Explicit abort — the only ClientMessage that stops a turn.
-                onAbort={() => controller.abort()}
-              />
+                {needsPermissionChoice && (
+                  <PermissionModeGate
+                    pending={setPermissionMode.isPending}
+                    onChoose={(mode, remember) => {
+                      if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
+                      if (remember) rememberPermissionDefault.mutate(mode)
+                    }}
+                  />
+                )}
+                {activeSession?.permissionMode === 'bypassPermissions' && (
+                  <div
+                    className="perm-bypass-chip"
+                    role="status"
+                    title="Set for this session — the default is managed in settings"
+                  >
+                    Skip permissions
+                  </div>
+                )}
+                <Composer
+                  disabled={selected === null || needsPermissionChoice}
+                  status={stream.status}
+                  // Précédence, pas de fusion (spec §5) : les deux listes viennent du
+                  // même producteur (le SDK), celle du WS est juste plus fraîche.
+                  commands={stream.commands ?? commandsQuery.data ?? []}
+                  files={fileEntries}
+                  onUploadImage={(file) => backend.uploadImage(commandsProjectId ?? '', file)}
+                  onSend={(text) => controller.sendMessage(text)}
+                  // Explicit abort — the only ClientMessage that stops a turn.
+                  onAbort={() => controller.abort()}
+                />
             </>
           )}
         </main>
