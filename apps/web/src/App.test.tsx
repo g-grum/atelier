@@ -89,6 +89,193 @@ function renderApp(backend: Backend) {
   return { queryClient }
 }
 
+
+/**
+ * Poll for a condition WITHOUT MutationObserver. RTL's waitFor observes the
+ * whole document; happy-dom's observer implementation degenerates (multi-
+ * second synchronous mutation processing) during the large welcome->shell
+ * remount, making absence-waits intermittently exceed bun's 5s test timeout
+ * (CI flake). Plain interval polling sees the same DOM change in ~30ms.
+ */
+async function waitUntil(pred: () => boolean, timeoutMs = 3000) {
+  const t0 = Date.now()
+  while (!pred()) {
+    if (Date.now() - t0 > timeoutMs) throw new Error('waitUntil timeout')
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+}
+
+describe('first-launch welcome', () => {
+  test('shows the welcome panel when the projects list resolves empty', async () => {
+    renderApp(fakeBackend({ listProjects: async () => [] }))
+    expect(await screen.findByRole('button', { name: /register your first project/i })).toBeTruthy()
+    // The composer is not rendered behind the welcome panel.
+    expect(screen.queryByLabelText('Reply to Claude')).toBeNull()
+  })
+
+  test('never flashes the welcome panel while projects load or on fetch error', async () => {
+    renderApp(fakeBackend({ listProjects: () => new Promise(() => {}) }))
+    expect(screen.queryByText(/welcome to atelier/i)).toBeNull()
+
+    cleanup()
+    renderApp(fakeBackend({ listProjects: async () => Promise.reject(new Error('down')) }))
+    await screen.findByText(/could not load projects/i)
+    expect(screen.queryByText(/welcome to atelier/i)).toBeNull()
+  })
+
+  test('the welcome panel disappears once a project is registered', async () => {
+    let registered = false
+    renderApp(
+      fakeBackend({
+        listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
+        registerProject: async (path) => {
+          registered = true
+          return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
+        },
+      }),
+    )
+    await screen.findByText(/welcome to atelier/i)
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await waitUntil(() => screen.queryByText(/welcome to atelier/i) === null)
+  })
+
+  test('registering the first project from the welcome state starts the tour', async () => {
+    let registered = false
+    renderApp(
+      fakeBackend({
+        listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
+        registerProject: async (path) => {
+          registered = true
+          return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
+        },
+      }),
+    )
+    await screen.findByText(/welcome to atelier/i)
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    expect(await screen.findByText('Projects & sessions')).toBeTruthy()
+  })
+
+  test('finishing the tour persists hasCompletedTour', async () => {
+    const patches: object[] = []
+    let registered = false
+    renderApp(
+      fakeBackend({
+        listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
+        registerProject: async (path) => {
+          registered = true
+          return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
+        },
+        patchPreferences: async (patch) => {
+          patches.push(patch)
+          return { ...DEFAULT_PREFERENCES, ...patch }
+        },
+      }),
+    )
+    await screen.findByText(/welcome to atelier/i)
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await screen.findByText('Projects & sessions')
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+    await waitFor(() => expect(patches).toContainEqual({ hasCompletedTour: true }))
+    expect(screen.queryByText('Projects & sessions')).toBeNull()
+  })
+
+  test('a registration with existing projects never starts the tour', async () => {
+    let projectFetches = 0
+    renderApp(
+      fakeBackend({
+        listProjects: async () => {
+          projectFetches++
+          return [project]
+        },
+      }),
+    )
+    await screen.findByText('atelier') // sidebar rendered
+    const fetchesBefore = projectFetches
+    // Open the footer « + Project » form and register a second project.
+    fireEvent.click(screen.getByRole('button', { name: '+ Project' }))
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/two' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    // Positive signal that onSuccess ran (the ['projects'] invalidation
+    // refetches) — asserting absence on an already-absent probe would pass
+    // trivially before the trigger even had a chance to misfire.
+    await waitFor(() => expect(projectFetches).toBeGreaterThan(fetchesBefore))
+    expect(screen.queryByText('Projects & sessions')).toBeNull()
+  })
+
+  test('a pending preferences fetch suppresses the tour (fail closed)', async () => {
+    let registered = false
+    renderApp(
+      fakeBackend({
+        listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
+        registerProject: async (path) => {
+          registered = true
+          return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
+        },
+        // Never resolves: without preferences data the trigger must stay OFF —
+        // the tour may already have been completed by this user.
+        getPreferences: () => new Promise(() => {}),
+      }),
+    )
+    await screen.findByText(/welcome to atelier/i)
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await waitUntil(() => screen.queryByText(/welcome to atelier/i) === null)
+    expect(screen.queryByText('Projects & sessions')).toBeNull()
+  })
+
+  test('hasCompletedTour true suppresses the tour after a first registration', async () => {
+    let registered = false
+    renderApp(
+      fakeBackend({
+        listProjects: async () => (registered ? [project] : []),
+        // A freshly registered project has no sessions yet (matches
+        // sessionCount: 0 below). Also keeps the test hermetic: the default
+        // [session] fixture would trigger the launch-restore auto-open, a
+        // path these tests do not assert and whose extra work makes them
+        // load-sensitive (act() can overrun the 5s test timeout on slow CI).
+        listSessions: async () => [],
+        registerProject: async (path) => {
+          registered = true
+          return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
+        },
+        getPreferences: async () => ({ ...DEFAULT_PREFERENCES, hasCompletedTour: true }),
+      }),
+    )
+    await screen.findByText(/welcome to atelier/i)
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await waitUntil(() => screen.queryByText(/welcome to atelier/i) === null)
+    expect(screen.queryByText('Projects & sessions')).toBeNull()
+  })
+})
+
 describe('App failure surfacing', () => {
   test('a failed projects fetch shows the sidebar error, never the register form', async () => {
     renderApp(fakeBackend({ listProjects: async () => Promise.reject(new Error('GET /api/projects → 401')) }))

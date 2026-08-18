@@ -13,6 +13,8 @@ import { ModifiedFilesPanel } from '@/features/chat/components/modified-files-pa
 import { PermissionModeGate } from '@/features/chat/components/permission-mode-gate/PermissionModeGate'
 import { RateLimitsPanel } from '@/features/settings/components/rate-limits-panel/RateLimitsPanel'
 import { SessionSidebar } from '@/features/sessions/components/session-sidebar/SessionSidebar'
+import { WelcomePanel } from '@/features/onboarding/components/welcome-panel/WelcomePanel'
+import { Tour } from '@/features/onboarding/components/tour/Tour'
 import { Topbar } from '@/components/topbar/Topbar'
 import { Toaster } from '@/ui/sonner/sonner'
 import { DashboardGrid } from '@/features/dashboard/components/dashboard-grid/DashboardGrid'
@@ -60,6 +62,8 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   const [confirmDelete, setConfirmDelete] = useState<SessionSummary | null>(null)
   /** github-prs instance awaiting configuration — null keeps the dialog closed. */
   const [configuring, setConfiguring] = useState<WidgetInstance | null>(null)
+  /** Tour armed by the first registration from the welcome state (spec 2026-08-18). */
+  const [tourRequested, setTourRequested] = useState(false)
   /** Bumped per open attempt — a stale rejection must not overwrite a newer attempt's state. */
   const openAttempt = useRef(0)
   /**
@@ -212,6 +216,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   // rendering the list — the retry card is reserved for the no-data case.
   const projectsStatus = projectsQuery.status === 'error' && projectsQuery.data !== undefined ? 'success' : projectsQuery.status
 
+  // First-launch empty state (spec 2026-08-18): only a RESOLVED empty list
+  // shows the welcome — pending renders the normal shell (no flash), and a
+  // fetch error keeps the sidebar's retry card as the single error surface.
+  const showWelcome = projectsStatus === 'success' && projects.length === 0
+
+  // Tour flag — the query only feeds the trigger below; silent on failure.
+  const preferencesQuery = useQuery({ queryKey: ['preferences'], queryFn: backend.getPreferences, retry: false })
+
   const sessionsQuery = useQuery({
     queryKey: ['sessions', projectId],
     queryFn: () => backend.listSessions(projectId ?? ''),
@@ -279,6 +291,17 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
     [controller],
   )
 
+  const finishTour = useCallback(() => {
+    // UX first (spec error handling): the tour closes even if the PATCH
+    // fails — worst case it re-arms on a future first-registration
+    // (practically never).
+    setTourRequested(false)
+    backend
+      .patchPreferences({ hasCompletedTour: true })
+      .then(() => queryClient.invalidateQueries({ queryKey: ['preferences'] }))
+      .catch((error: unknown) => console.error('could not persist hasCompletedTour', error))
+  }, [backend, queryClient])
+
   const selectSession = useCallback(
     (session: SessionSummary) => {
       if (selected?.sessionId === session.id) return
@@ -321,7 +344,14 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   const registerProject = useMutation({
     mutationFn: backend.registerProject,
     // Failure surfaces through `registerProject.error` in the sidebar form.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
+    onSuccess: () => {
+      // Tour trigger (spec 2026-08-18): ONLY a registration from the welcome
+      // state — adding a project to an existing install never fires it. Gated
+      // on isSuccess so a pending/failed preferences fetch keeps the trigger
+      // OFF (never show the tour to someone who may have completed it).
+      if (showWelcome && preferencesQuery.isSuccess && preferencesQuery.data.hasCompletedTour !== true) setTourRequested(true)
+      void queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
   })
 
   const createDraft = useMutation({
@@ -515,61 +545,74 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
               </button>
             </div>
           )}
-          <ChatView
-            items={stream.items}
-            status={stream.status}
-            // Sends permission_response on the socket and resolves the item locally.
-            onPermissionDecision={(requestId, decision) => controller.respondPermission(requestId, decision)}
-            // Sends question_response on the socket and freezes the QCM card locally.
-            onQuestionAnswer={(requestId, answers) => controller.answerQuestion(requestId, answers)}
-            onOpenInIde={(file, line) => {
-              // The server answers { ok: false, reason } instead of a 5xx when
-              // the IDE cannot be opened — both that and a transport rejection
-              // must reach the user, or the click silently does nothing.
-              backend.openInIde({ file, line }).then(
-                (result) => {
-                  if (!result.ok) setNotice(`Could not open in the IDE: ${result.reason}`)
-                },
-                (error: unknown) => setNotice(`Could not open in the IDE: ${errorMessage(error)}`),
-              )
-            }}
-          />
-          {needsPermissionChoice && (
-            <PermissionModeGate
-              pending={setPermissionMode.isPending}
-              onChoose={(mode, remember) => {
-                if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
-                if (remember) rememberPermissionDefault.mutate(mode)
+          {showWelcome ? (
+            <WelcomePanel
+              onGetStarted={() => {
+                // The sidebar's register form is already visible when no
+                // project exists — the button just moves focus into it.
+                document.querySelector<HTMLInputElement>('.register input')?.focus()
               }}
             />
+          ) : (
+            <>
+                <ChatView
+                  items={stream.items}
+                  status={stream.status}
+                  // Sends permission_response on the socket and resolves the item locally.
+                  onPermissionDecision={(requestId, decision) => controller.respondPermission(requestId, decision)}
+                  // Sends question_response on the socket and freezes the QCM card locally.
+                  onQuestionAnswer={(requestId, answers) => controller.answerQuestion(requestId, answers)}
+                  onOpenInIde={(file, line) => {
+                    // The server answers { ok: false, reason } instead of a 5xx when
+                    // the IDE cannot be opened — both that and a transport rejection
+                    // must reach the user, or the click silently does nothing.
+                    backend.openInIde({ file, line }).then(
+                      (result) => {
+                        if (!result.ok) setNotice(`Could not open in the IDE: ${result.reason}`)
+                      },
+                      (error: unknown) => setNotice(`Could not open in the IDE: ${errorMessage(error)}`),
+                    )
+                  }}
+                />
+                {needsPermissionChoice && (
+                  <PermissionModeGate
+                    pending={setPermissionMode.isPending}
+                    onChoose={(mode, remember) => {
+                      if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
+                      if (remember) rememberPermissionDefault.mutate(mode)
+                    }}
+                  />
+                )}
+                {activeSession?.permissionMode === 'bypassPermissions' && (
+                  <div
+                    className="perm-bypass-chip"
+                    role="status"
+                    title="Set for this session — the default is managed in settings"
+                  >
+                    Skip permissions
+                  </div>
+                )}
+                <Composer
+                  disabled={selected === null || needsPermissionChoice}
+                  status={stream.status}
+                  // Précédence, pas de fusion (spec §5) : les deux listes viennent du
+                  // même producteur (le SDK), celle du WS est juste plus fraîche.
+                  commands={stream.commands ?? commandsQuery.data ?? []}
+                  files={fileEntries}
+                  onUploadImage={(file) => backend.uploadImage(commandsProjectId ?? '', file)}
+                  onSend={(text) => controller.sendMessage(text)}
+                  // Explicit abort — the only ClientMessage that stops a turn.
+                  onAbort={() => controller.abort()}
+                />
+            </>
           )}
-          {activeSession?.permissionMode === 'bypassPermissions' && (
-            <div
-              className="perm-bypass-chip"
-              role="status"
-              title="Set for this session — the default is managed in settings"
-            >
-              Skip permissions
-            </div>
-          )}
-          <Composer
-            disabled={selected === null || needsPermissionChoice}
-            status={stream.status}
-            // Précédence, pas de fusion (spec §5) : les deux listes viennent du
-            // même producteur (le SDK), celle du WS est juste plus fraîche.
-            commands={stream.commands ?? commandsQuery.data ?? []}
-            files={fileEntries}
-            onUploadImage={(file) => backend.uploadImage(commandsProjectId ?? '', file)}
-            onSend={(text) => controller.sendMessage(text)}
-            // Explicit abort — the only ClientMessage that stops a turn.
-            onAbort={() => controller.abort()}
-          />
         </main>
         <aside className="dash" aria-label="Dashboard">
           <DashboardGrid widgets={widgets} onSave={(next) => saveWidgets.mutate(next)} renderWidget={renderWidget} onConfigure={setConfiguring} />
         </aside>
       </div>
       <Toaster />
+      {tourRequested && <Tour onFinish={finishTour} />}
       <DeleteSessionDialog
         session={confirmDelete}
         onConfirm={(session) => {

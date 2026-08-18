@@ -458,6 +458,33 @@ describe('createApp', () => {
     expect(prefs.defaultPermissionMode).toBeNull()
   })
 
+  test('PATCH /api/preferences persists hasCompletedTour and survives a reload', async () => {
+    const { app, filePath } = freshApp()
+    const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }
+
+    const rp = await app.request('/api/preferences', {
+      method: 'PATCH',
+      headers: auth,
+      body: JSON.stringify({ hasCompletedTour: true }),
+    })
+    expect(rp.status).toBe(200)
+    const prefs = await rp.json() as { hasCompletedTour?: boolean }
+    expect(prefs.hasCompletedTour).toBe(true)
+
+    const reloaded = new AppData(filePath)
+    expect(reloaded.get().preferences.hasCompletedTour).toBe(true)
+  })
+
+  test('PATCH /api/preferences rejects a non-boolean hasCompletedTour', async () => {
+    const { app } = freshApp()
+    const res = await app.request('/api/preferences', {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hasCompletedTour: 'yes' }),
+    })
+    expect(res.status).toBe(400)
+  })
+
   test('PATCH /api/preferences rejects an unknown defaultPermissionMode with 400 and leaves preferences untouched', async () => {
     const { app } = freshApp()
     const auth = { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' }

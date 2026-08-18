@@ -70,6 +70,9 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
     if (parsed.githubUser !== undefined && typeof parsed.githubUser !== 'string') {
       return c.json({ error: 'requête invalide : « githubUser » doit être une chaîne' }, 400)
     }
+    if (parsed.hasCompletedTour !== undefined && typeof parsed.hasCompletedTour !== 'boolean') {
+      return c.json({ error: 'invalid request: "hasCompletedTour" must be a boolean' }, 400)
+    }
     if (parsed.theme !== undefined && !THEMES.includes(parsed.theme as Theme)) {
       return c.json({ error: 'requête invalide : « theme » doit être « dark » ou « light »' }, 400)
     }
@@ -105,6 +108,7 @@ export function settingsRoutes(data: AppData, sessions: SessionsService, launch:
       if (parsed.defaultPermissionMode !== undefined) {
         d.preferences.defaultPermissionMode = parsed.defaultPermissionMode as SessionPermissionMode | null
       }
+      if (parsed.hasCompletedTour !== undefined) d.preferences.hasCompletedTour = parsed.hasCompletedTour as boolean
     })
     return c.json(data.get().preferences)
   })

@@ -534,3 +534,59 @@
     40% { opacity: 1; transform: translateY(-2px); }
   }
 }
+
+/* First-launch welcome panel (spec 2026-08-18) */
+.welcome {
+  margin: auto;
+  max-width: 420px;
+  padding: 24px;
+}
+.welcome h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+.welcome p {
+  color: var(--t-muted);
+  margin: 0 0 16px;
+}
+.welcome ol {
+  margin: 0 0 20px;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+/* First-launch tour (spec 2026-08-18) */
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.45);
+  z-index: 60;
+}
+.tour-pop {
+  position: fixed;
+  width: 280px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--t-surface);
+  border: 1px solid var(--t-line);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.4);
+}
+.tour-pop h2 {
+  font-size: 14px;
+  margin: 0 0 6px;
+}
+.tour-pop p {
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+.tour-pop footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tour-count {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--t-muted);
+}
