@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import type { StatusHubEvent } from '@atelier/shared'
 import { backend, createFixtureBackend } from './backend'
 import { fixtureDevServers } from '../state/fixtures'
-import { defaultApi as modelSelectorApi } from '../components/ModelSelector'
-import { defaultApi as settingsApi } from '../components/SettingsPanel'
+import { defaultApi as modelSelectorApi } from '@/features/settings/components/model-selector/ModelSelector'
+import { defaultApi as settingsApi } from '@/features/settings/components/settings-panel/SettingsPanel'
 
 describe('fixture backend — méthodes du seam ajoutées pour Réglages', () => {
   test('listRules → règles démo ; deleteRule les retire', async () => {
