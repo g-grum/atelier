@@ -55,6 +55,7 @@ export function SettingsPanel({ api = defaultApi }: { api?: SettingsApi }) {
           type="button"
           aria-label="Settings"
           title="Settings"
+          data-tour="settings"
           className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-[7px] border border-transparent bg-transparent p-0 text-muted hover:border-line hover:bg-surface-2 hover:text-text"
         >
           <Settings className="h-4 w-4" aria-hidden="true" />
