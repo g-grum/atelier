@@ -89,6 +89,42 @@ function renderApp(backend: Backend) {
   return { queryClient }
 }
 
+describe('first-launch welcome', () => {
+  test('shows the welcome panel when the projects list resolves empty', async () => {
+    renderApp(fakeBackend({ listProjects: async () => [] }))
+    expect(await screen.findByRole('button', { name: /register your first project/i })).toBeTruthy()
+    // The composer is not rendered behind the welcome panel.
+    expect(screen.queryByLabelText('Reply to Claude')).toBeNull()
+  })
+
+  test('never flashes the welcome panel while projects load or on fetch error', async () => {
+    renderApp(fakeBackend({ listProjects: () => new Promise(() => {}) }))
+    expect(screen.queryByText(/welcome to atelier/i)).toBeNull()
+
+    cleanup()
+    renderApp(fakeBackend({ listProjects: async () => Promise.reject(new Error('down')) }))
+    await screen.findByText(/could not load projects/i)
+    expect(screen.queryByText(/welcome to atelier/i)).toBeNull()
+  })
+
+  test('the welcome panel disappears once a project is registered', async () => {
+    let registered = false
+    renderApp(
+      fakeBackend({
+        listProjects: async () => (registered ? [project] : []),
+        registerProject: async (path) => {
+          registered = true
+          return { id: 'p1', path, color: 'cyan', sessionCount: 0 }
+        },
+      }),
+    )
+    await screen.findByText(/welcome to atelier/i)
+    fireEvent.change(screen.getByLabelText('Project folder path'), { target: { value: '/tmp/demo' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await waitFor(() => expect(screen.queryByText(/welcome to atelier/i)).toBeNull())
+  })
+})
+
 describe('App failure surfacing', () => {
   test('a failed projects fetch shows the sidebar error, never the register form', async () => {
     renderApp(fakeBackend({ listProjects: async () => Promise.reject(new Error('GET /api/projects → 401')) }))
