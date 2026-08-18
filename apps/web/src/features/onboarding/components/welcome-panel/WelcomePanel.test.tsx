@@ -12,9 +12,9 @@ describe('WelcomePanel', () => {
     render(<WelcomePanel onGetStarted={() => {}} />)
     const items = screen.getAllByRole('listitem')
     expect(items).toHaveLength(3)
-    expect(items[0].textContent).toContain('Register a project')
-    expect(items[1].textContent).toContain('Start a session')
-    expect(items[2].textContent).toContain('Watch the dashboard')
+    expect(items[0]?.textContent).toContain('Register a project')
+    expect(items[1]?.textContent).toContain('Start a session')
+    expect(items[2]?.textContent).toContain('Watch the dashboard')
   })
 
   test('the primary button fires onGetStarted', () => {

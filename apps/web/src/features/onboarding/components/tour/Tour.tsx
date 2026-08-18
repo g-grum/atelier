@@ -19,8 +19,10 @@ export function Tour({ onFinish }: TourProps) {
   // First step at or after `index` whose anchor exists in the DOM.
   const resolved = useMemo(() => {
     for (let i = index; i < TOUR_STEPS.length; i++) {
-      const el = document.querySelector(TOUR_STEPS[i].anchor)
-      if (el !== null) return { i, step: TOUR_STEPS[i], rect: el.getBoundingClientRect() }
+      const step = TOUR_STEPS[i]
+      if (step === undefined) continue
+      const el = document.querySelector(step.anchor)
+      if (el !== null) return { i, step, rect: el.getBoundingClientRect() }
     }
     return null
   }, [index])
