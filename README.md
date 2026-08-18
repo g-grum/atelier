@@ -110,12 +110,20 @@ Outside the dev scripts the token is mandatory — pass `--token <value>` or set
 `ATELIER_TOKEN`, and reach the UI at `http://localhost:4518/?token=<value>`. The
 desktop app generates a fresh UUID per launch and needs no setup.
 
-Desktop app:
+### Install the desktop app (macOS)
 
 ```bash
-bun run dev:desktop     # build web + launch Electron
-bun run package:mac     # package a macOS .app
+bun run package:mac
 ```
+
+This builds the web UI, bundles it with the embedded server into a
+self-contained `Atelier.app`, and installs it to `~/Applications`. Launch it
+from there — no dev servers, no token setup: the app spawns its own server
+and reuses your local Claude Code credentials.
+
+Prerequisites are the same as above (Bun ≥ 1.2, a Claude Code-authenticated
+environment). To iterate on the shell instead, `bun run dev:desktop` builds
+the web UI and launches Electron against your working tree.
 
 ## License
 
