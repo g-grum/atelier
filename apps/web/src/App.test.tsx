@@ -5,7 +5,7 @@ import type { ChatMessage, ClientMessage, ProjectSummary, ServerEvent, SessionSu
 import { DEFAULT_WIDGETS } from '@atelier/shared'
 import { DEFAULT_PREFERENCES, type Backend } from './api/backend'
 import App from './App'
-import { fixtureTurn } from './state/fixtures'
+import { fixtureTurn } from '@/mocks/fixtures'
 import currentVersion from '../../../version.json'
 
 // RTL wraps renders/events in act() — React 19 requires the env flag outside a test-runner preset.
