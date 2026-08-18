@@ -31,6 +31,7 @@
     "apps/web": {
       "name": "@atelier/web",
       "dependencies": {
+        "@atelier/core": "workspace:*",
         "@atelier/shared": "workspace:*",
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
@@ -63,6 +64,20 @@
         "vite": "^7",
       },
     },
+    "packages/core": {
+      "name": "@atelier/core",
+      "dependencies": {
+        "clsx": "^2.1.1",
+        "tailwind-merge": "^3.6.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19",
+        "bun-types": "^1.3.14",
+      },
+      "peerDependencies": {
+        "react": "^19",
+      },
+    },
     "packages/shared": {
       "name": "@atelier/shared",
     },
@@ -87,6 +102,8 @@
     "@anthropic-ai/claude-agent-sdk-win32-x64": ["@anthropic-ai/claude-agent-sdk-win32-x64@0.3.198", "", { "os": "win32", "cpu": "x64" }, "sha512-y3HLuCCz1kDwUrhd6OnqO+d5BUpTFSzNUsPT9kf3r1vk9HYKF+eMC9eIlcOhiW2kX491kxEvuEOfqgIkGx15cg=="],
 
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.110.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1", "standardwebhooks": "^1.0.0" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-hOP4bNYXDFHDxxiEgzlILXrxZIYCDnhe8sry0RDRKD/QnsEpvZcQpablCdm9X/WuD/YgOiSIkkqsL1mLLlTqJw=="],
+
+    "@atelier/core": ["@atelier/core@workspace:packages/core"],
 
     "@atelier/desktop": ["@atelier/desktop@workspace:apps/desktop"],
 

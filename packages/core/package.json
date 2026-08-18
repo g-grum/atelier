@@ -1,0 +1,21 @@
+{
+  "name": "@atelier/core",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./types": "./types/index.ts",
+    "./utils/*": "./utils/*.ts",
+    "./hooks/*": "./hooks/*.ts"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "bun-types": "^1.3.14"
+  }
+}
