@@ -124,3 +124,28 @@ guard in commit 5.
 Finally the app is launched (`dev:server` + `dev:web`) and chat, dashboard and
 settings are exercised: a green build does not prove that a dynamic import or an
 asset path survived.
+
+## Implementation notes (deviations from the plan above)
+
+- `packages/core/utils/errors.ts` was not created. The only error class in the
+  frontend is `ApiError`, which carries an HTTP status and has one consumer
+  (`api/client.ts`); moving it to core would be indirection with no caller.
+  `packages/core/CLAUDE.md` still documents the pattern for the day core needs
+  its own error.
+- `lib/utils.ts` held `cn`, `basename` and `errorMessage` — all three are
+  domain-free, so all three moved to core, one function per file. They had no
+  tests; unit tests were added in core.
+- `Maybe<T>` was applied only where the type genuinely is `T | null | undefined`
+  (one site: `registerError`). The existing `string | null` declarations were
+  left alone: `Maybe<string>` would widen them by admitting `undefined`.
+- `WidgetFrame`'s bespoke `frameRef` prop became a plain `ref` via
+  `PropsWithRef`, which React 19 supports for function components; `Stylable`
+  replaced its hand-rolled `style` passthrough and added `className` merging.
+- No root `CLAUDE.md` was created (the repository has none). The structure doc is
+  referenced from `apps/web/CLAUDE.md` and `packages/core/CLAUDE.md` instead.
+- The import guard lives in `scripts/check-structure.ts`, tested by
+  `scripts/check-structure.test.ts`: synthetic violations prove it detects
+  cross-feature imports, package→app imports and core→`@atelier/shared`, then it
+  scans the real repository and expects nothing.
+- `lib/theme-boot.test.ts` reads `index.html` through `import.meta.dir`; moving it
+  into `features/settings/utils` changed its depth, so the path was adjusted.
