@@ -61,6 +61,42 @@ describe('StatusSocket', () => {
     expect(sockA.closed).toBe(true)
   })
 
+  it('does not close a socket whose handshake is still in flight', () => {
+    const sock = fakeSocket()
+    const status = new StatusSocket(() => {}, { createSocket: () => sock, schedule: (fn) => { void fn; return () => {} } })
+    // React StrictMode mounts, cleans up, then mounts again — synchronously, so
+    // close() lands while the socket is still CONNECTING. Closing there makes the
+    // browser log "WebSocket is closed before the connection is established".
+    status.close()
+    expect(sock.closed).toBe(false)
+    // The handshake completes anyway: close it then, as soon as that is legal.
+    sock.emitOpen()
+    expect(sock.closed).toBe(true)
+  })
+
+  it('does not reconnect after a deferred close', () => {
+    const socks = [fakeSocket(), fakeSocket()]
+    let built = 0
+    const run: Array<() => void> = []
+    const status = new StatusSocket(() => {}, {
+      createSocket: () => socks[built++] ?? socks[1]!,
+      schedule: (fn) => { run.push(fn); return () => {} },
+    })
+    status.close()           // still CONNECTING
+    socks[0]!.emitOpen()     // deferred close fires here
+    socks[0]!.emitClose()    // browser follows with onclose
+    run.forEach((fn) => fn())
+    expect(built).toBe(1)
+  })
+
+  it('closes a socket that already settled', () => {
+    const sock = fakeSocket()
+    const status = new StatusSocket(() => {}, { createSocket: () => sock, schedule: (fn) => { void fn; return () => {} } })
+    sock.emitOpen()
+    status.close()
+    expect(sock.closed).toBe(true)
+  })
+
   it('ne se reconnecte pas si onclose arrive après close()', () => {
     const sockA = fakeSocket()
     const sockB = fakeSocket()

@@ -128,6 +128,28 @@ describe('SessionSocket onReconnect', () => {
 })
 
 describe('SessionSocket close()', () => {
+  test('does not close a socket whose handshake is still in flight', () => {
+    const { socket, current } = makeHarness()
+    // close() before onopen — the StrictMode double-mount case. Closing a
+    // CONNECTING socket makes the browser log a warning, so defer it.
+    socket.close()
+    expect(current().closed).toBe(false)
+    current().onopen?.()
+    expect(current().closed).toBe(true)
+  })
+
+  test('a deferred close flushes nothing and never reconnects', () => {
+    const { socket, scheduler, sockets, current } = makeHarness()
+    socket.send(userMessage)   // buffered while still connecting
+    socket.close()
+    current().onopen?.()       // deferred close lands here
+    expect(current().closed).toBe(true)
+    expect(current().sent).toEqual([])  // app is gone: do not flush the outbox
+    current().onclose?.()
+    expect(scheduler.delays).toEqual([])
+    expect(sockets).toHaveLength(1)
+  })
+
   test('closes the underlying socket and never reconnects', () => {
     const { socket, scheduler, sockets, current } = makeHarness()
     current().onopen?.()

@@ -24,6 +24,10 @@ export class StatusSocket {
   private backoffMs = INITIAL_BACKOFF_MS
   private closedByApp = false
   private cancelReconnect: (() => void) | null = null
+  // Whether the current socket's handshake has settled (onopen or onclose fired).
+  // Closing a socket that is still CONNECTING is legal but makes the browser log
+  // "WebSocket is closed before the connection is established", so close() waits.
+  private settled = false
 
   constructor(
     private readonly onEvent: (event: StatusHubEvent) => void,
@@ -40,14 +44,22 @@ export class StatusSocket {
     this.closedByApp = true
     this.cancelReconnect?.()
     this.cancelReconnect = null
-    this.socket?.close()
+    // Mid-handshake, onopen closes it instead — see `settled`.
+    if (this.settled) this.socket?.close()
   }
 
   private connect(): void {
     const socket = this.createSocket(this.url)
     this.socket = socket
+    this.settled = false
     socket.onopen = () => {
       if (socket !== this.socket) return
+      this.settled = true
+      // close() was called while connecting: honour it now that closing is clean.
+      if (this.closedByApp) {
+        socket.close()
+        return
+      }
       this.backoffMs = INITIAL_BACKOFF_MS
     }
     socket.onmessage = (event) => {
@@ -57,6 +69,7 @@ export class StatusSocket {
     }
     socket.onclose = () => {
       if (socket !== this.socket) return
+      this.settled = true
       if (this.closedByApp) return
       this.cancelReconnect = this.schedule(() => {
         this.cancelReconnect = null
