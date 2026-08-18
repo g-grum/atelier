@@ -90,12 +90,25 @@ bun install
 # 1. Start the server (port 4517)
 bun run dev:server
 
-# 2. Start the web UI (port 4518)
+# 2. Start the web UI (port 4518), then open http://localhost:4518
 bun run dev:web
 
 # — or try it with zero setup, no API calls, using demo fixtures:
 VITE_USE_FIXTURES=1 bun run dev:web
 ```
+
+Every `/api` route is Bearer-authenticated, so the server needs a token. The two
+dev scripts default to the same throwaway one (`atelier-dev`), which is why the
+commands above work as-is — set `ATELIER_TOKEN` to override it on both sides:
+
+```bash
+ATELIER_TOKEN=$(uuidgen) bun run dev:server
+ATELIER_TOKEN=$(uuidgen) bun run dev:web     # same value
+```
+
+Outside the dev scripts the token is mandatory — pass `--token <value>` or set
+`ATELIER_TOKEN`, and reach the UI at `http://localhost:4518/?token=<value>`. The
+desktop app generates a fresh UUID per launch and needs no setup.
 
 Desktop app:
 

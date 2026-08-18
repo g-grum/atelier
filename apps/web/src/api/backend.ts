@@ -1,6 +1,6 @@
 import type { AlwaysRule, AutopilotState, ChatMessage, ClientMessage, Preferences, ProjectFileList, ProjectGithubAccount, PrSummary, ProjectSummary, RateLimitSnapshot, ServerEvent, SessionPermissionMode, SessionSummary, SlashCommandInfo, StatusHubEvent, VersionInfo, WidgetInstance } from '@atelier/shared'
-import type { ControllerSocket } from '../state/session-controller'
-import { FIXTURE_PROJECT_ID, FIXTURE_SESSION_ID, fixtureArtifacts, fixtureAutopilot, fixtureDevServers, fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '../state/fixtures'
+import type { ControllerSocket } from '@/stores/session-controller'
+import { FIXTURE_PROJECT_ID, FIXTURE_SESSION_ID, fixtureArtifacts, fixtureAutopilot, fixtureDevServers, fixtureErrorTurn, fixtureMessages, fixturePrs, fixtureProjects, fixtureSessions, fixtureTurn, fixtureWidgets } from '@/mocks/fixtures'
 import * as client from './client'
 import { StatusSocket } from './status-socket'
 import { SessionSocket } from './ws'

@@ -3,10 +3,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite --port 4518",
+    "dev": "ATELIER_TOKEN=${ATELIER_TOKEN:-atelier-dev} vite --port 4518",
     "build": "vite build"
   },
   "dependencies": {
+    "@atelier/core": "workspace:*",
     "@atelier/shared": "workspace:*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",

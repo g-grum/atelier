@@ -2,7 +2,14 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Dev token inlined at compile time, and ONLY under `vite serve`: the front then
+  // needs no `?token=` in the URL. Under `vite build` the constant is `undefined` —
+  // no token ever lands in the production bundle, which only knows the URL handed
+  // to it by the Electron shell.
+  define: {
+    'import.meta.env.VITE_ATELIER_DEV_TOKEN': command === 'serve' ? JSON.stringify(process.env.ATELIER_TOKEN ?? 'atelier-dev') : 'undefined',
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': '/src' },
@@ -24,4 +31,4 @@ export default defineConfig({
       '/api': { target: 'http://127.0.0.1:4517', ws: true },
     },
   },
-})
+}))

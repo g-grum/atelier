@@ -1,7 +1,9 @@
 {
   "name": "@atelier/server",
   "type": "module",
-  "scripts": { "dev": "bun run --watch src/index.ts" },
+  "scripts": {
+    "dev": "ATELIER_TOKEN=${ATELIER_TOKEN:-atelier-dev} bun run --watch src/index.ts"
+  },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.198",
     "@atelier/shared": "workspace:*",

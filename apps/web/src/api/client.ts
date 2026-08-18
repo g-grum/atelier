@@ -4,6 +4,9 @@ import type { AlwaysRule, AutopilotState, ChatMessage, Preferences, ProjectFileL
 // Read from location.search ONCE at startup and persisted to sessionStorage so
 // a reload (which loses the ?token= URL in SPA navigation) keeps the session.
 // A token present in the URL always wins over a stored one (fresh app launch).
+// Last resort in dev only: the token Vite compiled in (see vite.config.ts), so
+// `bun run dev:web` works on a bare http://localhost:4518. It is `undefined` in
+// production builds, where the Electron shell always supplies ?token=.
 
 const TOKEN_KEY = 'atelier.token'
 
@@ -13,7 +16,9 @@ function initToken(): string {
     sessionStorage.setItem(TOKEN_KEY, fromUrl)
     return fromUrl
   }
-  return sessionStorage.getItem(TOKEN_KEY) ?? ''
+  const stored = sessionStorage.getItem(TOKEN_KEY)
+  if (stored !== null && stored !== '') return stored
+  return import.meta.env.VITE_ATELIER_DEV_TOKEN ?? ''
 }
 
 const token = initToken()
