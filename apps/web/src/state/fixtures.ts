@@ -1,3 +1,4 @@
+import type { Dictionary } from '@atelier/core/types'
 import { DEFAULT_WIDGETS, MODELS, type AutopilotState, type ChatMessage, type DevServer, type ProjectSummary, type PrSummary, type ServerEvent, type SessionArtifact, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 
 /**
@@ -42,7 +43,7 @@ export const fixtureSessions: SessionSummary[] = [
 ]
 
 /** Persisted history per session — what GET /api/sessions/:id/messages returns. */
-export const fixtureMessages: Record<string, ChatMessage[]> = {
+export const fixtureMessages: Dictionary<ChatMessage[]> = {
   [FIXTURE_SESSION_ID]: [
     {
       role: 'user',

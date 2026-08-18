@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type { Dictionary } from '@atelier/core/types'
 import type { PermissionDecision } from '@atelier/shared'
 import type { ChatItem, StreamState } from '../state/stream-reducer'
 import { MessageItem, TypingIndicator } from './MessageItem'
@@ -11,7 +12,7 @@ export type ChatViewProps = {
   status: StreamState['status']
   onOpenInIde: (file: string, line?: number) => void
   onPermissionDecision: (requestId: string, decision: PermissionDecision) => void
-  onQuestionAnswer: (requestId: string, answers: Record<string, string>) => void
+  onQuestionAnswer: (requestId: string, answers: Dictionary) => void
 }
 
 /**

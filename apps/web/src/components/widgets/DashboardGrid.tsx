@@ -102,7 +102,7 @@ function SortableWidget({
       onRemove={onRemove}
       onConfigure={onConfigure !== undefined && (instance.type === 'github-prs' || instance.type === 'autopilot') ? () => onConfigure(instance) : undefined}
       dragHandleProps={{ ...attributes, ...listeners }}
-      frameRef={setNodeRef}
+      ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       {renderWidget(instance)}

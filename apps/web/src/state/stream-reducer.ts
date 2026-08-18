@@ -1,3 +1,4 @@
+import type { Dictionary } from '@atelier/core/types'
 import type { ChatMessage, PermissionDecision, ProposedRule, QcmQuestion, ServerEvent, SlashCommandInfo, ToolKind } from '@atelier/shared'
 
 export type ChatItem =
@@ -26,7 +27,7 @@ export type ChatItem =
       requestId: string
       questions: QcmQuestion[]
       resolved?: 'answered' | 'dismissed'
-      answers?: Record<string, string>
+      answers?: Dictionary
     }
 
 export type StreamState = {
@@ -121,7 +122,7 @@ export function resolvePermission(state: StreamState, requestId: string, decisio
 }
 
 /** Résolution locale (optimiste) — la résolution définitive est serveur-side. answers absent = dismiss. */
-export function resolveQuestion(state: StreamState, requestId: string, answers: Record<string, string> | undefined): StreamState {
+export function resolveQuestion(state: StreamState, requestId: string, answers: Dictionary | undefined): StreamState {
   return {
     ...state,
     items: state.items.map((item) =>

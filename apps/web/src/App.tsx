@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import currentVersion from '../../../version.json'
+import type { Dictionary } from '@atelier/core/types'
 import { DEFAULT_WIDGETS, type ArtifactsStatusEvent, type AutopilotState, type DevServer, type RateLimitSnapshot, type SessionPermissionMode, type SessionSummary, type WidgetInstance } from '@atelier/shared'
 import { backend as defaultBackend, type Backend } from './api/backend'
 import { ChatView } from './components/ChatView'
@@ -120,7 +121,7 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   }, [statusStore, queryClient])
   const [autopilot, setAutopilot] = useState<AutopilotState | null>(null)
   // Artifacts par session (le hub pousse un snapshot complet par session) + dev servers (snapshot global).
-  const [artifactsBySession, setArtifactsBySession] = useState<Record<string, ArtifactsStatusEvent>>({})
+  const [artifactsBySession, setArtifactsBySession] = useState<Dictionary<ArtifactsStatusEvent>>({})
   const [devServers, setDevServers] = useState<DevServer[]>([])
   useEffect(() => {
     // Dispatch par type : le hub transporte les transitions de session, l'état autopilot (spec 2026-08-05),

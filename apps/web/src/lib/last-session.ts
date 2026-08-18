@@ -5,6 +5,8 @@
  * or corrupt storage reads as "nothing stored", never a crash.
  */
 
+import type { Dictionary } from '@atelier/core/types'
+
 const KEY = 'atelier:lastSession'
 
 export type LastSession = { sessionId: string; projectId: string }
@@ -15,7 +17,7 @@ export function readLastSession(): LastSession | null {
     if (raw === null) return null
     const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null) return null
-    const { sessionId, projectId } = parsed as Record<string, unknown>
+    const { sessionId, projectId } = parsed as Dictionary<unknown>
     if (typeof sessionId !== 'string' || typeof projectId !== 'string') return null
     return { sessionId, projectId }
   } catch {

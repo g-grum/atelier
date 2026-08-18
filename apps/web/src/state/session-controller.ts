@@ -1,3 +1,4 @@
+import type { Dictionary } from '@atelier/core/types'
 import type { ChatMessage, PermissionDecision, RateLimitSnapshot, ServerEvent } from '@atelier/shared'
 import { getMessages } from '../api/client'
 import { SessionSocket } from '../api/ws'
@@ -141,7 +142,7 @@ export class SessionController {
     this.setState(resolvePermission(this.state, requestId, decision))
   }
 
-  answerQuestion(requestId: string, answers: Record<string, string>): void {
+  answerQuestion(requestId: string, answers: Dictionary): void {
     if (this.socket === null) return
     this.socket.send({ type: 'question_response', requestId, answers })
     this.setState(resolveQuestion(this.state, requestId, answers))

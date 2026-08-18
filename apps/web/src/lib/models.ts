@@ -1,3 +1,4 @@
+import type { Dictionary } from '@atelier/core/types'
 import { MODELS } from '@atelier/shared'
 
 /**
@@ -15,5 +16,5 @@ export const MODEL_LABELS: Record<(typeof MODELS)[number], string> = {
 
 /** Label for any persisted model id — one no longer in MODELS falls back to the raw id. */
 export function modelLabel(model: string): string {
-  return (MODEL_LABELS as Record<string, string>)[model] ?? model
+  return (MODEL_LABELS as Dictionary)[model] ?? model
 }

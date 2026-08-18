@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { Maybe } from '@atelier/core/types'
 import type { ProjectSummary, SessionState, SessionSummary } from '@atelier/shared'
 import { basename } from '../lib/utils'
 import { SessionListItem, type SessionDotState } from './SessionListItem'
@@ -33,7 +34,7 @@ export type SessionSidebarProps = {
   /** First-launch bootstrap: register a folder as the project (POST /api/projects). */
   onRegisterProject: (path: string) => void
   /** Message of a failed POST /api/projects (shown inside the register form). */
-  registerError?: string | null
+  registerError?: Maybe<string>
   registerPending?: boolean
 }
 

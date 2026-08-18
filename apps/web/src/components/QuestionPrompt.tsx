@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { Dictionary } from '@atelier/core/types'
 import type { QcmQuestion } from '@atelier/shared'
 import type { ChatItem } from '../state/stream-reducer'
 
@@ -6,7 +7,7 @@ export type QuestionChatItem = Extract<ChatItem, { kind: 'question' }>
 
 export type QuestionPromptProps = {
   item: QuestionChatItem
-  onAnswer: (answers: Record<string, string>) => void
+  onAnswer: (answers: Dictionary) => void
 }
 
 /** Sélections en cours, par texte de question. useOther bascule sur le champ libre. */
@@ -32,12 +33,12 @@ const EMPTY_DRAFT: Draft = { selected: [], other: '', useOther: false }
  */
 export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
   const cardRef = useRef<HTMLDivElement>(null)
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  const [drafts, setDrafts] = useState<Dictionary<Draft>>({})
   /** Option survolée / focalisée, par texte de question (label d'option). */
-  const [hovered, setHovered] = useState<Record<string, string | undefined>>({})
-  const [focused, setFocused] = useState<Record<string, string | undefined>>({})
+  const [hovered, setHovered] = useState<Dictionary<string | undefined>>({})
+  const [focused, setFocused] = useState<Dictionary<string | undefined>>({})
   /** Dernière preview affichée par question — reste montée le temps du repli animé. */
-  const lastPreview = useRef<Record<string, string>>({})
+  const lastPreview = useRef<Dictionary>({})
   const resolved = item.resolved
   const disabled = resolved !== undefined
   const directSend = item.questions.length === 1 && !item.questions[0]!.multiSelect
@@ -54,13 +55,13 @@ export function QuestionPrompt({ item, onAnswer }: QuestionPromptProps) {
   }
   const complete = item.questions.every((q) => answerOf(q) !== null)
 
-  const send = (answers: Record<string, string>) => {
+  const send = (answers: Dictionary) => {
     // Les boutons vont se désactiver — parquer le focus sur la carte d'abord.
     cardRef.current?.focus()
     onAnswer(answers)
   }
   const submit = () => {
-    const answers: Record<string, string> = {}
+    const answers: Dictionary = {}
     for (const q of item.questions) {
       const answer = answerOf(q)
       if (answer === null) return
