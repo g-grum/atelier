@@ -54,9 +54,72 @@ export interface SdkClient {
   runTurn(params: RunTurnParams): AsyncIterable<SdkTurnEvent>
 }
 
+// ── Command discovery probe ─────────────────────────────────────────────────
+
+/** Server-side TTL for the per-cwd slash-command cache (client caches too, via react-query). */
+export const COMMANDS_CACHE_TTL_MS = 5 * 60_000
+
+type ProbeDeps = { query: typeof query; deleteSession: typeof deleteSession }
+
+/**
+ * Disposable probe: `supportedCommands()` lives on the Query object, which
+ * only exists during a turn — so we open one and abort it on `init`.
+ *
+ * The `prompt` MUST be a non-empty string. Measured (spec § Spikes): in
+ * streaming-input mode, an iterable that never yields blocks (>5 min) and an
+ * empty iterable only produces `system/hook_*` — either way the `init` the
+ * probe depends on NEVER arrives.
+ *
+ * The CLI persists the probe as a real transcript the moment the prompt is
+ * enqueued (observed on 2.1.198) — aborting on `init` does NOT prevent it, so
+ * every probe used to leak an "atelier: command discovery probe" conversation
+ * into the session list. Hence the `deleteSession` in `finally`: it removes
+ * the leftover .jsonl (and subagent dir) once the stream is closed.
+ *
+ * Returns null when the probe failed (no init, or any throw) so callers can
+ * distinguish "probe broken" from "project with zero commands". Never throws.
+ */
+export async function probeCommands(cwd: string, deps: ProbeDeps = { query, deleteSession }): Promise<SlashCommandInfo[] | null> {
+  const abortController = new AbortController()
+  let sessionId: string | undefined
+  let commands: SlashCommandInfo[] | null = null
+  try {
+    const q = deps.query({
+      prompt: 'atelier: command discovery probe',
+      options: { cwd, abortController },
+    })
+    for await (const msg of q as AsyncIterable<SDKMessage>) {
+      if (msg.type === 'system' && msg.subtype === 'init') {
+        sessionId = msg.session_id
+        commands = toSlashCommandInfo(await q.supportedCommands())
+        abortController.abort()
+        // break awaits the generator's return() — the CLI is shut down before
+        // the finally deletes the transcript, so no write races the deletion.
+        break
+      }
+    }
+  } catch {
+    // Never throws (deriveMessageCount policy): autocompletion is a comfort,
+    // its failure must not break anything.
+  } finally {
+    abortController.abort()
+    if (sessionId !== undefined) {
+      await deps.deleteSession(sessionId, { dir: cwd }).catch(() => {})
+    }
+  }
+  return commands
+}
+
 // ── AgentSdkClient ──────────────────────────────────────────────────────────
 
 export class AgentSdkClient implements SdkClient {
+  private commandsCache = new Map<string, { at: number; commands: SlashCommandInfo[] }>()
+
+  constructor(
+    /** Injectable for tests; production uses the real SDK probe. */
+    private probe: (cwd: string) => Promise<SlashCommandInfo[] | null> = probeCommands,
+    private now: () => number = Date.now,
+  ) {}
   /** SDK: listSessions({ dir }) → SDKSessionInfo[] (fields: sessionId, customTitle, summary, lastModified, cwd) */
   async listSessions(cwd: string): Promise<SdkSessionInfo[]> {
     const sessions = await listSessions({ dir: cwd })
@@ -90,40 +153,17 @@ export class AgentSdkClient implements SdkClient {
   }
 
   /**
-   * Sonde jetable : `supportedCommands()` vit sur l'objet Query, qui n'existe
-   * que pendant un tour — on en ouvre donc un et on l'avorte sur `init`.
-   *
-   * Le `prompt` DOIT être une string non vide. Mesuré (spec § Spikes) : en mode
-   * streaming input, un itérable qui ne yield jamais bloque (>5 min) et un
-   * itérable vide ne produit que des `system/hook_*` — dans les deux cas
-   * l'`init` dont la sonde dépend n'arrive JAMAIS. L'abort sur `init` précède
-   * tout message assistant/result : aucun tour modèle n'aboutit et aucun
-   * transcript n'est créé.
-   *
-   * Coût ~3,8 s → le client met en cache (react-query), le serveur non.
+   * Cached front of the probe (~3.8 s per run). A failed probe (null) is NOT
+   * cached — an empty list is far more often a broken probe than a project
+   * with zero commands, so the next call retries instead of pinning [].
    */
   async listCommands(cwd: string): Promise<SlashCommandInfo[]> {
-    const abortController = new AbortController()
-    try {
-      const q = query({
-        prompt: 'atelier: command discovery probe',
-        options: { cwd, abortController },
-      })
-      for await (const msg of q as AsyncIterable<SDKMessage>) {
-        if (msg.type === 'system' && msg.subtype === 'init') {
-          const commands = await q.supportedCommands()
-          abortController.abort()
-          return toSlashCommandInfo(commands)
-        }
-      }
-      return []
-    } catch {
-      // Ne jette jamais (politique deriveMessageCount) : l'autocomplétion est
-      // un confort, son échec ne doit rien casser.
-      return []
-    } finally {
-      abortController.abort()
-    }
+    const cached = this.commandsCache.get(cwd)
+    if (cached && this.now() - cached.at < COMMANDS_CACHE_TTL_MS) return cached.commands
+    const commands = await this.probe(cwd)
+    if (commands === null) return []
+    this.commandsCache.set(cwd, { at: this.now(), commands })
+    return commands
   }
 
   /** SDK: query({ prompt, options }) → Query (AsyncGenerator<SDKMessage>) */

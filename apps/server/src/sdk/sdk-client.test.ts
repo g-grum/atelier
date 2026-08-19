@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { buildQueryOptions, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, mapUsageWindows, toSlashCommandInfo, type RunTurnParams } from './sdk-client'
+import { AgentSdkClient, buildQueryOptions, COMMANDS_CACHE_TTL_MS, deriveMessageCount, encodeProjectDir, mapRateLimitInfo, mapSessionMessages, mapUsageWindows, probeCommands, toSlashCommandInfo, type RunTurnParams } from './sdk-client'
 
 function makeRunTurnParams(overrides: Partial<RunTurnParams> = {}): RunTurnParams {
   return {
@@ -239,5 +239,127 @@ describe('toSlashCommandInfo', () => {
 
   test('remplace les champs manquants par des chaînes vides', () => {
     expect(toSlashCommandInfo([{ name: 'x' }] as never)).toEqual([{ name: 'x', description: '', argumentHint: '', aliases: [] }])
+  })
+})
+
+// ── probeCommands ────────────────────────────────────────────────────────────
+
+type FakeProbeOpts = {
+  messages?: unknown[]
+  commands?: unknown[]
+  supportedCommandsError?: boolean
+  deleteSessionError?: boolean
+}
+
+/** Fake SDK deps for probeCommands: records deletions and the abort state. */
+function makeProbeDeps(opts: FakeProbeOpts = {}) {
+  const deleted: Array<[string, { dir: string }]> = []
+  let abortController: AbortController | undefined
+  const messages = opts.messages ?? [{ type: 'system', subtype: 'init', session_id: 'probe-session-1' }]
+  const deps = {
+    query: (params: { prompt: string; options: { abortController: AbortController } }) => {
+      abortController = params.options.abortController
+      return Object.assign(
+        (async function* () {
+          yield* messages
+        })(),
+        {
+          supportedCommands: async () => {
+            if (opts.supportedCommandsError) throw new Error('supportedCommands failed')
+            return opts.commands ?? [{ name: 'compact' }]
+          },
+        },
+      )
+    },
+    deleteSession: async (sessionId: string, o: { dir: string }) => {
+      if (opts.deleteSessionError) throw new Error('No session found')
+      deleted.push([sessionId, o])
+    },
+  }
+  return { deps: deps as never, deleted, aborted: () => abortController?.signal.aborted ?? false }
+}
+
+describe('probeCommands', () => {
+  test('returns the commands advertised on init, mapped to SlashCommandInfo', async () => {
+    const { deps } = makeProbeDeps({ commands: [{ name: 'compact', description: 'Compact', argumentHint: '', aliases: [] }] })
+    expect(await probeCommands('/proj', deps)).toEqual([{ name: 'compact', description: 'Compact', argumentHint: '', aliases: [] }])
+  })
+
+  test('deletes the probe transcript — the CLI persists it at enqueue, before init, so abort alone leaks a conversation', async () => {
+    const { deps, deleted } = makeProbeDeps()
+    await probeCommands('/proj', deps)
+    expect(deleted).toEqual([['probe-session-1', { dir: '/proj' }]])
+  })
+
+  test('aborts the probe turn once init is seen — no model turn runs', async () => {
+    const { deps, aborted } = makeProbeDeps()
+    await probeCommands('/proj', deps)
+    expect(aborted()).toBe(true)
+  })
+
+  test('stream without init → null, and nothing to delete', async () => {
+    const { deps, deleted } = makeProbeDeps({ messages: [{ type: 'system', subtype: 'hook_started' }] })
+    expect(await probeCommands('/proj', deps)).toBeNull()
+    expect(deleted).toEqual([])
+  })
+
+  test('never throws: a failing supportedCommands resolves to null but still deletes the transcript', async () => {
+    const { deps, deleted } = makeProbeDeps({ supportedCommandsError: true })
+    expect(await probeCommands('/proj', deps)).toBeNull()
+    expect(deleted).toEqual([['probe-session-1', { dir: '/proj' }]])
+  })
+
+  test('never throws: a failing deleteSession does not mask the commands', async () => {
+    const { deps } = makeProbeDeps({ deleteSessionError: true })
+    expect(await probeCommands('/proj', deps)).toEqual([{ name: 'compact', description: '', argumentHint: '', aliases: [] }])
+  })
+})
+
+// ── AgentSdkClient.listCommands cache ────────────────────────────────────────
+
+describe('AgentSdkClient.listCommands cache', () => {
+  const COMMANDS = [{ name: 'compact', description: '', argumentHint: '', aliases: [] }]
+
+  function makeClient(results: Array<typeof COMMANDS | null>) {
+    let nowMs = 0
+    const calls: string[] = []
+    const client = new AgentSdkClient(
+      async (cwd: string) => {
+        calls.push(cwd)
+        const result = results[calls.length - 1]
+        return result === undefined ? COMMANDS : result
+      },
+      () => nowMs,
+    )
+    return { client, calls, advance: (ms: number) => (nowMs += ms) }
+  }
+
+  test('serves the cached list within the TTL — a single probe for repeated calls', async () => {
+    const { client, calls } = makeClient([COMMANDS])
+    expect(await client.listCommands('/proj')).toEqual(COMMANDS)
+    expect(await client.listCommands('/proj')).toEqual(COMMANDS)
+    expect(calls).toEqual(['/proj'])
+  })
+
+  test('re-probes once the TTL has expired', async () => {
+    const { client, calls, advance } = makeClient([COMMANDS, COMMANDS])
+    await client.listCommands('/proj')
+    advance(COMMANDS_CACHE_TTL_MS + 1)
+    await client.listCommands('/proj')
+    expect(calls).toEqual(['/proj', '/proj'])
+  })
+
+  test('a failed probe (null) maps to [] and is NOT cached — next call retries', async () => {
+    const { client, calls } = makeClient([null, COMMANDS])
+    expect(await client.listCommands('/proj')).toEqual([])
+    expect(await client.listCommands('/proj')).toEqual(COMMANDS)
+    expect(calls).toEqual(['/proj', '/proj'])
+  })
+
+  test('the cache is keyed by cwd', async () => {
+    const { client, calls } = makeClient([COMMANDS, COMMANDS])
+    await client.listCommands('/proj-a')
+    await client.listCommands('/proj-b')
+    expect(calls).toEqual(['/proj-a', '/proj-b'])
   })
 })
