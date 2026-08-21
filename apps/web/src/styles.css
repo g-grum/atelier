@@ -253,6 +253,17 @@
   .msg.user .body { background: var(--color-surface-2); border: 1px solid var(--color-line-soft); border-radius: 11px; padding: 10px 13px; font-size: 14px; }
   .msg .body { white-space: pre-wrap; overflow-wrap: break-word; font-size: 15px; line-height: 1.6; }
 
+  /* Sticky user prompts (spec 2026-08-21) — the turn's question stays pinned
+     while its response scrolls. Opaque ground + padding mask the content
+     sliding underneath; z-index above tool rows and message bodies. */
+  .msg.user { position: sticky; top: 0; z-index: 10; background: var(--color-ground); padding: 8px 0; margin: -8px 0; }
+  /* Collapsed cap for long pinned prompts — scrollHeight-measured in MessageItem. */
+  .msg.user .body.expandable { cursor: pointer; }
+  .msg.user .body.collapsed { max-height: 200px; overflow: hidden; position: relative; }
+  .msg.user .body.collapsed::after { content: ''; position: absolute; inset: auto 0 0 0; height: 48px; border-radius: 0 0 11px 11px; background: linear-gradient(to bottom, transparent, var(--color-surface-2)); pointer-events: none; }
+  .msg.user .body.expandable:hover { border-color: var(--color-line); }
+  .msg.user .body.expandable:focus-visible { outline: 2px solid var(--color-indigo); outline-offset: 2px; }
+
   /* ── Markdown (assistant body only) ── */
   .msg .body.markdown { white-space: normal; }
   .msg .body.markdown > :first-child { margin-top: 0; }

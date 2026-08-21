@@ -44,3 +44,48 @@ describe('MessageItem markdown', () => {
     expect(await screen.findByText('Copied')).toBeTruthy()
   })
 })
+
+describe('MessageItem user collapse (sticky prompts, spec 2026-08-21)', () => {
+  // happy-dom has no layout: scrollHeight is 0, so the overflow measurement is
+  // faked by redefining scrollHeight on the live node, then re-running the
+  // effect via a text change (same deps as the component's useLayoutEffect).
+  function renderOverflowing() {
+    const view = render(<MessageItem role="user" text="first" />)
+    const body = document.querySelector('.msg.user .body') as HTMLDivElement
+    Object.defineProperty(body, 'scrollHeight', { value: 400, configurable: true })
+    view.rerender(<MessageItem role="user" text="a much longer prompt" />)
+    return body
+  }
+
+  test('a short message is not collapsible — no button semantics, no cap', () => {
+    render(<MessageItem role="user" text="short" />)
+    const body = document.querySelector('.msg.user .body') as HTMLDivElement
+    expect(body.className).toBe('body')
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  test('an overflowing message collapses; click expands and collapses again', () => {
+    const body = renderOverflowing()
+
+    expect(body.className).toContain('collapsed')
+    const toggle = screen.getByRole('button', { name: 'Expand message' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(toggle)
+    expect(body.className).toContain('expanded')
+    expect(body.className).not.toContain('collapsed')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+
+    fireEvent.click(toggle)
+    expect(body.className).toContain('collapsed')
+  })
+
+  test('keyboard toggles too (Enter and Space)', () => {
+    const body = renderOverflowing()
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Expand message' }), { key: 'Enter' })
+    expect(body.className).toContain('expanded')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Collapse message' }), { key: ' ' })
+    expect(body.className).toContain('collapsed')
+  })
+})
