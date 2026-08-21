@@ -1,4 +1,4 @@
-import type { PermissionRequest, QuestionRequest, ServerEvent, SessionState, SessionStatusEvent, StatusHubEvent } from '@atelier/shared'
+import type { PermissionRequest, QuestionRequest, ServerEvent, SessionPermissionMode, SessionState, SessionStatusEvent, StatusHubEvent } from '@atelier/shared'
 import { parseClientMessage } from '@atelier/shared'
 import type { SdkClient, SdkTurnEvent } from '../sdk/sdk-client'
 import type { AppData } from '../store/app-data'
@@ -7,6 +7,9 @@ import { PermissionBroker } from './permission-broker'
 import { QuestionBroker } from './question-broker'
 
 export type EventSink = (event: ServerEvent) => void
+
+/** Tools auto-allowed by the 'acceptEdits' mode — file edits only, everything else still prompts. */
+const ACCEPT_EDITS_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit'])
 
 type SessionStreamParams = {
   /** The id the client connected with — a draft id or an SDK session id. */
@@ -152,9 +155,12 @@ export class SessionStream {
         model,
         prompt,
         resumeSessionId: draft ? undefined : resolvedId,
+        // Seul 'plan' est transmis nativement (il ne court-circuite pas canUseTool).
+        permissionMode,
         // Routage canUseTool (spec QCM) : le QCM va au QuestionBroker — jamais aux
-        // règles « always » ; le mode skip-permissions est un auto-allow sélectif
-        // (plus de bypassPermissions SDK : il court-circuitait canUseTool et avalait le QCM).
+        // règles « always » ; skip-permissions et acceptEdits sont des auto-allow
+        // sélectifs (les modes SDK équivalents court-circuitaient canUseTool et
+        // avalaient le QCM).
         canUseTool: (toolName, input) => {
           // Session autopilot : deny immédiat AVANT le QuestionBroker — la session
           // est autonome, personne ne répondra jamais au QCM (spec 2026-08-05).
@@ -163,6 +169,17 @@ export class SessionStream {
           }
           if (toolName === 'AskUserQuestion') return this.questions.request(input)
           if (permissionMode === 'bypassPermissions') return Promise.resolve({ behavior: 'allow' as const })
+          if (permissionMode === 'acceptEdits' && ACCEPT_EDITS_TOOLS.has(toolName)) {
+            return Promise.resolve({ behavior: 'allow' as const })
+          }
+          // Plan approuvé → la session repasse en 'default' pour les tours suivants
+          // (spec 2026-08-21) ; un deny la laisse en plan.
+          if (permissionMode === 'plan' && toolName === 'ExitPlanMode') {
+            return this.broker.request(toolName, input).then((result) => {
+              if (result.behavior === 'allow') this.persistPermissionMode('default')
+              return result
+            })
+          }
           return this.broker.request(toolName, input)
         },
         signal: abort.signal,
@@ -348,6 +365,24 @@ export class SessionStream {
   /** Events are stamped with the resolved id — after materialization the SDK id. */
   private sessionId(): string {
     return this.data.resolveSessionId(this.id)
+  }
+
+  /**
+   * Persists a mode change for THIS session (ExitPlanMode approval flips plan →
+   * default). Same draft-vs-SDK-session split as SessionsService.setPermissionMode —
+   * the stream cannot depend on the service (registry wiring stays data-only).
+   */
+  private persistPermissionMode(mode: SessionPermissionMode): void {
+    const resolvedId = this.data.resolveSessionId(this.id)
+    const draft = this.data.get().drafts.find((d) => d.id === resolvedId)
+    this.data.update((d) => {
+      if (draft) {
+        const entry = d.drafts.find((x) => x.id === resolvedId)
+        if (entry) entry.permissionMode = mode
+        return
+      }
+      d.permissionModes[resolvedId] = mode
+    })
   }
 
   /** État live courant — lu par le registre pour le snapshot du hub. */

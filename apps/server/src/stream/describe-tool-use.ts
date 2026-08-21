@@ -33,6 +33,10 @@ export function describeToolUse(toolName: string, input: unknown): ToolUseDescri
     return description
   }
 
+  if (toolName === 'ExitPlanMode') {
+    return { kind: ToolKinds.Other, summary: 'Plan proposed' }
+  }
+
   if (toolName === 'AskUserQuestion') {
     // Résumé historique du QCM (mapSessionMessages) : une ligne sobre avec les headers.
     const questions = Array.isArray(record.questions) ? record.questions : []
@@ -49,6 +53,8 @@ export function renderForPermission(toolName: string, input: unknown): string {
   const record = asRecord(input)
   if (kind === 'Bash' && typeof record.command === 'string') return record.command
   if ((kind === 'Edit' || kind === 'Write' || kind === 'Read') && typeof record.file_path === 'string') return record.file_path
+  // ExitPlanMode: the plan markdown IS the thing being approved — show it whole.
+  if (toolName === 'ExitPlanMode' && typeof record.plan === 'string') return record.plan
   // Malformed/unknown input: render the whole thing rather than '' — an empty
   // permission prompt that still executes the real input on approval is fail-open.
   const json: string | undefined = JSON.stringify(input)

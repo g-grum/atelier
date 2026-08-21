@@ -35,7 +35,7 @@ export class SessionsService {
       isDraft: false,
       model: modelOverrides[s.id] ?? preferences.defaultModel,
       // Absent key = never answered — the UI asks once per session (spec « chaque session demande »).
-      permissionMode: permissionModes[s.id] ?? null,
+      permissionMode: permissionModes[s.id] ?? 'default',
     }))
 
     const draftSummaries: SessionSummary[] = drafts
@@ -48,7 +48,7 @@ export class SessionsService {
         messageCount: 0,
         isDraft: true,
         model: d.model,
-        permissionMode: d.permissionMode ?? null,
+        permissionMode: d.permissionMode ?? 'default',
       }))
 
     return [...draftSummaries, ...sdkSummaries]
@@ -71,9 +71,9 @@ export class SessionsService {
     const { preferences } = this.data.get()
     const id = randomUUID()
     const resolvedModel = model ?? preferences.defaultModel
-    // Défaut global stampé à la naissance (spec 2026-07-31) — null = le gate demandera.
-    // Les DEUX null codés en dur (record stocké + summary retourné) passent par cette valeur.
-    const permissionMode = preferences.defaultPermissionMode ?? null
+    // Défaut global stampé à la naissance (spec 2026-07-31) ; plus de gate depuis
+    // le sélecteur de mode (spec 2026-08-21) — absent = 'default', jamais null.
+    const permissionMode = preferences.defaultPermissionMode ?? 'default'
     const createdAt = new Date().toISOString()
 
     this.data.update((d) => {

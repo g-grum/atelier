@@ -44,7 +44,7 @@ export function sessionsRoutes(data: AppData, sessions: SessionsService): Hono {
       return c.json({ error: 'requête invalide : « model » doit être une chaîne' }, 400)
     }
     if (body.permissionMode !== undefined && !SESSION_PERMISSION_MODES.includes(body.permissionMode as SessionPermissionMode)) {
-      return c.json({ error: 'requête invalide : « permissionMode » doit être default ou bypassPermissions' }, 400)
+      return c.json({ error: 'requête invalide : « permissionMode » doit être default, acceptEdits, plan ou bypassPermissions' }, 400)
     }
     if (body.name !== undefined) await sessions.rename(id, body.name)
     if (body.model !== undefined) sessions.setModel(id, body.model)

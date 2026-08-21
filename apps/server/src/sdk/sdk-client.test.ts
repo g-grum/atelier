@@ -35,9 +35,17 @@ describe('buildQueryOptions', () => {
     expect(options.abortController).toBe(abortController)
   })
 
-  test('the options never carry permissionMode nor the dangerous flag — skip-permissions is a selective auto-allow inside canUseTool', () => {
-    const options = buildQueryOptions(makeRunTurnParams(), new AbortController())
-    expect(options.permissionMode).toBeUndefined()
+  test('the options never carry a native permissionMode nor the dangerous flag for default/acceptEdits/bypassPermissions — those are selective auto-allows inside canUseTool', () => {
+    for (const mode of [undefined, 'default', 'acceptEdits', 'bypassPermissions'] as const) {
+      const options = buildQueryOptions(makeRunTurnParams({ permissionMode: mode }), new AbortController())
+      expect(options.permissionMode).toBeUndefined()
+      expect(options.allowDangerouslySkipPermissions).toBeUndefined()
+    }
+  })
+
+  test("plan is the ONLY mode passed natively — it doesn't short-circuit canUseTool", () => {
+    const options = buildQueryOptions(makeRunTurnParams({ permissionMode: 'plan' }), new AbortController())
+    expect(options.permissionMode).toBe('plan')
     expect(options.allowDangerouslySkipPermissions).toBeUndefined()
   })
 
