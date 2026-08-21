@@ -10,7 +10,6 @@ import { Composer } from '@/features/chat/components/composer/Composer'
 import { DeleteSessionDialog } from '@/features/sessions/components/delete-session-dialog/DeleteSessionDialog'
 import { ErrorBanner } from '@/components/error-banner/ErrorBanner'
 import { ModifiedFilesPanel } from '@/features/chat/components/modified-files-panel/ModifiedFilesPanel'
-import { PermissionModeGate } from '@/features/chat/components/permission-mode-gate/PermissionModeGate'
 import { RateLimitsPanel } from '@/features/settings/components/rate-limits-panel/RateLimitsPanel'
 import { SessionSidebar } from '@/features/sessions/components/session-sidebar/SessionSidebar'
 import { WelcomePanel } from '@/features/onboarding/components/welcome-panel/WelcomePanel'
@@ -390,17 +389,9 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
   const setPermissionMode = useMutation({
     mutationFn: ({ sessionId, mode }: { sessionId: string; mode: SessionPermissionMode }) =>
       backend.patchSession(sessionId, { permissionMode: mode }),
-    // The gate unlocks when the refetched session carries the recorded choice.
+    // The composer selector reflects the refetched session's recorded mode.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
     onError: (error) => setNotice(`Could not save the permissions choice: ${errorMessage(error)}`),
-  })
-
-  // « Se souvenir » du gate — PATCH préférences indépendant du PATCH session :
-  // si l'un échoue l'autre tient (spec 2026-07-31, gestion d'erreurs).
-  const rememberPermissionDefault = useMutation({
-    mutationFn: (mode: SessionPermissionMode) => backend.patchPreferences({ defaultPermissionMode: mode }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['preferences'] }),
-    onError: (error) => setNotice(`Could not save the permissions default: ${errorMessage(error)}`),
   })
 
   // Dashboard layout — fallback to the shared default so a fetch failure
@@ -431,9 +422,6 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
 
   const activeSession = sessions.find((session) => session.id === selected?.sessionId) ?? null
   const activeProject = projects.find((project) => project.id === (selected?.projectId ?? projectId)) ?? null
-  // Per-session permissions question (spec: chaque session demande) — an
-  // unanswered session locks the composer until the user picks a mode.
-  const needsPermissionChoice = activeSession !== null && activeSession.permissionMode === null
 
   // Deliberately the ONLY usage surface — the plan limits are what matters
   // (owner's call); token cards were removed in 0.1.6.
@@ -574,15 +562,6 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
                     )
                   }}
                 />
-                {needsPermissionChoice && (
-                  <PermissionModeGate
-                    pending={setPermissionMode.isPending}
-                    onChoose={(mode, remember) => {
-                      if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
-                      if (remember) rememberPermissionDefault.mutate(mode)
-                    }}
-                  />
-                )}
                 {activeSession?.permissionMode === 'bypassPermissions' && (
                   <div
                     className="perm-bypass-chip"
@@ -593,8 +572,12 @@ export default function App({ backend = defaultBackend }: AppProps = {}) {
                   </div>
                 )}
                 <Composer
-                  disabled={selected === null || needsPermissionChoice}
+                  disabled={selected === null}
                   status={stream.status}
+                  permissionMode={activeSession?.permissionMode ?? 'default'}
+                  onPermissionModeChange={(mode) => {
+                    if (selected !== null) setPermissionMode.mutate({ sessionId: selected.sessionId, mode })
+                  }}
                   // Précédence, pas de fusion (spec §5) : les deux listes viennent du
                   // même producteur (le SDK), celle du WS est juste plus fraîche.
                   commands={stream.commands ?? commandsQuery.data ?? []}

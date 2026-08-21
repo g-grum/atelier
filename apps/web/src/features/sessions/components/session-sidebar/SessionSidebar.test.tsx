@@ -32,7 +32,7 @@ const draftSession: SessionSummary = {
   messageCount: 0,
   isDraft: true,
   model: 'claude-fable-5',
-  permissionMode: null,
+  permissionMode: 'default',
 }
 
 function renderSidebar(overrides: Partial<SessionSidebarProps> = {}) {

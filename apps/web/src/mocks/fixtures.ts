@@ -37,8 +37,7 @@ export const fixtureSessions: SessionSummary[] = [
     messageCount: 0,
     isDraft: true,
     model: MODEL,
-    // Unanswered — selecting the demo draft exercises the permissions gate.
-    permissionMode: null,
+    permissionMode: 'default',
   },
 ]
 

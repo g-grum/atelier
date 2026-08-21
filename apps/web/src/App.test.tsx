@@ -364,92 +364,51 @@ describe('App failure surfacing', () => {
   })
 })
 
-describe('App per-session permissions gate', () => {
-  test('an undecided session shows the gate with the composer locked; choosing persists and unlocks', async () => {
-    let mode: SessionSummary['permissionMode'] = null
-    const patches: unknown[] = []
-    const backend = fakeBackend({
-      listSessions: async () => [{ ...session, permissionMode: mode }],
-      patchSession: async (_id, patch) => {
-        patches.push(patch)
-        if (patch.permissionMode !== undefined) mode = patch.permissionMode
-      },
-    })
-    renderApp(backend)
-
-    // the launch restore auto-opens the (undecided) session — the gate shows
-    await screen.findByRole('group', { name: 'Session permissions' })
-    const textarea = screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement
-    expect(textarea.disabled).toBe(true)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Normal permissions' }))
-    await waitFor(() => expect(patches).toEqual([{ permissionMode: 'default' }]))
-    await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
-    expect(screen.queryByRole('button', { name: 'Normal permissions' })).toBeNull()
-  })
-
-  test('the dangerous choice patches bypassPermissions', async () => {
-    let mode: SessionSummary['permissionMode'] = null
-    const patches: unknown[] = []
-    const backend = fakeBackend({
-      listSessions: async () => [{ ...session, permissionMode: mode }],
-      patchSession: async (_id, patch) => {
-        patches.push(patch)
-        if (patch.permissionMode !== undefined) mode = patch.permissionMode
-      },
-    })
-    renderApp(backend)
-
-    fireEvent.click(await screen.findByRole('button', { name: /dangerous/i }))
-    await waitFor(() => expect(patches).toEqual([{ permissionMode: 'bypassPermissions' }]))
-  })
-
-  test('a decided session never shows the gate', async () => {
+describe('App permission mode selector (spec 2026-08-21)', () => {
+  test('the composer is never locked behind a mode choice — a fresh default session types right away', async () => {
     renderApp(fakeBackend())
     await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
-    expect(screen.queryByRole('button', { name: 'Normal permissions' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Permission mode: Auto' })).toBeTruthy()
   })
 
-  test('checking « Se souvenir » patches the session AND the preference default', async () => {
-    let mode: SessionSummary['permissionMode'] = null
-    const prefPatches: unknown[] = []
+  test('picking a mode in the selector patches the session and the button reflects it', async () => {
+    let mode: SessionSummary['permissionMode'] = 'default'
+    const patches: unknown[] = []
     const backend = fakeBackend({
       listSessions: async () => [{ ...session, permissionMode: mode }],
       patchSession: async (_id, patch) => {
+        patches.push(patch)
         if (patch.permissionMode !== undefined) mode = patch.permissionMode
-      },
-      patchPreferences: async (patch) => {
-        prefPatches.push(patch)
-        return { ...DEFAULT_PREFERENCES, ...patch }
       },
     })
     renderApp(backend)
 
-    fireEvent.click(await screen.findByLabelText(/Remember this choice/))
-    fireEvent.click(screen.getByRole('button', { name: /dangerous/i }))
+    // The selector lives in the composer — wait for the session to be active first.
+    await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
+    fireEvent.click(screen.getByRole('button', { name: 'Permission mode: Auto' }))
+    fireEvent.click(screen.getByRole('option', { name: /^Plan\b/ }))
 
-    await waitFor(() => expect(prefPatches).toEqual([{ defaultPermissionMode: 'bypassPermissions' }]))
+    await waitFor(() => expect(patches).toEqual([{ permissionMode: 'plan' }]))
+    await screen.findByRole('button', { name: 'Permission mode: Plan' })
   })
 
-  test('choosing WITHOUT the checkbox never patches the preferences', async () => {
-    let mode: SessionSummary['permissionMode'] = null
-    const prefPatches: unknown[] = []
+  test('the dangerous mode patches bypassPermissions', async () => {
+    let mode: SessionSummary['permissionMode'] = 'default'
+    const patches: unknown[] = []
     const backend = fakeBackend({
       listSessions: async () => [{ ...session, permissionMode: mode }],
       patchSession: async (_id, patch) => {
+        patches.push(patch)
         if (patch.permissionMode !== undefined) mode = patch.permissionMode
-      },
-      patchPreferences: async (patch) => {
-        prefPatches.push(patch)
-        return { ...DEFAULT_PREFERENCES, ...patch }
       },
     })
     renderApp(backend)
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Normal permissions' }))
 
     await waitFor(() => expect((screen.getByLabelText('Reply to Claude') as HTMLTextAreaElement).disabled).toBe(false))
-    expect(prefPatches).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: 'Permission mode: Auto' }))
+    fireEvent.click(screen.getByRole('option', { name: /Skip perms/ }))
+
+    await waitFor(() => expect(patches).toEqual([{ permissionMode: 'bypassPermissions' }]))
   })
 })
 
@@ -773,7 +732,7 @@ describe('App session deletion', () => {
   })
 
   test('a draft × deletes instantly — no confirmation dialog', async () => {
-    const draft: SessionSummary = { ...session, id: 'd1', name: null, isDraft: true, messageCount: 0, permissionMode: null }
+    const draft: SessionSummary = { ...session, id: 'd1', name: null, isDraft: true, messageCount: 0, permissionMode: 'default' }
     const deleted: string[] = []
     renderApp(
       fakeBackend({
