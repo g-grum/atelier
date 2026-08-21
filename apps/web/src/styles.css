@@ -253,6 +253,17 @@
   .msg.user .body { background: var(--color-surface-2); border: 1px solid var(--color-line-soft); border-radius: 11px; padding: 10px 13px; font-size: 14px; }
   .msg .body { white-space: pre-wrap; overflow-wrap: break-word; font-size: 15px; line-height: 1.6; }
 
+  /* Sticky user prompts (spec 2026-08-21) — the turn's question stays pinned
+     while its response scrolls. Opaque ground + padding mask the content
+     sliding underneath; z-index above tool rows and message bodies. */
+  .msg.user { position: sticky; top: 0; z-index: 10; background: var(--color-ground); padding: 8px 0; margin: -8px 0; }
+  /* Collapsed cap for long pinned prompts — scrollHeight-measured in MessageItem. */
+  .msg.user .body.expandable { cursor: pointer; }
+  .msg.user .body.collapsed { max-height: 200px; overflow: hidden; position: relative; }
+  .msg.user .body.collapsed::after { content: ''; position: absolute; inset: auto 0 0 0; height: 48px; border-radius: 0 0 11px 11px; background: linear-gradient(to bottom, transparent, var(--color-surface-2)); pointer-events: none; }
+  .msg.user .body.expandable:hover { border-color: var(--color-line); }
+  .msg.user .body.expandable:focus-visible { outline: 2px solid var(--color-indigo); outline-offset: 2px; }
+
   /* ── Markdown (assistant body only) ── */
   .msg .body.markdown { white-space: normal; }
   .msg .body.markdown > :first-child { margin-top: 0; }
@@ -323,6 +334,10 @@
   .permission .p-head { display: flex; gap: 9px; align-items: center; font-weight: 600; font-size: 12.5px; margin-bottom: 8px; }
   .permission .p-head .k { color: var(--color-amber); font: 700 10px var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; }
   .permission code.cmd { display: block; font: 12px var(--font-mono); color: var(--color-text); background: var(--color-ground); border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 9px 12px; margin: 8px 0 12px; overflow-x: auto; white-space: pre; }
+  /* Plan approval (ExitPlanMode) — the plan renders as markdown, scrollable past ~40vh. */
+  .permission .plan-body { font-size: 13px; line-height: 1.6; color: var(--color-text); background: var(--color-ground); border: 1px solid var(--color-line-soft); border-radius: 8px; padding: 10px 13px; margin: 8px 0 12px; max-height: 40vh; overflow-y: auto; }
+  .permission .plan-body > :first-child { margin-top: 0; }
+  .permission .plan-body > :last-child { margin-bottom: 0; }
   .permission .p-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   /* min-width:0 + overflow-wrap:anywhere: a pathological unbreakable matcher in the
      « Toujours » label wraps inside the button instead of overflowing the card. */
@@ -399,18 +414,23 @@
   .command-popover .cmd-desc { flex: 1; min-width: 0; color: var(--color-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .command-popover li.active .cmd-desc { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 
-  /* Per-session permissions question — asked once, above the composer. The
-     dangerous choice is red (amber stays reserved for tool permissions). */
-  .perm-gate { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 12px 28px 0; padding: 10px 14px; max-width: 48rem; border: 1px solid var(--color-line); border-left: 3px solid var(--color-indigo); border-radius: 9px; background: var(--color-surface); font-size: 12px; }
-  .perm-gate .perm-gate-text { flex: 1; min-width: 200px; color: var(--color-muted); }
-  .perm-gate .perm-gate-actions { display: flex; gap: 8px; flex-shrink: 0; }
-  .perm-gate .perm-gate-btn { font: 700 11px var(--font-sans); color: var(--color-text); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 5px 11px; cursor: pointer; }
-  .perm-gate .perm-gate-btn:hover { border-color: var(--color-indigo); }
-  .perm-gate .perm-gate-btn.danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
-  .perm-gate .perm-gate-btn.danger:hover { border-color: var(--color-red); background: color-mix(in srgb, var(--color-red) 8%, transparent); }
-  .perm-gate .perm-gate-btn:disabled { opacity: 0.5; cursor: default; }
-  .perm-gate .perm-gate-remember { flex-basis: 100%; display: flex; align-items: center; gap: 6px; color: var(--color-faint); font-size: 11.5px; cursor: pointer; }
-  .perm-gate .perm-gate-remember input { accent-color: var(--color-indigo); cursor: pointer; }
+  /* Permission mode selector — inside the composer box, next to submit
+     (spec 2026-08-21). Same popover grammar as .command-popover; the
+     dangerous mode is red (amber stays reserved for tool permissions). */
+  .mode-selector { position: relative; flex-shrink: 0; }
+  .mode-selector .mode-btn { display: flex; align-items: center; gap: 4px; font: 700 10.5px var(--font-sans); color: var(--color-muted); background: var(--color-surface-2); border: 1px solid var(--color-line); border-radius: 7px; padding: 4px 8px; height: 26px; cursor: pointer; white-space: nowrap; }
+  .mode-selector .mode-btn:hover { color: var(--color-text); border-color: var(--color-indigo); }
+  .mode-selector .mode-btn.danger { color: var(--color-red); border-color: color-mix(in srgb, var(--color-red) 40%, transparent); }
+  .mode-selector .mode-btn.danger:hover { border-color: var(--color-red); }
+  .mode-selector .mode-btn:disabled { cursor: default; }
+  .mode-selector .mode-btn svg { width: 10px; height: 10px; }
+  .mode-popover { position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 20; margin: 0; padding: 4px; list-style: none; min-width: 230px; background: var(--color-surface); border: 1px solid var(--color-line); border-radius: 10px; box-shadow: 0 10px 30px color-mix(in srgb, black 22%, transparent); }
+  .mode-popover .mode-option { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 6px 9px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+  .mode-popover .mode-option:hover { background: color-mix(in srgb, var(--color-indigo) 12%, transparent); }
+  .mode-popover .mode-option.selected { background: color-mix(in srgb, var(--color-indigo) 16%, transparent); }
+  .mode-popover .mode-label { font: 700 12px var(--font-sans); color: var(--color-text); white-space: nowrap; }
+  .mode-popover .mode-option.danger .mode-label { color: var(--color-red); }
+  .mode-popover .mode-desc { flex: 1; min-width: 0; font-size: 11px; color: var(--color-faint); }
 
   /* Rappel discret qu'une session tourne SANS garde-fou — rouge (état dangereux), jamais ambre. */
   .perm-bypass-chip { align-self: flex-start; margin: 8px 28px 0; padding: 2px 9px; font: 700 10px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-red); border: 1px solid color-mix(in srgb, var(--color-red) 40%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-red) 8%, transparent); }

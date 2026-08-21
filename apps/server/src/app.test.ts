@@ -232,7 +232,7 @@ describe('createApp', () => {
 
     const rs = await app.request(`/api/projects/${project.id}/sessions`, { method: 'POST', headers: auth, body: JSON.stringify({}) })
     const draft = await rs.json() as { id: string; permissionMode: string | null }
-    expect(draft.permissionMode).toBeNull()
+    expect(draft.permissionMode).toBe('default')
 
     const bad = await app.request(`/api/sessions/${draft.id}`, {
       method: 'PATCH',
@@ -240,6 +240,16 @@ describe('createApp', () => {
       body: JSON.stringify({ permissionMode: 'yolo' }),
     })
     expect(bad.status).toBe(400)
+
+    // Every mode of the 4-value contract is accepted (spec 2026-08-21).
+    for (const mode of ['acceptEdits', 'plan', 'default']) {
+      const r = await app.request(`/api/sessions/${draft.id}`, {
+        method: 'PATCH',
+        headers: auth,
+        body: JSON.stringify({ permissionMode: mode }),
+      })
+      expect(r.status).toBe(200)
+    }
 
     const ok = await app.request(`/api/sessions/${draft.id}`, {
       method: 'PATCH',

@@ -84,10 +84,10 @@ describe('SessionsService', () => {
     expect(sdkSummary?.model).toBe('claude-opus-4-8')
   })
 
-  test('createDraft returns permissionMode null — the UI must ask before the first turn', () => {
+  test("createDraft resolves an unset preference to 'default' — no gate, never null (spec 2026-08-21)", () => {
     const { service } = freshSetup()
     const summary = service.createDraft('p1', {})
-    expect(summary.permissionMode).toBeNull()
+    expect(summary.permissionMode).toBe('default')
   })
 
   test('createDraft stamps preferences.defaultPermissionMode — no gate for the new session', async () => {
@@ -116,11 +116,11 @@ describe('SessionsService', () => {
     expect(data.get().permissionModes['sdk-1']).toBe('default')
   })
 
-  test('list yields permissionMode null for an SDK session without a recorded choice', async () => {
+  test("list yields permissionMode 'default' for an SDK session without a recorded choice", async () => {
     const sdkSession = { id: 's1', name: 'session', updatedAt: '2025-01-01T00:00:00.000Z', messageCount: 0 }
     const { service } = freshSetup([sdkSession])
     const result = await service.list('p1')
-    expect(result[0]?.permissionMode).toBeNull()
+    expect(result[0]?.permissionMode).toBe('default')
   })
 
   test('setPermissionMode on a draft persists on the draft and list reflects it', async () => {

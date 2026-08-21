@@ -1,6 +1,9 @@
-import { useRef } from 'react'
+import { lazy, Suspense, useRef } from 'react'
 import type { PermissionDecision, ProposedRule } from '@atelier/shared'
 import type { ChatItem } from '@/stores/stream-reducer'
+
+// Same lazy markdown pipeline as MessageItem — plan approvals only.
+const MarkdownBody = lazy(() => import('@/features/chat/components/markdown-body/MarkdownBody'))
 
 export type PermissionChatItem = Extract<ChatItem, { kind: 'permission' }>
 
@@ -43,6 +46,8 @@ export function PermissionPrompt({ item, onDecision }: PermissionPromptProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const resolved = item.resolved
   const disabled = resolved !== undefined
+  // Plan approval (spec 2026-08-21): rendered carries the plan markdown, not a command.
+  const isPlan = item.toolName === 'ExitPlanMode'
 
   const decide = (decision: PermissionDecision) => {
     // The buttons are about to disable — park focus on the card first, or the
@@ -55,9 +60,17 @@ export function PermissionPrompt({ item, onDecision }: PermissionPromptProps) {
     <div ref={cardRef} tabIndex={-1} className="permission" role="group" aria-label="Permission request">
       <div role={disabled ? undefined : 'alert'}>
         <div className="p-head">
-          <span className="k">Permission</span> Claude wants to run:
+          <span className="k">Permission</span> {isPlan ? 'Claude proposes a plan:' : 'Claude wants to run:'}
         </div>
-        <code className="cmd">{item.rendered}</code>
+        {isPlan ? (
+          <div className="plan-body markdown">
+            <Suspense fallback={<span style={{ whiteSpace: 'pre-wrap' }}>{item.rendered}</span>}>
+              <MarkdownBody text={item.rendered} />
+            </Suspense>
+          </div>
+        ) : (
+          <code className="cmd">{item.rendered}</code>
+        )}
       </div>
       <div className="p-actions">
         <button type="button" className="deny" disabled={disabled} onClick={() => decide('deny')}>

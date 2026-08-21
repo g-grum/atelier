@@ -13,6 +13,8 @@ function renderComposer(overrides: Partial<ComposerProps> = {}) {
   const props: ComposerProps = {
     disabled: false,
     status: 'idle',
+    permissionMode: 'default',
+    onPermissionModeChange: () => {},
     onSend: (text) => {
       sent.push(text)
       return true

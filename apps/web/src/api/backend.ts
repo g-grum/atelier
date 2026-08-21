@@ -152,8 +152,8 @@ export function createFixtureBackend(): Backend {
         messageCount: 0,
         isDraft: true,
         model: init.model ?? sessions[0]?.model ?? 'claude-fable-5',
-        // A fresh session must ask the permissions question (spec) — demo mode included.
-        permissionMode: null,
+        // A fresh session starts on the default mode (spec 2026-08-21) — the composer selector changes it.
+        permissionMode: 'default',
       }
       sessions = [...sessions, draft]
       return draft

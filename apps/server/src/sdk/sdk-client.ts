@@ -12,7 +12,7 @@ import {
   type SessionMessage,
   type SlashCommand,
 } from '@anthropic-ai/claude-agent-sdk'
-import type { ChatMessage, RateLimitWindow, SlashCommandInfo } from '@atelier/shared'
+import type { ChatMessage, RateLimitWindow, SessionPermissionMode, SlashCommandInfo } from '@atelier/shared'
 import { describeToolUse } from '../stream/describe-tool-use'
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -40,6 +40,12 @@ export type RunTurnParams = {
   model: string
   prompt: string
   resumeSessionId?: string
+  /**
+   * Session mode. ONLY 'plan' maps to a native QueryOptions.permissionMode —
+   * it does not short-circuit canUseTool. The other modes are enforced inside
+   * the canUseTool callback (session-stream.ts), never natively.
+   */
+  permissionMode?: SessionPermissionMode
   canUseTool: CanUseTool
   signal: AbortSignal
 }
@@ -338,9 +344,12 @@ export function buildQueryOptions(params: RunTurnParams, abortController: AbortC
     resume: params.resumeSessionId,
     abortController,
     includePartialMessages: true,
-    // Le mode SDK 'bypassPermissions' n'est plus utilisé : il court-circuitait
-    // canUseTool et avalait les QCM AskUserQuestion. Le skip-permissions est
-    // désormais un auto-allow sélectif DANS le callback (session-stream.ts).
+    // 'plan' est le SEUL mode passé nativement (spec 2026-08-21) : il n'auto-
+    // approuve rien, donc canUseTool et les QCM restent pleinement actifs.
+    permissionMode: params.permissionMode === 'plan' ? 'plan' : undefined,
+    // Les modes SDK 'bypassPermissions'/'acceptEdits' ne sont pas utilisés : ils
+    // court-circuitaient canUseTool et avalaient les QCM AskUserQuestion. Ils sont
+    // désormais des auto-allow sélectifs DANS le callback (session-stream.ts).
     // Repli documenté (spec QCM, « Risque principal ») : restaurer
     // `permissionMode: 'bypassPermissions'` exige AUSSI
     // `allowDangerouslySkipPermissions: true` (flag de sécurité Zod-requis).

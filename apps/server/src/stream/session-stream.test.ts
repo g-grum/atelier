@@ -205,6 +205,86 @@ describe('SessionStream', () => {
       expect('bypassPermissions' in (runTurnParams(sdk) as object)).toBe(false)
     })
 
+    test('acceptEdits: Edit/Write/NotebookEdit auto-allow, other tools still prompt', async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'acceptEdits'
+      })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+      const canUseTool = runTurnParams(sdk).canUseTool
+
+      await expect(canUseTool('Edit', { file_path: '/proj/a.ts' })).resolves.toEqual({ behavior: 'allow' })
+      await expect(canUseTool('Write', { file_path: '/proj/b.ts' })).resolves.toEqual({ behavior: 'allow' })
+      await expect(canUseTool('NotebookEdit', { notebook_path: '/proj/n.ipynb' })).resolves.toEqual({ behavior: 'allow' })
+      expect(ofType(events, 'permission_request')).toHaveLength(0)
+
+      const bash = canUseTool('Bash', { command: 'rm -rf /' })
+      await tick()
+      expect(ofType(events, 'permission_request')).toHaveLength(1)
+      await expect(Promise.race([bash.then(() => 'settled'), Promise.resolve('pending')])).resolves.toBe('pending')
+    })
+
+    test('plan mode is forwarded to runTurn params (the only natively-passed mode)', async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'plan'
+      })
+
+      registry.get('s1', 'p1').onMessage(clientMessage({ type: 'user_message', text: 'go' }))
+      await tick()
+
+      expect(runTurnParams(sdk).permissionMode).toBe('plan')
+    })
+
+    test('ExitPlanMode allow flips the persisted mode back to default', async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'plan'
+      })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'plan something' }))
+      await tick()
+
+      const result = runTurnParams(sdk).canUseTool('ExitPlanMode', { plan: '# The plan\n1. do it' })
+      await tick()
+      const request = ofType(events, 'permission_request')[0]!
+      // The plan markdown is what the user approves — rendered whole.
+      expect(request.rendered).toBe('# The plan\n1. do it')
+
+      stream.onMessage(clientMessage({ type: 'permission_response', requestId: request.requestId, decision: 'allow' }))
+      await expect(result).resolves.toMatchObject({ behavior: 'allow' })
+      expect(data.get().permissionModes['s1']).toBe('default')
+    })
+
+    test('ExitPlanMode deny keeps the session in plan mode', async () => {
+      const { registry, data, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
+      data.update((d) => {
+        d.permissionModes['s1'] = 'plan'
+      })
+      const stream = registry.get('s1', 'p1')
+      const { events, send } = makeSink()
+      stream.onConnect(send)
+
+      stream.onMessage(clientMessage({ type: 'user_message', text: 'plan something' }))
+      await tick()
+
+      const result = runTurnParams(sdk).canUseTool('ExitPlanMode', { plan: '# Nope' })
+      await tick()
+      const request = ofType(events, 'permission_request')[0]!
+
+      stream.onMessage(clientMessage({ type: 'permission_response', requestId: request.requestId, decision: 'deny' }))
+      await expect(result).resolves.toMatchObject({ behavior: 'deny' })
+      expect(data.get().permissionModes['s1']).toBe('plan')
+    })
+
     test('onConnect ré-émet les question_request pendants', async () => {
       const { registry, sdk } = setup({ turns: [[{ type: 'turn_done' }]] })
       const stream = registry.get('s1', 'p1')

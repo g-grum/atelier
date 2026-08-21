@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SlashCommandInfo } from '@atelier/shared'
+import type { SessionPermissionMode, SlashCommandInfo } from '@atelier/shared'
 import { completeMention, insertMention, matchFiles, mentionPrefix, type FileEntry } from '@/features/chat/utils/file-mentions'
 import { commandPrefix, completeCommand, matchCommands } from '@/features/chat/utils/slash-commands'
 import type { StreamState } from '@/stores/stream-reducer'
+import { ModeSelector } from './ModeSelector'
 
 export type ComposerProps = {
   /** No session selected — dimmed and inert. */
   disabled: boolean
   /** While 'streaming' the action button becomes Stop and submits are no-ops. */
   status: StreamState['status']
+  /** Session permission mode shown in the selector next to submit (spec 2026-08-21). */
+  permissionMode: SessionPermissionMode
+  /** Persists the mode (PATCH session) — effective from the next turn. */
+  onPermissionModeChange: (mode: SessionPermissionMode) => void
   /** Returns whether the controller accepted the message (refused mid-turn). */
   onSend: (text: string) => boolean
   /** Sends the abort ClientMessage — the spec's only way to stop a turn. */
@@ -24,7 +29,7 @@ export type ComposerProps = {
 /** Growth cap (~8 lines) — beyond it the textarea scrolls internally. */
 const MAX_TEXTAREA_HEIGHT_PX = 200
 
-export function Composer({ disabled, status, onSend, onAbort, commands, files, onUploadImage }: ComposerProps) {
+export function Composer({ disabled, status, permissionMode, onPermissionModeChange, onSend, onAbort, commands, files, onUploadImage }: ComposerProps) {
   const [text, setText] = useState('')
   const streaming = status === 'streaming'
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -248,6 +253,7 @@ export function Composer({ disabled, status, onSend, onAbort, commands, files, o
           }}
         />
         <kbd>⌘↵</kbd>
+        <ModeSelector mode={permissionMode} disabled={disabled} onChange={onPermissionModeChange} />
         <button
           type="button"
           className="attach"

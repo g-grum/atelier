@@ -47,7 +47,7 @@ export type Preferences = {
   githubUser: string
   /** Thème UI. Clé absente = dark (rétrocompat disque, spec charte v5). */
   theme?: Theme
-  /** Mode appliqué aux NOUVELLES sessions (stampé dans createDraft). Absent/null = demander à chaque session (gate). Jamais rétroactif. */
+  /** Mode appliqué aux NOUVELLES sessions (stampé dans createDraft). Absent/null = 'default' (le gate a disparu, spec 2026-08-21). Jamais rétroactif. */
   defaultPermissionMode?: SessionPermissionMode | null
   /** First-launch feature tour completed (or skipped). Absent = false — pre-existing installs never see the tour since it only triggers on a first registration. */
   hasCompletedTour?: boolean
@@ -60,9 +60,13 @@ export type UsageEvent = { at: string; inputTokens: number; outputTokens: number
  * Per-session permission behavior for SDK turns. 'bypassPermissions' est un
  * auto-allow sélectif dans canUseTool (tout sauf AskUserQuestion — le QCM
  * remonte toujours à la UI) ; le mode SDK 'bypassPermissions' n'est plus utilisé.
+ * 'acceptEdits' = auto-allow des outils d'édition (Edit/Write/NotebookEdit) dans
+ * le même callback. 'plan' est le SEUL mode passé nativement au SDK (il ne
+ * court-circuite pas canUseTool) ; ExitPlanMode arrive comme permission normale
+ * et son allow rebascule la session en 'default' (spec 2026-08-21).
  */
-export type SessionPermissionMode = 'default' | 'bypassPermissions'
-export const SESSION_PERMISSION_MODES: readonly SessionPermissionMode[] = ['default', 'bypassPermissions']
+export type SessionPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+export const SESSION_PERMISSION_MODES: readonly SessionPermissionMode[] = ['default', 'acceptEdits', 'plan', 'bypassPermissions']
 
 /** GET /api/version — the repo's version.json read from disk at request time (update detection). */
 export type VersionInfo = { version: string; notes: string[] }
@@ -91,8 +95,8 @@ export type SessionSummary = {
   messageCount: number
   isDraft: boolean
   model: string
-  /** null — the user has not answered the per-session permissions question yet (UI must ask). */
-  permissionMode: SessionPermissionMode | null
+  /** Never null since the composer mode selector (spec 2026-08-21): unset resolves to 'default'. */
+  permissionMode: SessionPermissionMode
 }
 
 export type ChatMessage =
