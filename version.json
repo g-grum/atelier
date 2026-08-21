@@ -1,9 +1,9 @@
 {
-  "version": "0.1.15",
+  "version": "0.1.16",
   "notes": [
-    "Autopilot va jusqu'au bout : chaque PR est relue par un agent dédié, corrigée si besoin, puis mergée seule une fois la CI verte",
-    "Un seul cycle de correction — si la review rejette encore, l'item s'arrête en échec et la PR reste ouverte",
-    "Le widget suit tout le parcours : en review, en correction, merge en cours, mergée",
-    "Arrêter un run pendant la review laisse la PR ouverte et mergeable à la main"
+    "Sélecteur de mode de permissions dans le composer, à côté du bouton d'envoi : Auto, Accept edits, Plan ou Skip perms, changeable à tout moment (effectif au tour suivant)",
+    "Mode Plan : Claude planifie sans rien exécuter ; le plan s'affiche en markdown et son approbation repasse la session en Auto",
+    "Plus d'écran de choix des permissions à l'ouverture d'une session — le composer est utilisable immédiatement",
+    "Vos messages restent épinglés en haut de la conversation pendant que la réponse défile ; au-delà de 200 px ils se replient, un clic les déplie"
   ]
 }
